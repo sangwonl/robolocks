@@ -2,6 +2,7 @@
 
 #include <robolocks/types.hpp>
 
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -73,6 +74,27 @@ inline CommandChannel command_channel(CommandKind kind) {
       return CommandChannel::Hull;
   }
   return CommandChannel::Mobility;
+}
+
+inline CommandKind command_payload_kind(const CommandPayload& payload) {
+  return std::visit([](const auto& typed_payload) {
+    using Payload = std::decay_t<decltype(typed_payload)>;
+    if constexpr (std::is_same_v<Payload, MoveToCommand>) {
+      return CommandKind::MoveTo;
+    } else if constexpr (std::is_same_v<Payload, AimAtCommand>) {
+      return CommandKind::AimAt;
+    } else if constexpr (std::is_same_v<Payload, FireIfSolutionCommand>) {
+      return CommandKind::FireIfSolution;
+    } else if constexpr (std::is_same_v<Payload, ScanArcCommand>) {
+      return CommandKind::ScanArc;
+    } else {
+      return CommandKind::FaceArmorToward;
+    }
+  }, payload);
+}
+
+inline bool command_payload_matches_kind(const Command& command) {
+  return command.kind == command_payload_kind(command.payload);
 }
 
 }  // namespace robolocks
