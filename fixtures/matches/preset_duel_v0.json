@@ -1,0 +1,25 @@
+{
+  "matchId": "preset_duel_v0",
+  "mapId": "duel_grid_v0",
+  "seed": 1,
+  "tickRate": 30,
+  "tickLimit": 9000,
+  "league": {
+    "id": "standard_500",
+    "pointLimit": 500
+  },
+  "tanks": [
+    {
+      "unitId": 1,
+      "name": "Blue",
+      "spawn": { "x": 6, "y": 12 },
+      "preset": "standard_blue_v0"
+    },
+    {
+      "unitId": 2,
+      "name": "Red",
+      "spawn": { "x": 34, "y": 12 },
+      "preset": "standard_red_v0"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "duel_grid_v0",
+  "width": 40,
+  "height": 24,
+  "cellSizeM": 10,
+  "cells": [],
+  "obstacles": [
+    { "x": 19, "y": 8, "width": 2, "height": 8, "blocksMovement": true, "blocksLineOfSight": true, "cover": 1.0 }
+  ]
+}
