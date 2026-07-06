@@ -1,3 +1,4 @@
+import { createPresetDuel } from "./kernelAdapter";
 import type { BattleFrame, SimWorkerRequest, SimWorkerResponse } from "../types/protocol";
 
 function post(response: SimWorkerResponse): void {
@@ -9,14 +10,13 @@ self.onmessage = (event: MessageEvent<SimWorkerRequest>) => {
     return;
   }
 
-  const frame: BattleFrame = {
-    tick: event.data.ticks,
-    units: [
-      { unitId: 1, name: "Blue", position: { x: 10, y: 12 }, armorIntegrity: 100 },
-      { unitId: 2, name: "Red", position: { x: 30, y: 12 }, armorIntegrity: 100 },
-    ],
-    events: [],
-  };
+  const match = createPresetDuel();
+  let frame: BattleFrame = match.step();
+
+  for (let i = 1; i < event.data.ticks; i += 1) {
+    frame = match.step();
+    post({ type: "battleFrame", frame });
+  }
 
   post({ type: "battleComplete", finalFrame: frame });
 };
