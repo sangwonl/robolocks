@@ -40,3 +40,20 @@ target_link_libraries(robolocks_tests PRIVATE
 include(CTest)
 include(Catch)
 catch_discover_tests(robolocks_tests)
+
+if(EMSCRIPTEN)
+  add_executable(robolocks_wasm
+    engine/wasm/wasm_exports.cpp
+  )
+
+  target_link_libraries(robolocks_wasm PRIVATE robolocks_core)
+  target_include_directories(robolocks_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/engine/include)
+
+  target_link_options(robolocks_wasm PRIVATE
+    "SHELL:-sMODULARIZE=1"
+    "SHELL:-sEXPORT_NAME=createRobolocksKernel"
+    "SHELL:-sENVIRONMENT=worker"
+    "SHELL:-sEXPORTED_FUNCTIONS=['_robolocks_engine_version']"
+    "SHELL:-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
+  )
+endif()
