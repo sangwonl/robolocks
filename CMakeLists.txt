@@ -27,6 +27,7 @@ enable_testing()
 add_executable(robolocks_tests
   engine/tests/version_test.cpp
   engine/tests/math_test.cpp
+  engine/tests/command_test.cpp
 )
 
 target_link_libraries(robolocks_tests PRIVATE
