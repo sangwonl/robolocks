@@ -5,8 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-include(cmake/Dependencies.cmake)
-
 add_library(robolocks_core
   engine/src/version.cpp
   engine/src/math.cpp
@@ -23,23 +21,26 @@ target_compile_options(robolocks_core PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /fp:strict>
 )
 
-enable_testing()
+if(NOT EMSCRIPTEN)
+  include(cmake/Dependencies.cmake)
+  enable_testing()
 
-add_executable(robolocks_tests
-  engine/tests/version_test.cpp
-  engine/tests/math_test.cpp
-  engine/tests/command_test.cpp
-  engine/tests/match_test.cpp
-)
+  add_executable(robolocks_tests
+    engine/tests/version_test.cpp
+    engine/tests/math_test.cpp
+    engine/tests/command_test.cpp
+    engine/tests/match_test.cpp
+  )
 
-target_link_libraries(robolocks_tests PRIVATE
-  robolocks_core
-  Catch2::Catch2WithMain
-)
+  target_link_libraries(robolocks_tests PRIVATE
+    robolocks_core
+    Catch2::Catch2WithMain
+  )
 
-include(CTest)
-include(Catch)
-catch_discover_tests(robolocks_tests)
+  include(CTest)
+  include(Catch)
+  catch_discover_tests(robolocks_tests)
+endif()
 
 if(EMSCRIPTEN)
   add_executable(robolocks_wasm
@@ -48,6 +49,9 @@ if(EMSCRIPTEN)
 
   target_link_libraries(robolocks_wasm PRIVATE robolocks_core)
   target_include_directories(robolocks_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/engine/include)
+  set_target_properties(robolocks_wasm PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/wasm"
+  )
 
   target_link_options(robolocks_wasm PRIVATE
     "SHELL:-sMODULARIZE=1"

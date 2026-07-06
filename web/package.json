@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:wasm": "../scripts/build-wasm.sh all",
+    "sync:wasm": "node ../scripts/sync-wasm.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-basic-ssl": "^1.1.0",

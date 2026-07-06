@@ -1,3 +1,7 @@
 build-*/
 node_modules/
 web/dist/
+.emscripten_cache/
+.emsdk/
+web/public/wasm/*
+!web/public/wasm/.gitkeep
