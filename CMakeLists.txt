@@ -9,6 +9,7 @@ include(cmake/Dependencies.cmake)
 
 add_library(robolocks_core
   engine/src/version.cpp
+  engine/src/math.cpp
 )
 
 target_include_directories(robolocks_core
@@ -25,6 +26,7 @@ enable_testing()
 
 add_executable(robolocks_tests
   engine/tests/version_test.cpp
+  engine/tests/math_test.cpp
 )
 
 target_link_libraries(robolocks_tests PRIVATE
