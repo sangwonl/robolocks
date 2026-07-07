@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
 import { buildBattlefieldScene } from "./battlefieldThreeScene.ts";
@@ -13,6 +14,7 @@ export function BattlefieldThreeView({ frame, obstacles }: BattlefieldThreeViewP
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
 
   useEffect(() => {
@@ -33,6 +35,39 @@ export function BattlefieldThreeView({ frame, obstacles }: BattlefieldThreeViewP
     camera.lookAt(20, 0, 12);
     cameraRef.current = camera;
 
+    const renderCurrentScene = () => {
+      const scene = sceneRef.current;
+      if (scene) {
+        renderer.render(scene, camera);
+      }
+    };
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(20, 0, 12);
+    controls.enableDamping = false;
+    controls.enablePan = true;
+    controls.enableRotate = true;
+    controls.enableZoom = true;
+    controls.screenSpacePanning = true;
+    controls.minZoom = 0.45;
+    controls.maxZoom = 4;
+    controls.minPolarAngle = 0.02;
+    controls.maxPolarAngle = Math.PI / 3;
+    controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.PAN,
+    };
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
+    controls.addEventListener("change", () => {
+      renderCurrentScene();
+    });
+    controls.update();
+    controlsRef.current = controls;
+
     const resize = () => {
       const width = Math.max(1, host.clientWidth);
       const height = Math.max(1, host.clientHeight);
@@ -48,23 +83,18 @@ export function BattlefieldThreeView({ frame, obstacles }: BattlefieldThreeViewP
       renderCurrentScene();
     };
 
-    const renderCurrentScene = () => {
-      const scene = sceneRef.current;
-      if (scene) {
-        renderer.render(scene, camera);
-      }
-    };
-
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(host);
 
     return () => {
       observer.disconnect();
+      controls.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       rendererRef.current = null;
       cameraRef.current = null;
+      controlsRef.current = null;
     };
   }, []);
 
@@ -73,7 +103,9 @@ export function BattlefieldThreeView({ frame, obstacles }: BattlefieldThreeViewP
     sceneRef.current = scene;
     const renderer = rendererRef.current;
     const camera = cameraRef.current;
+    const controls = controlsRef.current;
     if (renderer && camera) {
+      controls?.update();
       renderer.render(scene, camera);
     }
     return () => {
