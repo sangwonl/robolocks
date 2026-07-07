@@ -35,11 +35,15 @@ struct TurretComponent {
 struct ArmorComponent {
   std::string id;
   double integrity = 100.0;
+  double front_mm = 60.0;
+  double side_mm = 40.0;
+  double rear_mm = 30.0;
 };
 
 struct WeaponComponent {
   std::string id;
   double damage = 25.0;
+  double penetration_mm = 100.0;
   double range_m = 80.0;
   double muzzle_velocity_mps = 1000.0;
   double projectile_radius_m = 0.05;

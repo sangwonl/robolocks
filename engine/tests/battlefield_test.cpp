@@ -783,6 +783,70 @@ TEST_CASE("battlefield advances fired projectiles before applying damage") {
   REQUIRE(third.events[0].code == "armor_damage");
 }
 
+TEST_CASE("battlefield resolves projectile penetration against armor facing") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.tanks = {
+    make_tank(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
+    make_tank(robolocks::UnitId{2}, "Red", robolocks::Vec2{10.0, 0.0}, 0.0, 100.0, 180.0, 180.0),
+  };
+  config.tanks[0].weapon.muzzle_velocity_mps = 10.0;
+  config.tanks[0].weapon.projectile_radius_m = 0.1;
+  config.tanks[0].weapon.penetration_mm = 80.0;
+  config.tanks[1].armor.front_mm = 120.0;
+  config.tanks[1].armor.side_mm = 80.0;
+  config.tanks[1].armor.rear_mm = 40.0;
+  config.tanks[1].body.shape.radius_m = 1.0;
+
+  robolocks::Battlefield front_battlefield(config);
+  const auto front_result = front_battlefield.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{10.0, 0.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+
+  REQUIRE(front_result.snapshot.units[1].armor_integrity == Catch::Approx(100.0));
+  REQUIRE(front_result.events.size() == 2);
+  REQUIRE(front_result.events[0].code == "weapon_fired");
+  REQUIRE(front_result.events[1].unit_id == robolocks::UnitId{2});
+  REQUIRE(front_result.events[1].code == "armor_bounced");
+
+  config.tanks[1].transform.hull_heading_deg = 0.0;
+  config.tanks[1].turret.heading_deg = 0.0;
+  robolocks::Battlefield rear_battlefield(config);
+  const auto rear_result = rear_battlefield.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{10.0, 0.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+
+  REQUIRE(rear_result.snapshot.units[1].armor_integrity == Catch::Approx(75.0));
+  REQUIRE(rear_result.events.size() == 2);
+  REQUIRE(rear_result.events[0].code == "weapon_fired");
+  REQUIRE(rear_result.events[1].unit_id == robolocks::UnitId{2});
+  REQUIRE(rear_result.events[1].code == "armor_damage");
+}
+
 TEST_CASE("battlefield keeps FireIfSolution intent until turret solution is available") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;

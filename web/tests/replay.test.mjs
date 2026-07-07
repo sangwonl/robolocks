@@ -31,8 +31,8 @@ test("replay parser reads CLI replay JSON frames", () => {
             modules: {
               mobility: { id: "tracked_chassis_mk1", maxSpeedMps: 6, maxHullTurnDegps: 120 },
               turret: { id: "light_turret_mk1", maxTurnDegps: 180 },
-              weapon: { id: "cannon_75mm_mk1", damage: 25, rangeM: 80, muzzleVelocityMps: 620, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
-              armor: { id: "rolled_armor_mk1", integrity: 100 },
+              weapon: { id: "cannon_75mm_mk1", damage: 25, penetrationMm: 120, rangeM: 80, muzzleVelocityMps: 620, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
+              armor: { id: "rolled_armor_mk1", integrity: 100, frontMm: 100, sideMm: 70, rearMm: 45 },
               body: { id: "medium_hull_mk1", massKg: 30000 },
               sensor: { id: "visual_optic_mk1", rangeM: 60, fovDeg: 120, refreshTicks: 1 },
             },
@@ -83,8 +83,12 @@ test("replay parser reads CLI replay JSON frames", () => {
   assert.equal(replay.frames[0].units[0].modules.mobility.id, "tracked_chassis_mk1");
   assert.equal(replay.frames[0].units[0].modules.mobility.maxSpeedMps, 6);
   assert.equal(replay.frames[0].units[0].modules.weapon.reloadTicks, 30);
+  assert.equal(replay.frames[0].units[0].modules.weapon.penetrationMm, 120);
   assert.equal(replay.frames[0].units[0].modules.weapon.muzzleVelocityMps, 620);
   assert.equal(replay.frames[0].units[0].modules.weapon.projectileRadiusM, 0.08);
+  assert.equal(replay.frames[0].units[0].modules.armor.frontMm, 100);
+  assert.equal(replay.frames[0].units[0].modules.armor.sideMm, 70);
+  assert.equal(replay.frames[0].units[0].modules.armor.rearMm, 45);
   assert.deepEqual(replay.frames[0].units[0].bodyShape, { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 });
   assert.equal(replay.frames[0].projectiles[0].projectileId, 7);
   assert.deepEqual(replay.frames[0].projectiles[0].previousPosition, { x: 18, y: 12 });

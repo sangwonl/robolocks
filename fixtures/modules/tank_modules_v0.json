@@ -22,6 +22,7 @@
     {
       "id": "cannon_75mm_mk1",
       "damage": 25,
+      "penetrationMm": 120,
       "rangeM": 80,
       "muzzleVelocityMps": 620,
       "projectileRadiusM": 0.08,
@@ -31,6 +32,7 @@
     {
       "id": "slow_cannon_test",
       "damage": 25,
+      "penetrationMm": 80,
       "rangeM": 80,
       "muzzleVelocityMps": 20,
       "projectileRadiusM": 0.08,
@@ -41,7 +43,10 @@
   "armor": [
     {
       "id": "rolled_armor_mk1",
-      "integrity": 100
+      "integrity": 100,
+      "frontMm": 100,
+      "sideMm": 70,
+      "rearMm": 45
     }
   ],
   "body": [

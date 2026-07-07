@@ -194,6 +194,7 @@ function parseModules(payload: unknown): UnitModulesFrame {
     weapon: {
       id: stringField(modules.weapon, "id"),
       damage: numberField(modules.weapon, "damage"),
+      penetrationMm: numberField(modules.weapon, "penetrationMm"),
       rangeM: numberField(modules.weapon, "rangeM"),
       muzzleVelocityMps: numberField(modules.weapon, "muzzleVelocityMps"),
       projectileRadiusM: numberField(modules.weapon, "projectileRadiusM"),
@@ -203,6 +204,9 @@ function parseModules(payload: unknown): UnitModulesFrame {
     armor: {
       id: stringField(modules.armor, "id"),
       integrity: numberField(modules.armor, "integrity"),
+      frontMm: numberField(modules.armor, "frontMm"),
+      sideMm: numberField(modules.armor, "sideMm"),
+      rearMm: numberField(modules.armor, "rearMm"),
     },
     body: {
       id: stringField(modules.body, "id"),
@@ -235,8 +239,8 @@ function defaultModules(): UnitModulesFrame {
   return {
     mobility: { id: "", maxSpeedMps: 0, maxHullTurnDegps: 0 },
     turret: { id: "", maxTurnDegps: 0 },
-    weapon: { id: "", damage: 0, rangeM: 0, muzzleVelocityMps: 0, projectileRadiusM: 0, aimToleranceDeg: 0, reloadTicks: 0 },
-    armor: { id: "", integrity: 0 },
+    weapon: { id: "", damage: 0, penetrationMm: 0, rangeM: 0, muzzleVelocityMps: 0, projectileRadiusM: 0, aimToleranceDeg: 0, reloadTicks: 0 },
+    armor: { id: "", integrity: 0, frontMm: 0, sideMm: 0, rearMm: 0 },
     body: { id: "", massKg: 0 },
     sensor: { id: "", rangeM: 0, fovDeg: 0, refreshTicks: 0 },
   };

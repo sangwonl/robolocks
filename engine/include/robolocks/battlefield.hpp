@@ -65,6 +65,7 @@ class Battlefield {
     Vec2 position;
     Vec2 velocity;
     double damage = 0.0;
+    double penetration_mm = 0.0;
     double radius_m = 0.05;
     double remaining_range_m = 0.0;
   };

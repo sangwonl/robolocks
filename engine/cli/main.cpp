@@ -202,6 +202,7 @@ void print_modules_json(const robolocks::UnitSnapshot& unit, std::ostream& out) 
   out << "\"weapon\":{";
   out << "\"id\":\"" << unit.modules.weapon.id << "\",";
   out << "\"damage\":" << unit.modules.weapon.damage << ",";
+  out << "\"penetrationMm\":" << unit.modules.weapon.penetration_mm << ",";
   out << "\"rangeM\":" << unit.modules.weapon.range_m << ",";
   out << "\"muzzleVelocityMps\":" << unit.modules.weapon.muzzle_velocity_mps << ",";
   out << "\"projectileRadiusM\":" << unit.modules.weapon.projectile_radius_m << ",";
@@ -210,7 +211,10 @@ void print_modules_json(const robolocks::UnitSnapshot& unit, std::ostream& out) 
   out << "},";
   out << "\"armor\":{";
   out << "\"id\":\"" << unit.modules.armor.id << "\",";
-  out << "\"integrity\":" << unit.modules.armor.integrity;
+  out << "\"integrity\":" << unit.modules.armor.integrity << ",";
+  out << "\"frontMm\":" << unit.modules.armor.front_mm << ",";
+  out << "\"sideMm\":" << unit.modules.armor.side_mm << ",";
+  out << "\"rearMm\":" << unit.modules.armor.rear_mm;
   out << "},";
   out << "\"body\":{";
   out << "\"id\":\"" << unit.modules.body.id << "\",";

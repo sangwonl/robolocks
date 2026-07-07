@@ -41,6 +41,7 @@ export type UnitModulesFrame = {
   weapon: {
     id: string;
     damage: number;
+    penetrationMm: number;
     rangeM: number;
     muzzleVelocityMps: number;
     projectileRadiusM: number;
@@ -50,6 +51,9 @@ export type UnitModulesFrame = {
   armor: {
     id: string;
     integrity: number;
+    frontMm: number;
+    sideMm: number;
+    rearMm: number;
   };
   body: {
     id: string;

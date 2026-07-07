@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace robolocks {
@@ -15,6 +16,12 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kMoveTargetEpsilon = 1.0e-9;
 constexpr double kMinHitChance = 0.0;
 constexpr double kMaxHitChance = 1.0;
+
+enum class ArmorFacing {
+  Front,
+  Side,
+  Rear,
+};
 
 double distance_between(Vec2 from, Vec2 to) {
   return length(Vec2{to.x - from.x, to.y - from.y});
@@ -46,6 +53,42 @@ bool segment_intersects_circle(Vec2 from, Vec2 to, Vec2 center, double radius) {
   const double t = clamp(dot(from_to_center, segment) / length_sq, 0.0, 1.0);
   const Vec2 closest{from.x + segment.x * t, from.y + segment.y * t};
   return distance_between(closest, center) <= radius;
+}
+
+ArmorFacing armor_facing_from_projectile(Vec2 target_position, double target_hull_heading_deg, Vec2 projectile_previous_position) {
+  const double projectile_bearing = angle_to(target_position, projectile_previous_position);
+  const double delta = std::abs(shortest_angle_delta_deg(target_hull_heading_deg, projectile_bearing));
+  if (delta <= 45.0) {
+    return ArmorFacing::Front;
+  }
+  if (delta >= 135.0) {
+    return ArmorFacing::Rear;
+  }
+  return ArmorFacing::Side;
+}
+
+double armor_thickness_mm(const ArmorComponent& armor, ArmorFacing facing) {
+  switch (facing) {
+    case ArmorFacing::Front:
+      return armor.front_mm;
+    case ArmorFacing::Side:
+      return armor.side_mm;
+    case ArmorFacing::Rear:
+      return armor.rear_mm;
+  }
+  return armor.side_mm;
+}
+
+const char* armor_facing_name(ArmorFacing facing) {
+  switch (facing) {
+    case ArmorFacing::Front:
+      return "front";
+    case ArmorFacing::Side:
+      return "side";
+    case ArmorFacing::Rear:
+      return "rear";
+  }
+  return "unknown";
 }
 
 double hit_chance_for_error(double error_deg, double aim_tolerance_deg) {
@@ -485,6 +528,7 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
         direction.y * unit.weapon.muzzle_velocity_mps,
       },
       .damage = unit.weapon.damage,
+      .penetration_mm = unit.weapon.penetration_mm,
       .radius_m = unit.weapon.projectile_radius_m,
       .remaining_range_m = unit.weapon.range_m,
     });
@@ -527,6 +571,22 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
 
     if (hit_target_index.has_value()) {
       auto& target = units_[*hit_target_index];
+      const auto facing = armor_facing_from_projectile(
+        target.transform.position,
+        target.transform.hull_heading_deg,
+        projectile.previous_position
+      );
+      const double armor_mm = armor_thickness_mm(target.armor, facing);
+      if (projectile.penetration_mm < armor_mm) {
+        events.push_back(Event{
+          .tick = tick_,
+          .unit_id = target.unit_id,
+          .code = "armor_bounced",
+          .message = std::string("Projectile failed to penetrate ") + armor_facing_name(facing) + " armor.",
+        });
+        continue;
+      }
+
       target.armor.integrity = std::max(0.0, target.armor.integrity - projectile.damage);
       if (target.armor.integrity <= 0.0) {
         Battlefield::clear_intents(target);
@@ -535,7 +595,7 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
         .tick = tick_,
         .unit_id = target.unit_id,
         .code = "armor_damage",
-        .message = "Armor integrity reduced by projectile damage.",
+        .message = std::string("Projectile penetrated ") + armor_facing_name(facing) + " armor.",
       });
       continue;
     }

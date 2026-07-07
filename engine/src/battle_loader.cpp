@@ -265,6 +265,7 @@ WeaponComponent optional_weapon_component(const nlohmann::json& tank, const Modu
   }
   weapon.id = optional_string(*weapon_json, "id");
   weapon.damage = optional_number(*weapon_json, "damage", weapon.damage);
+  weapon.penetration_mm = optional_number(*weapon_json, "penetrationMm", weapon.penetration_mm);
   weapon.range_m = optional_number(*weapon_json, "rangeM", weapon.range_m);
   weapon.muzzle_velocity_mps = optional_number(*weapon_json, "muzzleVelocityMps", weapon.muzzle_velocity_mps);
   weapon.projectile_radius_m = optional_number(*weapon_json, "projectileRadiusM", weapon.projectile_radius_m);
@@ -281,6 +282,9 @@ ArmorComponent optional_armor_component(const nlohmann::json& tank, const Module
   }
   armor.id = optional_string(*armor_json, "id");
   armor.integrity = optional_number(*armor_json, "integrity", armor.integrity);
+  armor.front_mm = optional_number(*armor_json, "frontMm", armor.front_mm);
+  armor.side_mm = optional_number(*armor_json, "sideMm", armor.side_mm);
+  armor.rear_mm = optional_number(*armor_json, "rearMm", armor.rear_mm);
   return armor;
 }
 

@@ -35,6 +35,7 @@ BattleConfig preset_duel_config() {
       .weapon = WeaponComponent{
         .id = "cannon_75mm_mk1",
         .damage = 25.0,
+        .penetration_mm = 120.0,
         .range_m = 80.0,
         .muzzle_velocity_mps = 620.0,
         .projectile_radius_m = 0.08,
@@ -44,6 +45,9 @@ BattleConfig preset_duel_config() {
       .armor = ArmorComponent{
         .id = "rolled_armor_mk1",
         .integrity = 100.0,
+        .front_mm = 100.0,
+        .side_mm = 70.0,
+        .rear_mm = 45.0,
       },
       .body = BodyComponent{
         .id = "medium_hull_mk1",
@@ -81,6 +85,7 @@ BattleConfig preset_duel_config() {
       .weapon = WeaponComponent{
         .id = "cannon_75mm_mk1",
         .damage = 25.0,
+        .penetration_mm = 120.0,
         .range_m = 80.0,
         .muzzle_velocity_mps = 620.0,
         .projectile_radius_m = 0.08,
@@ -90,6 +95,9 @@ BattleConfig preset_duel_config() {
       .armor = ArmorComponent{
         .id = "rolled_armor_mk1",
         .integrity = 100.0,
+        .front_mm = 100.0,
+        .side_mm = 70.0,
+        .rear_mm = 45.0,
       },
       .body = BodyComponent{
         .id = "medium_hull_mk1",
