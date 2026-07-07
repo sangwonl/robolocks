@@ -12,9 +12,14 @@
     "sync:wasm": "../scripts/build.sh sync"
   },
   "dependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.0",
     "@vitejs/plugin-basic-ssl": "^1.1.0",
-    "vite": "^5.4.0",
-    "typescript": "^5.5.0"
-  },
-  "devDependencies": {}
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "three": "^0.185.1",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  }
 }

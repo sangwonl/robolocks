@@ -4,6 +4,7 @@
     "useDefineForClassFields": true,
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "WebWorker"],
+    "jsx": "react-jsx",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "strict": true,
