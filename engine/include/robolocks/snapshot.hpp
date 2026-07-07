@@ -56,11 +56,24 @@ struct ProjectileSnapshot {
   double height_m = 0.0;
 };
 
+struct EventPayload {
+  std::uint64_t projectile_id = 0;
+  std::string damage_type;
+  std::string armor_facing;
+  double damage = 0.0;
+  double remaining_armor = 0.0;
+  double penetration_mm = 0.0;
+  double armor_mm = 0.0;
+  double impact_distance_m = 0.0;
+  double blast_radius_m = 0.0;
+};
+
 struct Event {
   Tick tick = 0;
   UnitId unit_id;
   std::string code;
   std::string message;
+  EventPayload payload;
 };
 
 struct WorldSnapshot {

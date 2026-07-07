@@ -110,6 +110,19 @@ export type BattleEvent = {
   unitId: number;
   code: string;
   message: string;
+  payload: BattleEventPayload;
+};
+
+export type BattleEventPayload = {
+  projectileId: number;
+  damageType: string;
+  armorFacing: string;
+  damage: number;
+  remainingArmor: number;
+  penetrationMm: number;
+  armorMm: number;
+  impactDistanceM: number;
+  blastRadiusM: number;
 };
 
 export type BattleAction = {

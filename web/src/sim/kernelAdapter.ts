@@ -306,9 +306,24 @@ function readEvents(
       unitId: eventUnitId(handle, i),
       code: eventCode(handle, i),
       message: eventMessage(handle, i),
+      payload: defaultEventPayload(),
     });
   }
   return events;
+}
+
+function defaultEventPayload(): BattleEvent["payload"] {
+  return {
+    projectileId: 0,
+    damageType: "",
+    armorFacing: "",
+    damage: 0,
+    remainingArmor: 0,
+    penetrationMm: 0,
+    armorMm: 0,
+    impactDistanceM: 0,
+    blastRadiusM: 0,
+  };
 }
 
 function readProjectiles(

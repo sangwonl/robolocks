@@ -283,8 +283,29 @@ function formatEventItems(events: BattleFrame["events"]): string {
     return `<li><span>-</span> no events</li>`;
   }
   return events
-    .map((event) => `<li><span>${event.tick}</span> ${event.code}</li>`)
+    .map((event) => `<li><span>${event.tick}</span> ${event.code}${eventPayloadSummary(event)}</li>`)
     .join("");
+}
+
+function eventPayloadSummary(event: BattleFrame["events"][number]): string {
+  const payload = event.payload;
+  if (!payload || payload.damage <= 0) {
+    return payload?.armorFacing ? ` ${payload.armorFacing}` : "";
+  }
+  const parts = [
+    `-${payload.damage.toFixed(1)}`,
+    `hp=${payload.remainingArmor.toFixed(1)}`,
+  ];
+  if (payload.damageType) {
+    parts.push(payload.damageType);
+  }
+  if (payload.armorFacing) {
+    parts.push(payload.armorFacing);
+  }
+  if (payload.blastRadiusM > 0) {
+    parts.push(`d=${payload.impactDistanceM.toFixed(1)}/${payload.blastRadiusM.toFixed(1)}m`);
+  }
+  return ` ${parts.join(" ")}`;
 }
 
 function actionTarget(action: BattleFrame["actions"][number]): string {

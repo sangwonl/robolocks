@@ -708,7 +708,7 @@ TEST_CASE("battlefield applies FireIfSolution through weapon damage and reload")
     },
   });
 
-  REQUIRE(first.snapshot.units[1].armor_integrity == Catch::Approx(75.0));
+  REQUIRE(first.snapshot.units[1].armor_integrity == Catch::Approx(62.5));
   REQUIRE(first.events.size() == 2);
   REQUIRE(first.events[0].unit_id == robolocks::UnitId{1});
   REQUIRE(first.events[0].code == "weapon_fired");
@@ -727,7 +727,7 @@ TEST_CASE("battlefield applies FireIfSolution through weapon damage and reload")
     },
   });
 
-  REQUIRE(second.snapshot.units[1].armor_integrity == Catch::Approx(75.0));
+  REQUIRE(second.snapshot.units[1].armor_integrity == Catch::Approx(62.5));
   REQUIRE(second.events.size() == 1);
   REQUIRE(second.events[0].unit_id == robolocks::UnitId{1});
   REQUIRE(second.events[0].code == "weapon_reloading");
@@ -776,7 +776,7 @@ TEST_CASE("battlefield advances fired projectiles before applying damage") {
 
   const auto third = battlefield.step({});
 
-  REQUIRE(third.snapshot.units[1].armor_integrity == Catch::Approx(75.0));
+  REQUIRE(third.snapshot.units[1].armor_integrity == Catch::Approx(62.5));
   REQUIRE(third.snapshot.projectiles.empty());
   REQUIRE(third.events.size() == 1);
   REQUIRE(third.events[0].unit_id == robolocks::UnitId{2});
@@ -840,11 +840,17 @@ TEST_CASE("battlefield resolves projectile penetration against armor facing") {
     },
   });
 
-  REQUIRE(rear_result.snapshot.units[1].armor_integrity == Catch::Approx(75.0));
+  REQUIRE(rear_result.snapshot.units[1].armor_integrity == Catch::Approx(62.5));
   REQUIRE(rear_result.events.size() == 2);
   REQUIRE(rear_result.events[0].code == "weapon_fired");
   REQUIRE(rear_result.events[1].unit_id == robolocks::UnitId{2});
   REQUIRE(rear_result.events[1].code == "armor_damage");
+  REQUIRE(rear_result.events[1].payload.projectile_id == 1);
+  REQUIRE(rear_result.events[1].payload.damage == Catch::Approx(37.5));
+  REQUIRE(rear_result.events[1].payload.remaining_armor == Catch::Approx(62.5));
+  REQUIRE(rear_result.events[1].payload.armor_facing == "rear");
+  REQUIRE(rear_result.events[1].payload.penetration_mm == Catch::Approx(80.0));
+  REQUIRE(rear_result.events[1].payload.armor_mm == Catch::Approx(40.0));
 }
 
 TEST_CASE("battlefield advances ballistic projectiles with height and blast impact") {
@@ -852,7 +858,7 @@ TEST_CASE("battlefield advances ballistic projectiles with height and blast impa
   config.tick_dt_sec = 0.5;
   config.tanks = {
     make_tank(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
-    make_tank(robolocks::UnitId{2}, "Red", robolocks::Vec2{10.0, 0.0}, 0.0, 100.0, 180.0, 180.0),
+    make_tank(robolocks::UnitId{2}, "Red", robolocks::Vec2{10.6066, 0.0}, 0.0, 100.0, 180.0, 180.0),
   };
   config.tanks[0].weapon.fire_mode = robolocks::WeaponFireMode::Ballistic;
   config.tanks[0].weapon.muzzle_velocity_mps = 10.0;
@@ -869,7 +875,7 @@ TEST_CASE("battlefield advances ballistic projectiles with height and blast impa
       {
         robolocks::Order{
           .kind = robolocks::OrderKind::AimAt,
-          .payload = robolocks::AimAtOrder{robolocks::Vec2{10.0, 0.0}},
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{10.6066, 0.0}},
         },
         robolocks::Order{
           .kind = robolocks::OrderKind::FireIfSolution,
@@ -892,6 +898,49 @@ TEST_CASE("battlefield advances ballistic projectiles with height and blast impa
   REQUIRE(third.events.size() == 1);
   REQUIRE(third.events[0].unit_id == robolocks::UnitId{2});
   REQUIRE(third.events[0].code == "armor_damage");
+  REQUIRE(third.events[0].payload.damage_type == "splash");
+  REQUIRE(third.events[0].payload.projectile_id == 1);
+  REQUIRE(third.events[0].payload.damage == Catch::Approx(25.0).margin(0.001));
+  REQUIRE(third.events[0].payload.remaining_armor == Catch::Approx(75.0).margin(0.001));
+  REQUIRE(third.events[0].payload.impact_distance_m == Catch::Approx(0.0).margin(0.001));
+  REQUIRE(third.events[0].payload.blast_radius_m == Catch::Approx(2.0));
+}
+
+TEST_CASE("battlefield rejects ballistic fire when target is outside the ballistic solution") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 0.5;
+  config.tanks = {
+    make_tank(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
+    make_tank(robolocks::UnitId{2}, "Red", robolocks::Vec2{20.0, 0.0}, 0.0, 100.0, 180.0, 180.0),
+  };
+  config.tanks[0].weapon.fire_mode = robolocks::WeaponFireMode::Ballistic;
+  config.tanks[0].weapon.muzzle_velocity_mps = 10.0;
+  config.tanks[0].weapon.launch_angle_deg = 45.0;
+  config.tanks[0].weapon.gravity_mps2 = 10.0;
+  config.tanks[0].weapon.blast_radius_m = 2.0;
+  config.tanks[0].weapon.range_m = 80.0;
+
+  robolocks::Battlefield battlefield(config);
+  const auto result = battlefield.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{20.0, 0.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+
+  REQUIRE(result.snapshot.projectiles.empty());
+  REQUIRE(result.snapshot.units[1].armor_integrity == Catch::Approx(100.0));
+  REQUIRE(result.events.size() == 1);
+  REQUIRE(result.events[0].code == "fire_no_solution");
 }
 
 TEST_CASE("battlefield keeps FireIfSolution intent until turret solution is available") {
@@ -947,7 +996,7 @@ TEST_CASE("battlefield keeps FireIfSolution intent until turret solution is avai
 
   const auto second = battlefield.step({});
 
-  REQUIRE(second.snapshot.units[1].armor_integrity == Catch::Approx(75.0));
+  REQUIRE(second.snapshot.units[1].armor_integrity == Catch::Approx(62.5));
   REQUIRE_FALSE(second.snapshot.units[0].weapon_intent_active);
   REQUIRE(second.events.size() == 2);
   REQUIRE(second.events[0].code == "weapon_fired");

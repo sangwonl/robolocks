@@ -1,5 +1,6 @@
 #include <robolocks/battlefield.hpp>
 
+#include <robolocks/combat_resolution.hpp>
 #include <robolocks/math.hpp>
 
 #include <algorithm>
@@ -481,6 +482,14 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
       }
       const double target_heading = angle_to(unit.transform.position, target.transform.position);
       const double aim_error = std::abs(shortest_angle_delta_deg(unit.turret.heading_deg, target_heading));
+      const double range_hit_chance = ballistic_range_hit_chance(
+        unit.weapon,
+        distance,
+        collision_radius_for_shape(target.body.shape)
+      );
+      if (range_hit_chance <= 0.0) {
+        continue;
+      }
       if (aim_error <= best_aim_error) {
         best_aim_error = aim_error;
         target_index = j;
@@ -501,7 +510,12 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
     auto& target = units_[*target_index];
     const double target_heading = angle_to(unit.transform.position, target.transform.position);
     const double aim_error = std::abs(shortest_angle_delta_deg(unit.turret.heading_deg, target_heading));
-    const double hit_chance = hit_chance_for_error(aim_error, unit.weapon.aim_tolerance_deg);
+    const double hit_chance = hit_chance_for_error(aim_error, unit.weapon.aim_tolerance_deg)
+      * ballistic_range_hit_chance(
+        unit.weapon,
+        distance_between(unit.transform.position, target.transform.position),
+        collision_radius_for_shape(target.body.shape)
+      );
     if (hit_chance < min_hit_chance) {
       if (fire_order_count == 1) {
         events.push_back(Event{
@@ -580,10 +594,18 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
           }
           const double target_radius = collision_radius_for_shape(target.body.shape);
           const double blast_radius = std::max(projectile.blast_radius_m, projectile.radius_m);
-          if (distance_between(projectile.position, target.transform.position) > blast_radius + target_radius) {
+          const double impact_distance = std::max(
+            0.0,
+            distance_between(projectile.position, target.transform.position) - target_radius
+          );
+          if (impact_distance > blast_radius) {
             continue;
           }
-          target.armor.integrity = std::max(0.0, target.armor.integrity - projectile.damage);
+          const double damage = splash_damage_at_distance(projectile.damage, impact_distance, blast_radius);
+          if (damage <= 0.0) {
+            continue;
+          }
+          target.armor.integrity = std::max(0.0, target.armor.integrity - damage);
           if (target.armor.integrity <= 0.0) {
             Battlefield::clear_intents(target);
           }
@@ -592,6 +614,14 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
             .unit_id = target.unit_id,
             .code = "armor_damage",
             .message = "Ballistic projectile blast reduced armor integrity.",
+            .payload = EventPayload{
+              .projectile_id = projectile.projectile_id,
+              .damage_type = "splash",
+              .damage = damage,
+              .remaining_armor = target.armor.integrity,
+              .impact_distance_m = impact_distance,
+              .blast_radius_m = blast_radius,
+            },
           });
         }
         continue;
@@ -630,11 +660,19 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
           .unit_id = target.unit_id,
           .code = "armor_bounced",
           .message = std::string("Projectile failed to penetrate ") + armor_facing_name(facing) + " armor.",
+          .payload = EventPayload{
+            .projectile_id = projectile.projectile_id,
+            .damage_type = "direct",
+            .armor_facing = armor_facing_name(facing),
+            .penetration_mm = projectile.penetration_mm,
+            .armor_mm = armor_mm,
+          },
         });
         continue;
       }
 
-      target.armor.integrity = std::max(0.0, target.armor.integrity - projectile.damage);
+      const double damage = direct_damage_after_penetration(projectile.damage, projectile.penetration_mm, armor_mm);
+      target.armor.integrity = std::max(0.0, target.armor.integrity - damage);
       if (target.armor.integrity <= 0.0) {
         Battlefield::clear_intents(target);
       }
@@ -643,6 +681,15 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
         .unit_id = target.unit_id,
         .code = "armor_damage",
         .message = std::string("Projectile penetrated ") + armor_facing_name(facing) + " armor.",
+        .payload = EventPayload{
+          .projectile_id = projectile.projectile_id,
+          .damage_type = "direct",
+          .armor_facing = armor_facing_name(facing),
+          .damage = damage,
+          .remaining_armor = target.armor.integrity,
+          .penetration_mm = projectile.penetration_mm,
+          .armor_mm = armor_mm,
+        },
       });
       continue;
     }

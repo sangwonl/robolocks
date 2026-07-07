@@ -63,7 +63,23 @@ test("replay parser reads CLI replay JSON frames", () => {
           },
         ],
         events: [
-          { tick: 1, unitId: 1, code: "unit_collision", message: "Collided with unit 2." },
+          {
+            tick: 1,
+            unitId: 1,
+            code: "armor_damage",
+            message: "Projectile penetrated rear armor.",
+            payload: {
+              projectileId: 7,
+              damageType: "direct",
+              armorFacing: "rear",
+              damage: 37.5,
+              remainingArmor: 62.5,
+              penetrationMm: 80,
+              armorMm: 40,
+              impactDistanceM: 0,
+              blastRadiusM: 0,
+            },
+          },
         ],
         actions: [
           { unitId: 1, type: "moveTo", channel: "mobility", position: { x: 12, y: 12 } },
@@ -100,7 +116,9 @@ test("replay parser reads CLI replay JSON frames", () => {
   assert.deepEqual(replay.frames[0].projectiles[0].position, { x: 20, y: 12 });
   assert.equal(replay.frames[0].projectiles[0].heightM, 3.5);
   assert.deepEqual(replay.frames[0].events, []);
-  assert.equal(replay.frames[1].events[0].code, "unit_collision");
+  assert.equal(replay.frames[1].events[0].code, "armor_damage");
+  assert.equal(replay.frames[1].events[0].payload.damage, 37.5);
+  assert.equal(replay.frames[1].events[0].payload.armorFacing, "rear");
   assert.equal(replay.frames[1].actions[0].type, "moveTo");
   assert.deepEqual(replay.frames[1].actions[0].position, { x: 12, y: 12 });
   assert.equal(replay.frames[1].actions[1].widthDeg, 120);

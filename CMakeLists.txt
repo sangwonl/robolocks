@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(robolocks_core
   engine/src/version.cpp
   engine/src/math.cpp
+  engine/src/combat_resolution.cpp
   engine/src/battlefield.cpp
   engine/src/physics_system.cpp
   engine/src/battle_runtime.cpp

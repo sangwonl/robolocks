@@ -84,6 +84,7 @@ void print_intents_json(const robolocks::UnitSnapshot& unit, std::ostream& out);
 void print_modules_json(const robolocks::UnitSnapshot& unit, std::ostream& out);
 void print_vec_json(const robolocks::Vec2& vec, std::ostream& out);
 void print_projectiles_json_compact(const std::vector<robolocks::ProjectileSnapshot>& projectiles, std::ostream& out);
+void print_event_payload_json_compact(const robolocks::EventPayload& payload, std::ostream& out);
 
 void print_snapshot_json(const robolocks::WorldSnapshot& snapshot, std::ostream& out) {
   out << std::setprecision(15);
@@ -125,13 +126,29 @@ void print_events_json_compact(const std::vector<robolocks::Event>& events, std:
     out << "\"tick\":" << event.tick << ",";
     out << "\"unitId\":" << event.unit_id.value << ",";
     out << "\"code\":\"" << event.code << "\",";
-    out << "\"message\":\"" << event.message << "\"";
+    out << "\"message\":\"" << event.message << "\",";
+    out << "\"payload\":";
+    print_event_payload_json_compact(event.payload, out);
     out << "}";
     if (i + 1 < events.size()) {
       out << ",";
     }
   }
   out << "]";
+}
+
+void print_event_payload_json_compact(const robolocks::EventPayload& payload, std::ostream& out) {
+  out << "{";
+  out << "\"projectileId\":" << payload.projectile_id << ",";
+  out << "\"damageType\":\"" << payload.damage_type << "\",";
+  out << "\"armorFacing\":\"" << payload.armor_facing << "\",";
+  out << "\"damage\":" << payload.damage << ",";
+  out << "\"remainingArmor\":" << payload.remaining_armor << ",";
+  out << "\"penetrationMm\":" << payload.penetration_mm << ",";
+  out << "\"armorMm\":" << payload.armor_mm << ",";
+  out << "\"impactDistanceM\":" << payload.impact_distance_m << ",";
+  out << "\"blastRadiusM\":" << payload.blast_radius_m;
+  out << "}";
 }
 
 std::string order_kind_name(robolocks::OrderKind kind) {

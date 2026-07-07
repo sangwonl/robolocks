@@ -33,7 +33,17 @@ function enqueue(task: () => Promise<void>): void {
         tick: 0,
         units: [],
         projectiles: [],
-        events: [{ tick: 0, unitId: 0, code: "worker_error", message }],
+        events: [{ tick: 0, unitId: 0, code: "worker_error", message, payload: {
+          projectileId: 0,
+          damageType: "",
+          armorFacing: "",
+          damage: 0,
+          remainingArmor: 0,
+          penetrationMm: 0,
+          armorMm: 0,
+          impactDistanceM: 0,
+          blastRadiusM: 0,
+        } }],
         actions: [],
       },
     });

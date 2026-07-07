@@ -54,6 +54,7 @@ type ReplayEventPayload = {
   unitId?: unknown;
   code?: unknown;
   message?: unknown;
+  payload?: unknown;
 };
 
 type ReplayActionPayload = {
@@ -382,6 +383,39 @@ function parseEvent(payload: unknown): BattleEvent {
     unitId: event.unitId,
     code: event.code,
     message: event.message,
+    payload: parseEventPayload(event.payload),
+  };
+}
+
+function parseEventPayload(payload: unknown): BattleEvent["payload"] {
+  if (typeof payload !== "object" || payload === null) {
+    return defaultEventPayload();
+  }
+  const eventPayload = payload as Partial<Record<string, unknown>>;
+  return {
+    projectileId: numberField(eventPayload, "projectileId"),
+    damageType: stringField(eventPayload, "damageType"),
+    armorFacing: stringField(eventPayload, "armorFacing"),
+    damage: numberField(eventPayload, "damage"),
+    remainingArmor: numberField(eventPayload, "remainingArmor"),
+    penetrationMm: numberField(eventPayload, "penetrationMm"),
+    armorMm: numberField(eventPayload, "armorMm"),
+    impactDistanceM: numberField(eventPayload, "impactDistanceM"),
+    blastRadiusM: numberField(eventPayload, "blastRadiusM"),
+  };
+}
+
+function defaultEventPayload(): BattleEvent["payload"] {
+  return {
+    projectileId: 0,
+    damageType: "",
+    armorFacing: "",
+    damage: 0,
+    remainingArmor: 0,
+    penetrationMm: 0,
+    armorMm: 0,
+    impactDistanceM: 0,
+    blastRadiusM: 0,
   };
 }
 
