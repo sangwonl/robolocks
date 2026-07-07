@@ -733,6 +733,56 @@ TEST_CASE("battlefield applies FireIfSolution through weapon damage and reload")
   REQUIRE(second.events[0].code == "weapon_reloading");
 }
 
+TEST_CASE("battlefield advances fired projectiles before applying damage") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.tanks = {
+    make_tank(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
+    make_tank(robolocks::UnitId{2}, "Red", robolocks::Vec2{10.0, 0.0}, 0.0, 100.0, 180.0, 180.0),
+  };
+  config.tanks[0].weapon.muzzle_velocity_mps = 4.0;
+  config.tanks[0].weapon.projectile_radius_m = 0.1;
+  config.tanks[1].body.shape.radius_m = 1.0;
+
+  robolocks::Battlefield battlefield(config);
+
+  const auto first = battlefield.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{10.0, 0.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+
+  REQUIRE(first.snapshot.units[1].armor_integrity == Catch::Approx(100.0));
+  REQUIRE(first.snapshot.projectiles.size() == 1);
+  REQUIRE(first.snapshot.projectiles[0].position.x == Catch::Approx(4.0));
+  REQUIRE(first.events.size() == 1);
+  REQUIRE(first.events[0].code == "weapon_fired");
+
+  const auto second = battlefield.step({});
+
+  REQUIRE(second.snapshot.units[1].armor_integrity == Catch::Approx(100.0));
+  REQUIRE(second.snapshot.projectiles.size() == 1);
+  REQUIRE(second.snapshot.projectiles[0].position.x == Catch::Approx(8.0));
+
+  const auto third = battlefield.step({});
+
+  REQUIRE(third.snapshot.units[1].armor_integrity == Catch::Approx(75.0));
+  REQUIRE(third.snapshot.projectiles.empty());
+  REQUIRE(third.events.size() == 1);
+  REQUIRE(third.events[0].unit_id == robolocks::UnitId{2});
+  REQUIRE(third.events[0].code == "armor_damage");
+}
+
 TEST_CASE("battlefield keeps FireIfSolution intent until turret solution is available") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;

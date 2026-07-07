@@ -44,6 +44,14 @@ const robolocks::Event* event_at(RobolocksBattleRuntimeHandle handle, size_t eve
   return &runtime->last_result.events[event_index];
 }
 
+const robolocks::ProjectileSnapshot* projectile_at(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+  const auto* runtime = as_runtime(handle);
+  if (runtime == nullptr || projectile_index >= runtime->snapshot.projectiles.size()) {
+    return nullptr;
+  }
+  return &runtime->snapshot.projectiles[projectile_index];
+}
+
 struct ActionRef {
   robolocks::UnitId unit_id;
   const robolocks::Order* order = nullptr;
@@ -451,6 +459,73 @@ const char* robolocks_battle_runtime_event_message(RobolocksBattleRuntimeHandle 
     return "";
   }
   return event->message.c_str();
+}
+
+size_t robolocks_battle_runtime_projectile_count(RobolocksBattleRuntimeHandle handle) {
+  const auto* runtime = as_runtime(handle);
+  if (runtime == nullptr) {
+    return 0;
+  }
+  return runtime->snapshot.projectiles.size();
+}
+
+uint64_t robolocks_battle_runtime_projectile_id(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+  const auto* projectile = projectile_at(handle, projectile_index);
+  if (projectile == nullptr) {
+    return 0;
+  }
+  return projectile->projectile_id;
+}
+
+uint32_t robolocks_battle_runtime_projectile_owner_unit_id(
+  RobolocksBattleRuntimeHandle handle,
+  size_t projectile_index
+) {
+  const auto* projectile = projectile_at(handle, projectile_index);
+  if (projectile == nullptr) {
+    return 0;
+  }
+  return projectile->owner_unit_id.value;
+}
+
+double robolocks_battle_runtime_projectile_previous_x(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+  const auto* projectile = projectile_at(handle, projectile_index);
+  if (projectile == nullptr) {
+    return 0.0;
+  }
+  return projectile->previous_position.x;
+}
+
+double robolocks_battle_runtime_projectile_previous_y(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+  const auto* projectile = projectile_at(handle, projectile_index);
+  if (projectile == nullptr) {
+    return 0.0;
+  }
+  return projectile->previous_position.y;
+}
+
+double robolocks_battle_runtime_projectile_x(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+  const auto* projectile = projectile_at(handle, projectile_index);
+  if (projectile == nullptr) {
+    return 0.0;
+  }
+  return projectile->position.x;
+}
+
+double robolocks_battle_runtime_projectile_y(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+  const auto* projectile = projectile_at(handle, projectile_index);
+  if (projectile == nullptr) {
+    return 0.0;
+  }
+  return projectile->position.y;
+}
+
+double robolocks_battle_runtime_projectile_radius_m(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+  const auto* projectile = projectile_at(handle, projectile_index);
+  if (projectile == nullptr) {
+    return 0.0;
+  }
+  return projectile->radius_m;
 }
 
 size_t robolocks_battle_runtime_action_count(RobolocksBattleRuntimeHandle handle) {

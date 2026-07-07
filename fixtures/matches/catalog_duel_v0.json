@@ -1,29 +1,14 @@
 {
-  "matchId": "preset_duel_v0",
-  "mapId": "duel_grid_v0",
+  "matchId": "catalog_duel_v0",
   "seed": 1,
   "tickRate": 30,
   "tickLimit": 9000,
   "moduleCatalog": "../modules/tank_modules_v0.json",
-  "league": {
-    "id": "standard_500",
-    "pointLimit": 500
-  },
-  "obstacles": [
-    {
-      "id": "north_cover",
-      "position": { "x": 20, "y": 6 },
-      "radiusM": 1.5,
-      "blocksMovement": true,
-      "blocksLineOfSight": true
-    }
-  ],
   "tanks": [
     {
       "unitId": 1,
       "name": "Blue",
       "spawn": { "x": 6, "y": 12, "headingDeg": 0 },
-      "preset": "standard_blue_v0",
       "modules": {
         "mobility": { "id": "tracked_chassis_mk1" },
         "turret": { "id": "light_turret_mk1" },
@@ -37,11 +22,10 @@
       "unitId": 2,
       "name": "Red",
       "spawn": { "x": 34, "y": 12, "headingDeg": 180 },
-      "preset": "standard_red_v0",
       "modules": {
-        "mobility": { "id": "tracked_chassis_mk1" },
+        "mobility": { "id": "slow_chassis_test" },
         "turret": { "id": "light_turret_mk1" },
-        "weapon": { "id": "cannon_75mm_mk1" },
+        "weapon": { "id": "slow_cannon_test", "reloadTicks": 45 },
         "armor": { "id": "rolled_armor_mk1" },
         "body": { "id": "medium_hull_mk1" },
         "sensor": { "id": "visual_optic_mk1" }

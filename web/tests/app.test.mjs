@@ -123,8 +123,17 @@ test("workbench autoloads and autoplays the bundled preset replay", async () => 
                 armorIntegrity: 100,
                 weaponCooldownTicks: 0,
                 bodyShape: { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 },
+                modules: {
+                  mobility: { id: "tracked_chassis_mk1", maxSpeedMps: 6, maxHullTurnDegps: 120 },
+                  turret: { id: "light_turret_mk1", maxTurnDegps: 180 },
+                  weapon: { id: "cannon_75mm_mk1", damage: 25, rangeM: 80, muzzleVelocityMps: 620, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
+                  armor: { id: "rolled_armor_mk1", integrity: 100 },
+                  body: { id: "medium_hull_mk1", massKg: 30000 },
+                  sensor: { id: "visual_optic_mk1", rangeM: 60, fovDeg: 120, refreshTicks: 1 },
+                },
               },
             ],
+            projectiles: [],
             events: [],
             actions: [],
           },
@@ -141,6 +150,7 @@ test("workbench autoloads and autoplays the bundled preset replay", async () => 
                 bodyShape: { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 },
               },
             ],
+            projectiles: [],
             events: [],
             actions: [],
           },
@@ -156,6 +166,7 @@ test("workbench autoloads and autoplays the bundled preset replay", async () => 
   assert.equal(play.textContent, "Pause");
   assert.equal(battlefield.children.length, 1);
   assert.match(inspector.innerHTML, /Blue/);
+  assert.match(inspector.innerHTML, /tracked_chassis_mk1/);
 
   play.listeners.get("click")();
 });

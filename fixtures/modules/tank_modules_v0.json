@@ -1,0 +1,67 @@
+{
+  "catalogId": "tank_modules_v0",
+  "mobility": [
+    {
+      "id": "tracked_chassis_mk1",
+      "maxSpeedMps": 6,
+      "maxHullTurnDegps": 120
+    },
+    {
+      "id": "slow_chassis_test",
+      "maxSpeedMps": 3,
+      "maxHullTurnDegps": 60
+    }
+  ],
+  "turret": [
+    {
+      "id": "light_turret_mk1",
+      "maxTurnDegps": 180
+    }
+  ],
+  "weapon": [
+    {
+      "id": "cannon_75mm_mk1",
+      "damage": 25,
+      "rangeM": 80,
+      "muzzleVelocityMps": 620,
+      "projectileRadiusM": 0.08,
+      "aimToleranceDeg": 5,
+      "reloadTicks": 30
+    },
+    {
+      "id": "slow_cannon_test",
+      "damage": 25,
+      "rangeM": 80,
+      "muzzleVelocityMps": 20,
+      "projectileRadiusM": 0.08,
+      "aimToleranceDeg": 5,
+      "reloadTicks": 90
+    }
+  ],
+  "armor": [
+    {
+      "id": "rolled_armor_mk1",
+      "integrity": 100
+    }
+  ],
+  "body": [
+    {
+      "id": "medium_hull_mk1",
+      "shape": {
+        "type": "box",
+        "radiusM": 1.2,
+        "lengthM": 5.6,
+        "widthM": 2.8
+      },
+      "massKg": 30000
+    }
+  ],
+  "sensor": [
+    {
+      "id": "visual_optic_mk1",
+      "rangeM": 60,
+      "fovDeg": 120,
+      "refreshTicks": 1
+    }
+  ]
+}

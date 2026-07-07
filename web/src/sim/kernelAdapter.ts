@@ -1,4 +1,4 @@
-import type { BattleAction, BattleEvent, BattleFrame, BodyShapeFrame, StaticObstacleFrame, UnitFrame, UnitIntentsFrame } from "../types/protocol";
+import type { BattleAction, BattleEvent, BattleFrame, BodyShapeFrame, ProjectileFrame, StaticObstacleFrame, UnitFrame, UnitIntentsFrame, UnitModulesFrame } from "../types/protocol";
 import createRobolocksKernel from "../generated/robolocks_wasm.js";
 
 type InternalUnit = UnitFrame & {
@@ -53,6 +53,14 @@ type WasmModule = {
   cwrap(name: "robolocks_battle_runtime_event_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
   cwrap(name: "robolocks_battle_runtime_event_code", returnType: "string", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => string;
   cwrap(name: "robolocks_battle_runtime_event_message", returnType: "string", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => string;
+  cwrap(name: "robolocks_battle_runtime_projectile_count", returnType: "number", argTypes: ["number"]): (handle: number) => number;
+  cwrap(name: "robolocks_battle_runtime_projectile_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runtime_projectile_owner_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runtime_projectile_previous_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runtime_projectile_previous_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runtime_projectile_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runtime_projectile_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runtime_projectile_radius_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
   cwrap(name: "robolocks_battle_runtime_action_count", returnType: "number", argTypes: ["number"]): (handle: number) => number;
   cwrap(name: "robolocks_battle_runtime_action_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runtime_action_type", returnType: "string", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => string;
@@ -136,6 +144,14 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
   const eventUnitId = module.cwrap("robolocks_battle_runtime_event_unit_id", "number", ["number", "number"]);
   const eventCode = module.cwrap("robolocks_battle_runtime_event_code", "string", ["number", "number"]);
   const eventMessage = module.cwrap("robolocks_battle_runtime_event_message", "string", ["number", "number"]);
+  const projectileCount = module.cwrap("robolocks_battle_runtime_projectile_count", "number", ["number"]);
+  const projectileId = module.cwrap("robolocks_battle_runtime_projectile_id", "number", ["number", "number"]);
+  const projectileOwnerUnitId = module.cwrap("robolocks_battle_runtime_projectile_owner_unit_id", "number", ["number", "number"]);
+  const projectilePreviousX = module.cwrap("robolocks_battle_runtime_projectile_previous_x", "number", ["number", "number"]);
+  const projectilePreviousY = module.cwrap("robolocks_battle_runtime_projectile_previous_y", "number", ["number", "number"]);
+  const projectileX = module.cwrap("robolocks_battle_runtime_projectile_x", "number", ["number", "number"]);
+  const projectileY = module.cwrap("robolocks_battle_runtime_projectile_y", "number", ["number", "number"]);
+  const projectileRadius = module.cwrap("robolocks_battle_runtime_projectile_radius_m", "number", ["number", "number"]);
   const actionCount = module.cwrap("robolocks_battle_runtime_action_count", "number", ["number"]);
   const actionUnitId = module.cwrap("robolocks_battle_runtime_action_unit_id", "number", ["number", "number"]);
   const actionType = module.cwrap("robolocks_battle_runtime_action_type", "string", ["number", "number"]);
@@ -192,6 +208,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
         armorIntegrity: unitArmor(runtimeHandle, i),
         weaponCooldownTicks: weaponCooldown(runtimeHandle, i),
         bodyShape: readBodyShape(runtimeHandle, i, bodyShapeType, bodyRadius, bodyLength, bodyWidth),
+        modules: defaultModules(),
         intents: readIntents(runtimeHandle, i),
       });
     }
@@ -199,6 +216,17 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
     return {
       tick: tick(runtimeHandle),
       units,
+      projectiles: readProjectiles(
+        runtimeHandle,
+        projectileCount,
+        projectileId,
+        projectileOwnerUnitId,
+        projectilePreviousX,
+        projectilePreviousY,
+        projectileX,
+        projectileY,
+        projectileRadius,
+      ),
       events: readEvents(runtimeHandle, eventCount, eventTick, eventUnitId, eventCode, eventMessage),
       actions: readActions(
         runtimeHandle,
@@ -281,6 +309,30 @@ function readEvents(
     });
   }
   return events;
+}
+
+function readProjectiles(
+  handle: number,
+  projectileCount: (handle: number) => number,
+  projectileId: (handle: number, projectileIndex: number) => number,
+  projectileOwnerUnitId: (handle: number, projectileIndex: number) => number,
+  projectilePreviousX: (handle: number, projectileIndex: number) => number,
+  projectilePreviousY: (handle: number, projectileIndex: number) => number,
+  projectileX: (handle: number, projectileIndex: number) => number,
+  projectileY: (handle: number, projectileIndex: number) => number,
+  projectileRadius: (handle: number, projectileIndex: number) => number,
+): ProjectileFrame[] {
+  const projectiles: ProjectileFrame[] = [];
+  for (let i = 0; i < projectileCount(handle); i += 1) {
+    projectiles.push({
+      projectileId: projectileId(handle, i),
+      ownerUnitId: projectileOwnerUnitId(handle, i),
+      previousPosition: { x: projectilePreviousX(handle, i), y: projectilePreviousY(handle, i) },
+      position: { x: projectileX(handle, i), y: projectileY(handle, i) },
+      radiusM: projectileRadius(handle, i),
+    });
+  }
+  return projectiles;
 }
 
 function readActions(
@@ -374,11 +426,22 @@ function defaultIntents(): UnitIntentsFrame {
   };
 }
 
+function defaultModules(): UnitModulesFrame {
+  return {
+    mobility: { id: "tracked_chassis_mk1", maxSpeedMps: 6, maxHullTurnDegps: 120 },
+    turret: { id: "light_turret_mk1", maxTurnDegps: 180 },
+    weapon: { id: "cannon_75mm_mk1", damage: 25, rangeM: 80, muzzleVelocityMps: 620, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
+    armor: { id: "rolled_armor_mk1", integrity: 100 },
+    body: { id: "medium_hull_mk1", massKg: 30000 },
+    sensor: { id: "visual_optic_mk1", rangeM: 60, fovDeg: 120, refreshTicks: 1 },
+  };
+}
+
 export function createFallbackPresetDuel(): KernelMatch {
   let tick = 0;
   const units: InternalUnit[] = [
-    { unitId: 1, name: "Blue", position: { x: 6, y: 12 }, hullHeadingDeg: 0, turretHeadingDeg: 0, armorIntegrity: 100, weaponCooldownTicks: 0, bodyShape: { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 }, intents: defaultIntents(), target: { x: 17, y: 12 }, speed: 0.2 },
-    { unitId: 2, name: "Red", position: { x: 34, y: 12 }, hullHeadingDeg: 0, turretHeadingDeg: 0, armorIntegrity: 100, weaponCooldownTicks: 0, bodyShape: { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 }, intents: defaultIntents(), target: { x: 23, y: 12 }, speed: 0.2 },
+    { unitId: 1, name: "Blue", position: { x: 6, y: 12 }, hullHeadingDeg: 0, turretHeadingDeg: 0, armorIntegrity: 100, weaponCooldownTicks: 0, bodyShape: { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 }, modules: defaultModules(), intents: defaultIntents(), target: { x: 17, y: 12 }, speed: 0.2 },
+    { unitId: 2, name: "Red", position: { x: 34, y: 12 }, hullHeadingDeg: 0, turretHeadingDeg: 0, armorIntegrity: 100, weaponCooldownTicks: 0, bodyShape: { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 }, modules: defaultModules(), intents: defaultIntents(), target: { x: 23, y: 12 }, speed: 0.2 },
   ];
 
   return {
@@ -397,8 +460,10 @@ export function createFallbackPresetDuel(): KernelMatch {
           armorIntegrity: unit.armorIntegrity,
           weaponCooldownTicks: unit.weaponCooldownTicks,
           bodyShape: unit.bodyShape,
+          modules: unit.modules,
           intents: unit.intents,
         })),
+        projectiles: [],
         events: [],
         actions: [],
       };
@@ -419,8 +484,10 @@ export function createFallbackPresetDuel(): KernelMatch {
           armorIntegrity: unit.armorIntegrity,
           weaponCooldownTicks: unit.weaponCooldownTicks,
           bodyShape: unit.bodyShape,
+          modules: unit.modules,
           intents: unit.intents,
         })),
+        projectiles: [],
         events: [],
         actions: [],
       };

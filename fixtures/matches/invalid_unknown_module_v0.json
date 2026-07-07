@@ -1,0 +1,25 @@
+{
+  "matchId": "invalid_unknown_module_v0",
+  "seed": 1,
+  "tickRate": 30,
+  "tickLimit": 9000,
+  "moduleCatalog": "../modules/tank_modules_v0.json",
+  "tanks": [
+    {
+      "unitId": 1,
+      "name": "Blue",
+      "spawn": { "x": 6, "y": 12, "headingDeg": 0 },
+      "modules": {
+        "mobility": { "id": "missing_chassis" }
+      }
+    }
+  ],
+  "controllers": [
+    {
+      "unitId": 1,
+      "type": "builtin",
+      "id": "hold_line",
+      "hold": { "x": 17, "y": 12 }
+    }
+  ]
+}

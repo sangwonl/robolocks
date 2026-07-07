@@ -32,6 +32,7 @@ function enqueue(task: () => Promise<void>): void {
       finalFrame: {
         tick: 0,
         units: [],
+        projectiles: [],
         events: [{ tick: 0, unitId: 0, code: "worker_error", message }],
         actions: [],
       },

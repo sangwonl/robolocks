@@ -24,7 +24,43 @@ export type UnitFrame = {
   armorIntegrity: number;
   weaponCooldownTicks: number;
   bodyShape: BodyShapeFrame;
+  modules: UnitModulesFrame;
   intents: UnitIntentsFrame;
+};
+
+export type UnitModulesFrame = {
+  mobility: {
+    id: string;
+    maxSpeedMps: number;
+    maxHullTurnDegps: number;
+  };
+  turret: {
+    id: string;
+    maxTurnDegps: number;
+  };
+  weapon: {
+    id: string;
+    damage: number;
+    rangeM: number;
+    muzzleVelocityMps: number;
+    projectileRadiusM: number;
+    aimToleranceDeg: number;
+    reloadTicks: number;
+  };
+  armor: {
+    id: string;
+    integrity: number;
+  };
+  body: {
+    id: string;
+    massKg: number;
+  };
+  sensor: {
+    id: string;
+    rangeM: number;
+    fovDeg: number;
+    refreshTicks: number;
+  };
 };
 
 export type UnitIntentsFrame = {
@@ -79,9 +115,18 @@ export type BattleAction = {
   widthDeg?: number;
 };
 
+export type ProjectileFrame = {
+  projectileId: number;
+  ownerUnitId: number;
+  previousPosition: Vec2;
+  position: Vec2;
+  radiusM: number;
+};
+
 export type BattleFrame = {
   tick: number;
   units: UnitFrame[];
+  projectiles: ProjectileFrame[];
   events: BattleEvent[];
   actions: BattleAction[];
 };

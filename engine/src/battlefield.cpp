@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <utility>
 
 namespace robolocks {
 
@@ -19,9 +20,32 @@ double distance_between(Vec2 from, Vec2 to) {
   return length(Vec2{to.x - from.x, to.y - from.y});
 }
 
+double dot(Vec2 a, Vec2 b) {
+  return a.x * b.x + a.y * b.y;
+}
+
 Vec2 forward_vector(double heading_deg) {
   const double radians = normalize_angle_deg(heading_deg) * kPi / 180.0;
   return Vec2{std::cos(radians), std::sin(radians)};
+}
+
+double collision_radius_for_shape(const BodyShapeComponent& shape) {
+  if (shape.type == BodyShapeType::Box) {
+    return std::max(shape.radius_m, std::hypot(shape.length_m * 0.5, shape.width_m * 0.5));
+  }
+  return shape.radius_m;
+}
+
+bool segment_intersects_circle(Vec2 from, Vec2 to, Vec2 center, double radius) {
+  const Vec2 segment{to.x - from.x, to.y - from.y};
+  const double length_sq = dot(segment, segment);
+  if (length_sq <= 0.0) {
+    return distance_between(from, center) <= radius;
+  }
+  const Vec2 from_to_center{center.x - from.x, center.y - from.y};
+  const double t = clamp(dot(from_to_center, segment) / length_sq, 0.0, 1.0);
+  const Vec2 closest{from.x + segment.x * t, from.y + segment.y * t};
+  return distance_between(closest, center) <= radius;
 }
 
 double hit_chance_for_error(double error_deg, double aim_tolerance_deg) {
@@ -52,6 +76,15 @@ Battlefield::Battlefield(BattleConfig config)
       .weapon = tank.weapon,
       .armor = tank.armor,
       .body = tank.body,
+      .sensor = tank.sensor,
+      .module_specs = UnitModulesSnapshot{
+        .mobility = tank.mobility,
+        .turret = tank.turret,
+        .weapon = tank.weapon,
+        .armor = tank.armor,
+        .body = tank.body,
+        .sensor = tank.sensor,
+      },
       .weapon_cooldown_ticks = 0,
       .mobility_intent_active = false,
       .mobility_intent_target = tank.transform.position,
@@ -104,6 +137,7 @@ WorldSnapshot Battlefield::snapshot() const {
       .body_radius_m = unit.body.shape.radius_m,
       .body_length_m = unit.body.shape.length_m,
       .body_width_m = unit.body.shape.width_m,
+      .modules = unit.module_specs,
       .mobility_intent_active = unit.mobility_intent_active,
       .mobility_intent_target = unit.mobility_intent_target,
       .mobility_intent_remaining_m = mobility_remaining,
@@ -119,6 +153,16 @@ WorldSnapshot Battlefield::snapshot() const {
       .weapon_intent_active = unit.weapon_intent_active,
       .weapon_intent_min_hit_chance = unit.weapon_intent_min_hit_chance,
       .weapon_intent_age_ticks = intent_age(tick_, unit.weapon_intent_updated_tick),
+    });
+  }
+  out.projectiles.reserve(projectiles_.size());
+  for (const auto& projectile : projectiles_) {
+    out.projectiles.push_back(ProjectileSnapshot{
+      .projectile_id = projectile.projectile_id,
+      .owner_unit_id = projectile.owner_unit_id,
+      .previous_position = projectile.previous_position,
+      .position = projectile.position,
+      .radius_m = projectile.radius_m,
     });
   }
   return out;
@@ -426,27 +470,81 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
       continue;
     }
 
-    target.armor.integrity = std::max(0.0, target.armor.integrity - unit.weapon.damage);
-    if (target.armor.integrity <= 0.0) {
-      Battlefield::clear_intents(target);
-    }
     unit.weapon_cooldown_ticks = unit.weapon.reload_ticks;
     unit.weapon_intent_active = false;
     unit.weapon_intent_min_hit_chance = 0.0;
     unit.weapon_intent_updated_tick = tick_;
+    const Vec2 direction = forward_vector(unit.turret.heading_deg);
+    projectiles_.push_back(ProjectileState{
+      .projectile_id = next_projectile_id_++,
+      .owner_unit_id = unit.unit_id,
+      .previous_position = unit.transform.position,
+      .position = unit.transform.position,
+      .velocity = Vec2{
+        direction.x * unit.weapon.muzzle_velocity_mps,
+        direction.y * unit.weapon.muzzle_velocity_mps,
+      },
+      .damage = unit.weapon.damage,
+      .radius_m = unit.weapon.projectile_radius_m,
+      .remaining_range_m = unit.weapon.range_m,
+    });
     events.push_back(Event{
       .tick = tick_,
       .unit_id = unit.unit_id,
       .code = "weapon_fired",
       .message = "Weapon fired with a valid direct-fire solution.",
     });
-    events.push_back(Event{
-      .tick = tick_,
-      .unit_id = target.unit_id,
-      .code = "armor_damage",
-      .message = "Armor integrity reduced by weapon damage.",
-    });
   }
+
+  std::vector<ProjectileState> active_projectiles;
+  active_projectiles.reserve(projectiles_.size());
+  for (auto projectile : projectiles_) {
+    projectile.previous_position = projectile.position;
+    const double max_distance = std::max(0.0, projectile.remaining_range_m);
+    const double requested_distance = length(projectile.velocity) * tick_dt_sec_;
+    const double distance = std::min(requested_distance, max_distance);
+    const Vec2 direction = requested_distance > 0.0
+      ? Vec2{projectile.velocity.x / requested_distance * tick_dt_sec_, projectile.velocity.y / requested_distance * tick_dt_sec_}
+      : Vec2{0.0, 0.0};
+    projectile.position = Vec2{
+      projectile.position.x + direction.x * distance,
+      projectile.position.y + direction.y * distance,
+    };
+    projectile.remaining_range_m -= distance;
+
+    std::optional<std::size_t> hit_target_index;
+    for (std::size_t i = 0; i < units_.size(); i += 1) {
+      auto& target = units_[i];
+      if (target.unit_id == projectile.owner_unit_id || target.armor.integrity <= 0.0) {
+        continue;
+      }
+      const double hit_radius = collision_radius_for_shape(target.body.shape) + projectile.radius_m;
+      if (segment_intersects_circle(projectile.previous_position, projectile.position, target.transform.position, hit_radius)) {
+        hit_target_index = i;
+        break;
+      }
+    }
+
+    if (hit_target_index.has_value()) {
+      auto& target = units_[*hit_target_index];
+      target.armor.integrity = std::max(0.0, target.armor.integrity - projectile.damage);
+      if (target.armor.integrity <= 0.0) {
+        Battlefield::clear_intents(target);
+      }
+      events.push_back(Event{
+        .tick = tick_,
+        .unit_id = target.unit_id,
+        .code = "armor_damage",
+        .message = "Armor integrity reduced by projectile damage.",
+      });
+      continue;
+    }
+
+    if (projectile.remaining_range_m > 0.0) {
+      active_projectiles.push_back(projectile);
+    }
+  }
+  projectiles_ = std::move(active_projectiles);
 
   std::vector<PhysicsBody> physics_bodies;
   physics_bodies.reserve(units_.size());

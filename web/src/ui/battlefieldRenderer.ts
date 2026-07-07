@@ -37,6 +37,7 @@ export function createBattlefieldRenderer(container: HTMLElement): BattlefieldRe
       for (const unit of lastFrame.units) {
         drawUnit(context, unit, lastFrame);
       }
+      drawProjectiles(context, lastFrame);
       drawWeaponTracers(context, lastFrame);
     }
   }
@@ -252,7 +253,30 @@ function drawDamageFlash(context: CanvasRenderingContext2D, unit: UnitFrame, pos
   context.restore();
 }
 
+function drawProjectiles(context: CanvasRenderingContext2D, frame: BattleFrame): void {
+  for (const projectile of frame.projectiles) {
+    const previous = worldToCanvas(projectile.previousPosition);
+    const position = worldToCanvas(projectile.position);
+    context.save();
+    context.beginPath();
+    context.moveTo(previous.x, previous.y);
+    context.lineTo(position.x, position.y);
+    context.strokeStyle = "rgba(255, 224, 91, 0.72)";
+    context.lineWidth = 2;
+    context.stroke();
+
+    context.beginPath();
+    context.arc(position.x, position.y, Math.max(3, projectile.radiusM * METERS_TO_PX), 0, Math.PI * 2);
+    context.fillStyle = "#fff3a3";
+    context.fill();
+    context.restore();
+  }
+}
+
 function drawWeaponTracers(context: CanvasRenderingContext2D, frame: BattleFrame): void {
+  if (frame.projectiles.length > 0) {
+    return;
+  }
   for (const event of frame.events) {
     if (event.code !== "weapon_fired") {
       continue;

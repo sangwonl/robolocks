@@ -51,9 +51,13 @@ TEST_CASE("C API drives the battle runtime and exposes snapshots") {
   REQUIRE(robolocks_battle_runtime_unit_id(runtime, 1) == 2);
   REQUIRE(robolocks_battle_runtime_unit_x(runtime, 1) == Catch::Approx(33.8));
   REQUIRE(robolocks_battle_runtime_unit_y(runtime, 1) == Catch::Approx(12.0));
-  REQUIRE(robolocks_battle_runtime_event_count(runtime) == 4);
+  REQUIRE(robolocks_battle_runtime_event_count(runtime) == 2);
   REQUIRE(std::string(robolocks_battle_runtime_event_code(runtime, 0)) == "weapon_fired");
-  REQUIRE(std::string(robolocks_battle_runtime_event_code(runtime, 1)) == "armor_damage");
+  REQUIRE(std::string(robolocks_battle_runtime_event_code(runtime, 1)) == "weapon_fired");
+  REQUIRE(robolocks_battle_runtime_projectile_count(runtime) == 2);
+  REQUIRE(robolocks_battle_runtime_projectile_owner_unit_id(runtime, 0) == 1);
+  REQUIRE(robolocks_battle_runtime_projectile_x(runtime, 0) > 20.0);
+  REQUIRE(robolocks_battle_runtime_projectile_radius_m(runtime, 0) == Catch::Approx(0.08));
   REQUIRE(robolocks_battle_runtime_action_count(runtime) == 6);
   REQUIRE(robolocks_battle_runtime_action_unit_id(runtime, 0) == 1);
   REQUIRE(std::string(robolocks_battle_runtime_action_type(runtime, 0)) == "moveTo");

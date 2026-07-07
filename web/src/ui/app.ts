@@ -207,6 +207,8 @@ function formatInspector(frame: BattleFrame): string {
           <div><dt>Armor</dt><dd>${unit.armorIntegrity.toFixed(0)}</dd></div>
           <div><dt>Reload</dt><dd>${unit.weaponCooldownTicks} ticks</dd></div>
         </dl>
+        <div class="unit-subtitle">Modules</div>
+        <ul class="action-list">${formatModuleItems(unit)}</ul>
         <div class="unit-subtitle">Intents</div>
         <ul class="action-list">${formatIntentItems(unit)}</ul>
         <div class="unit-subtitle">Actions</div>
@@ -223,6 +225,17 @@ function formatInspector(frame: BattleFrame): string {
       <div class="debug-title">Units</div>
       <div class="unit-stack">${units}</div>
     </div>
+  `;
+}
+
+function formatModuleItems(unit: BattleFrame["units"][number]): string {
+  return `
+    <li><span>move</span> ${unit.modules.mobility.id} ${unit.modules.mobility.maxSpeedMps.toFixed(1)}m/s ${unit.modules.mobility.maxHullTurnDegps.toFixed(0)}deg/s</li>
+    <li><span>turret</span> ${unit.modules.turret.id} ${unit.modules.turret.maxTurnDegps.toFixed(0)}deg/s</li>
+    <li><span>weapon</span> ${unit.modules.weapon.id} dmg=${unit.modules.weapon.damage.toFixed(0)} v=${unit.modules.weapon.muzzleVelocityMps.toFixed(0)}m/s r=${unit.modules.weapon.projectileRadiusM.toFixed(2)}m reload=${unit.modules.weapon.reloadTicks}</li>
+    <li><span>armor</span> ${unit.modules.armor.id} hp=${unit.modules.armor.integrity.toFixed(0)}</li>
+    <li><span>body</span> ${unit.modules.body.id} mass=${unit.modules.body.massKg.toFixed(0)}kg</li>
+    <li><span>sensor</span> ${unit.modules.sensor.id} ${unit.modules.sensor.rangeM.toFixed(0)}m/${unit.modules.sensor.fovDeg.toFixed(0)}deg</li>
   `;
 }
 

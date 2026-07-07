@@ -5,6 +5,7 @@
 #include <robolocks/physics_system.hpp>
 #include <robolocks/snapshot.hpp>
 
+#include <cstdint>
 #include <vector>
 
 namespace robolocks {
@@ -36,6 +37,8 @@ class Battlefield {
     WeaponComponent weapon;
     ArmorComponent armor;
     BodyComponent body;
+    SensorComponent sensor;
+    UnitModulesSnapshot module_specs;
     Tick weapon_cooldown_ticks = 0;
     bool mobility_intent_active = false;
     Vec2 mobility_intent_target;
@@ -55,12 +58,25 @@ class Battlefield {
     Tick weapon_intent_updated_tick = 0;
   };
 
+  struct ProjectileState {
+    std::uint64_t projectile_id = 0;
+    UnitId owner_unit_id;
+    Vec2 previous_position;
+    Vec2 position;
+    Vec2 velocity;
+    double damage = 0.0;
+    double radius_m = 0.05;
+    double remaining_range_m = 0.0;
+  };
+
   static void clear_intents(UnitState& unit);
 
   double tick_dt_sec_ = 1.0 / 30.0;
   PhysicsSystem physics_;
   Tick tick_ = 0;
+  std::uint64_t next_projectile_id_ = 1;
   std::vector<UnitState> units_;
+  std::vector<ProjectileState> projectiles_;
 };
 
 }  // namespace robolocks

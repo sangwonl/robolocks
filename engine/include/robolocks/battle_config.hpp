@@ -9,6 +9,7 @@
 namespace robolocks {
 
 struct SensorComponent {
+  std::string id;
   double range_m = 1000.0;
   double fov_deg = 360.0;
   Tick refresh_ticks = 1;
@@ -20,22 +21,28 @@ struct TransformComponent {
 };
 
 struct MobilityComponent {
+  std::string id;
   double max_speed_mps = 8.0;
   double max_hull_turn_degps = 120.0;
 };
 
 struct TurretComponent {
+  std::string id;
   double heading_deg = 0.0;
   double max_turn_degps = 180.0;
 };
 
 struct ArmorComponent {
+  std::string id;
   double integrity = 100.0;
 };
 
 struct WeaponComponent {
+  std::string id;
   double damage = 25.0;
   double range_m = 80.0;
+  double muzzle_velocity_mps = 1000.0;
+  double projectile_radius_m = 0.05;
   double aim_tolerance_deg = 5.0;
   Tick reload_ticks = 30;
 };
@@ -53,6 +60,7 @@ struct BodyShapeComponent {
 };
 
 struct BodyComponent {
+  std::string id;
   BodyShapeComponent shape;
   double mass_kg = 30000.0;
 };

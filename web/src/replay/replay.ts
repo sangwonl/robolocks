@@ -1,4 +1,4 @@
-import type { BattleAction, BattleEvent, BattleFrame, BodyShapeFrame, StaticObstacleFrame, UnitFrame, UnitIntentsFrame } from "../types/protocol";
+import type { BattleAction, BattleEvent, BattleFrame, BodyShapeFrame, ProjectileFrame, StaticObstacleFrame, UnitFrame, UnitIntentsFrame, UnitModulesFrame } from "../types/protocol";
 
 export type BattleReplay = {
   type: "robolocks.replay.v1";
@@ -17,6 +17,7 @@ type ReplayPayload = {
 type ReplayFramePayload = {
   tick?: unknown;
   units?: unknown;
+  projectiles?: unknown;
   events?: unknown;
   actions?: unknown;
 };
@@ -29,6 +30,7 @@ type ReplayUnitPayload = {
   armorIntegrity?: unknown;
   weaponCooldownTicks?: unknown;
   bodyShape?: unknown;
+  modules?: unknown;
   intents?: unknown;
 };
 
@@ -65,6 +67,14 @@ type ReplayActionPayload = {
   widthDeg?: unknown;
 };
 
+type ReplayProjectilePayload = {
+  projectileId?: unknown;
+  ownerUnitId?: unknown;
+  previousPosition?: unknown;
+  position?: unknown;
+  radiusM?: unknown;
+};
+
 type ReplayIntentPayload = {
   active?: unknown;
   target?: unknown;
@@ -72,6 +82,15 @@ type ReplayIntentPayload = {
   errorDeg?: unknown;
   minHitChance?: unknown;
   ageTicks?: unknown;
+};
+
+type ReplayModulesPayload = {
+  mobility?: unknown;
+  turret?: unknown;
+  weapon?: unknown;
+  armor?: unknown;
+  body?: unknown;
+  sensor?: unknown;
 };
 
 export function parseBattleReplay(text: string): BattleReplay {
@@ -100,8 +119,30 @@ function parseFrame(payload: unknown): BattleFrame {
   return {
     tick: frame.tick,
     units: frame.units.map(parseUnit),
+    projectiles: Array.isArray(frame.projectiles) ? frame.projectiles.map(parseProjectile) : [],
     events: Array.isArray(frame.events) ? frame.events.map(parseEvent) : [],
     actions: Array.isArray(frame.actions) ? frame.actions.map(parseAction) : [],
+  };
+}
+
+function parseProjectile(payload: unknown): ProjectileFrame {
+  const projectile = payload as ReplayProjectilePayload;
+  if (
+    typeof projectile !== "object" ||
+    projectile === null ||
+    typeof projectile.projectileId !== "number" ||
+    typeof projectile.ownerUnitId !== "number" ||
+    typeof projectile.radiusM !== "number"
+  ) {
+    throw new Error("Invalid replay projectile");
+  }
+
+  return {
+    projectileId: projectile.projectileId,
+    ownerUnitId: projectile.ownerUnitId,
+    previousPosition: parseVec(projectile.previousPosition, "Invalid replay projectile previous position"),
+    position: parseVec(projectile.position, "Invalid replay projectile position"),
+    radiusM: projectile.radiusM,
   };
 }
 
@@ -130,7 +171,74 @@ function parseUnit(payload: unknown): UnitFrame {
     armorIntegrity: unit.armorIntegrity,
     weaponCooldownTicks: typeof unit.weaponCooldownTicks === "number" ? unit.weaponCooldownTicks : 0,
     bodyShape: parseBodyShape(unit.bodyShape),
+    modules: parseModules(unit.modules),
     intents: parseIntents(unit.intents),
+  };
+}
+
+function parseModules(payload: unknown): UnitModulesFrame {
+  const modules = payload as ReplayModulesPayload;
+  if (typeof modules !== "object" || modules === null) {
+    return defaultModules();
+  }
+  return {
+    mobility: {
+      id: stringField(modules.mobility, "id"),
+      maxSpeedMps: numberField(modules.mobility, "maxSpeedMps"),
+      maxHullTurnDegps: numberField(modules.mobility, "maxHullTurnDegps"),
+    },
+    turret: {
+      id: stringField(modules.turret, "id"),
+      maxTurnDegps: numberField(modules.turret, "maxTurnDegps"),
+    },
+    weapon: {
+      id: stringField(modules.weapon, "id"),
+      damage: numberField(modules.weapon, "damage"),
+      rangeM: numberField(modules.weapon, "rangeM"),
+      muzzleVelocityMps: numberField(modules.weapon, "muzzleVelocityMps"),
+      projectileRadiusM: numberField(modules.weapon, "projectileRadiusM"),
+      aimToleranceDeg: numberField(modules.weapon, "aimToleranceDeg"),
+      reloadTicks: numberField(modules.weapon, "reloadTicks"),
+    },
+    armor: {
+      id: stringField(modules.armor, "id"),
+      integrity: numberField(modules.armor, "integrity"),
+    },
+    body: {
+      id: stringField(modules.body, "id"),
+      massKg: numberField(modules.body, "massKg"),
+    },
+    sensor: {
+      id: stringField(modules.sensor, "id"),
+      rangeM: numberField(modules.sensor, "rangeM"),
+      fovDeg: numberField(modules.sensor, "fovDeg"),
+      refreshTicks: numberField(modules.sensor, "refreshTicks"),
+    },
+  };
+}
+
+function stringField(payload: unknown, key: string): string {
+  const object = payload as Record<string, unknown>;
+  return typeof object === "object" && object !== null && typeof object[key] === "string"
+    ? object[key]
+    : "";
+}
+
+function numberField(payload: unknown, key: string): number {
+  const object = payload as Record<string, unknown>;
+  return typeof object === "object" && object !== null && typeof object[key] === "number"
+    ? object[key]
+    : 0;
+}
+
+function defaultModules(): UnitModulesFrame {
+  return {
+    mobility: { id: "", maxSpeedMps: 0, maxHullTurnDegps: 0 },
+    turret: { id: "", maxTurnDegps: 0 },
+    weapon: { id: "", damage: 0, rangeM: 0, muzzleVelocityMps: 0, projectileRadiusM: 0, aimToleranceDeg: 0, reloadTicks: 0 },
+    armor: { id: "", integrity: 0 },
+    body: { id: "", massKg: 0 },
+    sensor: { id: "", rangeM: 0, fovDeg: 0, refreshTicks: 0 },
   };
 }
 

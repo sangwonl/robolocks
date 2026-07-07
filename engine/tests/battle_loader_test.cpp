@@ -101,6 +101,39 @@ TEST_CASE("battle loader reads python controller paths") {
   REQUIRE(loaded.controllers[1].resolved_path.ends_with("examples/bots/hold_line_blue.py"));
 }
 
+TEST_CASE("battle loader resolves module specs from catalog ids and applies inline overrides") {
+  const auto fixture_path = std::string(ROBOLOCKS_SOURCE_DIR) + "/fixtures/matches/catalog_duel_v0.json";
+  const auto loaded = robolocks::load_battle_from_file(fixture_path);
+  const auto& config = loaded.config;
+
+  REQUIRE(config.battle_id == "catalog_duel_v0");
+  REQUIRE(config.tanks.size() == 2);
+
+  REQUIRE(config.tanks[0].mobility.max_speed_mps == Catch::Approx(6.0));
+  REQUIRE(config.tanks[0].mobility.max_hull_turn_degps == Catch::Approx(120.0));
+  REQUIRE(config.tanks[0].turret.max_turn_degps == Catch::Approx(180.0));
+  REQUIRE(config.tanks[0].weapon.damage == Catch::Approx(25.0));
+  REQUIRE(config.tanks[0].weapon.reload_ticks == 30);
+  REQUIRE(config.tanks[0].body.shape.type == robolocks::BodyShapeType::Box);
+  REQUIRE(config.tanks[0].body.shape.length_m == Catch::Approx(5.6));
+  REQUIRE(config.tanks[0].sensor.fov_deg == Catch::Approx(120.0));
+
+  REQUIRE(config.tanks[1].mobility.max_speed_mps == Catch::Approx(3.0));
+  REQUIRE(config.tanks[1].mobility.max_hull_turn_degps == Catch::Approx(60.0));
+  REQUIRE(config.tanks[1].weapon.reload_ticks == 45);
+}
+
+TEST_CASE("battle loader rejects unknown catalog module ids") {
+  const auto fixture_path = std::string(ROBOLOCKS_SOURCE_DIR)
+    + "/fixtures/matches/invalid_unknown_module_v0.json";
+
+  REQUIRE_THROWS_MATCHES(
+    robolocks::load_battle_from_file(fixture_path),
+    std::runtime_error,
+    Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring("Unknown mobility module id: missing_chassis"))
+  );
+}
+
 TEST_CASE("battle loader rejects implicit body shape schema") {
   const auto fixture_path = std::string(ROBOLOCKS_SOURCE_DIR)
     + "/fixtures/matches/invalid_implicit_body_shape_v0.json";

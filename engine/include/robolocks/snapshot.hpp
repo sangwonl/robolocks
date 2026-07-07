@@ -3,10 +3,20 @@
 #include <robolocks/battle_config.hpp>
 #include <robolocks/types.hpp>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
 namespace robolocks {
+
+struct UnitModulesSnapshot {
+  MobilityComponent mobility;
+  TurretComponent turret;
+  WeaponComponent weapon;
+  ArmorComponent armor;
+  BodyComponent body;
+  SensorComponent sensor;
+};
 
 struct UnitSnapshot {
   UnitId unit_id;
@@ -19,6 +29,7 @@ struct UnitSnapshot {
   double body_radius_m = 1.0;
   double body_length_m = 5.6;
   double body_width_m = 2.8;
+  UnitModulesSnapshot modules;
   bool mobility_intent_active = false;
   Vec2 mobility_intent_target;
   double mobility_intent_remaining_m = 0.0;
@@ -36,6 +47,14 @@ struct UnitSnapshot {
   Tick weapon_intent_age_ticks = 0;
 };
 
+struct ProjectileSnapshot {
+  std::uint64_t projectile_id = 0;
+  UnitId owner_unit_id;
+  Vec2 previous_position;
+  Vec2 position;
+  double radius_m = 0.05;
+};
+
 struct Event {
   Tick tick = 0;
   UnitId unit_id;
@@ -46,6 +65,7 @@ struct Event {
 struct WorldSnapshot {
   Tick tick = 0;
   std::vector<UnitSnapshot> units;
+  std::vector<ProjectileSnapshot> projectiles;
 };
 
 }  // namespace robolocks

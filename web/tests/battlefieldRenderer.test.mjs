@@ -103,6 +103,7 @@ function frame(tick, blueX, redX) {
         bodyShape: { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 },
       },
     ],
+    projectiles: [],
     events: [],
     actions: [],
   };
@@ -186,6 +187,57 @@ test("battlefield renderer draws weapon tracers for fired shots", () => {
 
   assert(context.calls.some(([name, args]) => name === "moveTo" && args[0] === 112 && args[1] === 184));
   assert(context.calls.some(([name, args]) => name === "lineTo" && args[0] === 448 && args[1] === 184));
+});
+
+test("battlefield renderer draws active projectiles from replay state", () => {
+  const context = new FakeCanvasContext();
+  const document = new FakeDocument(context);
+  const container = new FakeContainer(document);
+  const renderer = createBattlefieldRenderer(container);
+  const projectileFrame = frame(1, 6, 34);
+  projectileFrame.projectiles = [
+    {
+      projectileId: 7,
+      ownerUnitId: 1,
+      previousPosition: { x: 18, y: 12 },
+      position: { x: 20, y: 12 },
+      radiusM: 0.08,
+    },
+  ];
+
+  renderer.drawFrame(projectileFrame);
+
+  assert(context.calls.some(([name, args]) => name === "moveTo" && args[0] === 256 && args[1] === 184));
+  assert(context.calls.some(([name, args]) => name === "lineTo" && args[0] === 280 && args[1] === 184));
+  assert(context.calls.some(([name, args]) => name === "arc" && args[0] === 280 && args[1] === 184 && args[2] === 3));
+});
+
+test("battlefield renderer suppresses legacy fired-shot tracer when projectile state is present", () => {
+  const context = new FakeCanvasContext();
+  const document = new FakeDocument(context);
+  const container = new FakeContainer(document);
+  const renderer = createBattlefieldRenderer(container);
+  const projectileFrame = frame(1, 6, 34);
+  projectileFrame.actions = [
+    { unitId: 1, type: "aimAt", channel: "turret", target: { x: 34, y: 12 } },
+  ];
+  projectileFrame.events = [
+    { tick: 1, unitId: 1, code: "weapon_fired", message: "Weapon fired with a valid direct-fire solution." },
+  ];
+  projectileFrame.projectiles = [
+    {
+      projectileId: 7,
+      ownerUnitId: 1,
+      previousPosition: { x: 18, y: 12 },
+      position: { x: 20, y: 12 },
+      radiusM: 0.08,
+    },
+  ];
+
+  renderer.drawFrame(projectileFrame);
+
+  assert(!context.calls.some(([name, args]) => name === "lineTo" && args[0] === 448 && args[1] === 184));
+  assert(context.calls.some(([name, args]) => name === "lineTo" && args[0] === 280 && args[1] === 184));
 });
 
 function nearlyEqual(actual, expected) {
