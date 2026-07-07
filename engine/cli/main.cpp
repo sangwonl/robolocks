@@ -170,6 +170,16 @@ void print_vec_json(const robolocks::Vec2& vec, std::ostream& out) {
   out << "{\"x\":" << vec.x << ",\"y\":" << vec.y << "}";
 }
 
+const char* fire_mode_json(robolocks::WeaponFireMode mode) {
+  switch (mode) {
+    case robolocks::WeaponFireMode::Direct:
+      return "direct";
+    case robolocks::WeaponFireMode::Ballistic:
+      return "ballistic";
+  }
+  return "direct";
+}
+
 void print_body_shape_json(const robolocks::UnitSnapshot& unit, std::ostream& out) {
   out << "{";
   if (unit.body_shape_type == robolocks::BodyShapeType::Box) {
@@ -201,10 +211,14 @@ void print_modules_json(const robolocks::UnitSnapshot& unit, std::ostream& out) 
   out << "},";
   out << "\"weapon\":{";
   out << "\"id\":\"" << unit.modules.weapon.id << "\",";
+  out << "\"fireMode\":\"" << fire_mode_json(unit.modules.weapon.fire_mode) << "\",";
   out << "\"damage\":" << unit.modules.weapon.damage << ",";
   out << "\"penetrationMm\":" << unit.modules.weapon.penetration_mm << ",";
   out << "\"rangeM\":" << unit.modules.weapon.range_m << ",";
   out << "\"muzzleVelocityMps\":" << unit.modules.weapon.muzzle_velocity_mps << ",";
+  out << "\"launchAngleDeg\":" << unit.modules.weapon.launch_angle_deg << ",";
+  out << "\"gravityMps2\":" << unit.modules.weapon.gravity_mps2 << ",";
+  out << "\"blastRadiusM\":" << unit.modules.weapon.blast_radius_m << ",";
   out << "\"projectileRadiusM\":" << unit.modules.weapon.projectile_radius_m << ",";
   out << "\"aimToleranceDeg\":" << unit.modules.weapon.aim_tolerance_deg << ",";
   out << "\"reloadTicks\":" << unit.modules.weapon.reload_ticks;
@@ -313,7 +327,8 @@ void print_projectiles_json_compact(const std::vector<robolocks::ProjectileSnaps
     print_vec_json(projectile.previous_position, out);
     out << ",\"position\":";
     print_vec_json(projectile.position, out);
-    out << ",\"radiusM\":" << projectile.radius_m;
+    out << ",\"radiusM\":" << projectile.radius_m << ",";
+    out << "\"heightM\":" << projectile.height_m;
     out << "}";
     if (i + 1 < projectiles.size()) {
       out << ",";

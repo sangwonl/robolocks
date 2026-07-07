@@ -83,7 +83,7 @@ class FakeRoot extends FakeElement {
   }
 }
 
-test("workbench autoloads and autoplays the bundled preset replay", async () => {
+test("workbench starts empty until a replay is loaded", async () => {
   const status = new FakeElement();
   const inspector = new FakeElement();
   const battlefield = new FakeElement(new FakeDocument());
@@ -104,7 +104,6 @@ test("workbench autoloads and autoplays the bundled preset replay", async () => 
   const fetched = [];
 
   renderApp(root, {
-    defaultReplayUrl: "/replays/preset_duel_python_v0.replay.json",
     fetchText: async (url) => {
       fetched.push(url);
       return JSON.stringify({
@@ -126,7 +125,7 @@ test("workbench autoloads and autoplays the bundled preset replay", async () => 
                 modules: {
                   mobility: { id: "tracked_chassis_mk1", maxSpeedMps: 6, maxHullTurnDegps: 120 },
                   turret: { id: "light_turret_mk1", maxTurnDegps: 180 },
-                  weapon: { id: "cannon_75mm_mk1", damage: 25, penetrationMm: 120, rangeM: 80, muzzleVelocityMps: 620, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
+                  weapon: { id: "cannon_75mm_mk1", fireMode: "direct", damage: 25, penetrationMm: 120, rangeM: 80, muzzleVelocityMps: 620, launchAngleDeg: 0, gravityMps2: 9.81, blastRadiusM: 0, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
                   armor: { id: "rolled_armor_mk1", integrity: 100, frontMm: 100, sideMm: 70, rearMm: 45 },
                   body: { id: "medium_hull_mk1", massKg: 30000 },
                   sensor: { id: "visual_optic_mk1", rangeM: 60, fovDeg: 120, refreshTicks: 1 },
@@ -161,12 +160,9 @@ test("workbench autoloads and autoplays the bundled preset replay", async () => 
 
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.deepEqual(fetched, ["/replays/preset_duel_python_v0.replay.json"]);
-  assert.equal(status.textContent, "Replay 1/2 - tick 0");
-  assert.equal(play.textContent, "Pause");
+  assert.deepEqual(fetched, []);
+  assert.equal(status.textContent, "Ready");
+  assert.equal(play.disabled, true);
   assert.equal(battlefield.children.length, 1);
-  assert.match(inspector.innerHTML, /Blue/);
-  assert.match(inspector.innerHTML, /tracked_chassis_mk1/);
-
-  play.listeners.get("click")();
+  assert.equal(inspector.innerHTML, "");
 });

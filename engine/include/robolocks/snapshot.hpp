@@ -53,6 +53,7 @@ struct ProjectileSnapshot {
   Vec2 previous_position;
   Vec2 position;
   double radius_m = 0.05;
+  double height_m = 0.0;
 };
 
 struct Event {

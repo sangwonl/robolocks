@@ -40,10 +40,14 @@ export type UnitModulesFrame = {
   };
   weapon: {
     id: string;
+    fireMode: string;
     damage: number;
     penetrationMm: number;
     rangeM: number;
     muzzleVelocityMps: number;
+    launchAngleDeg: number;
+    gravityMps2: number;
+    blastRadiusM: number;
     projectileRadiusM: number;
     aimToleranceDeg: number;
     reloadTicks: number;
@@ -125,6 +129,7 @@ export type ProjectileFrame = {
   previousPosition: Vec2;
   position: Vec2;
   radiusM: number;
+  heightM: number;
 };
 
 export type BattleFrame = {

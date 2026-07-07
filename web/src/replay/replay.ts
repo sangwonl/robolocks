@@ -73,6 +73,7 @@ type ReplayProjectilePayload = {
   previousPosition?: unknown;
   position?: unknown;
   radiusM?: unknown;
+  heightM?: unknown;
 };
 
 type ReplayIntentPayload = {
@@ -143,6 +144,7 @@ function parseProjectile(payload: unknown): ProjectileFrame {
     previousPosition: parseVec(projectile.previousPosition, "Invalid replay projectile previous position"),
     position: parseVec(projectile.position, "Invalid replay projectile position"),
     radiusM: projectile.radiusM,
+    heightM: typeof projectile.heightM === "number" ? projectile.heightM : 0,
   };
 }
 
@@ -193,10 +195,14 @@ function parseModules(payload: unknown): UnitModulesFrame {
     },
     weapon: {
       id: stringField(modules.weapon, "id"),
+      fireMode: stringField(modules.weapon, "fireMode"),
       damage: numberField(modules.weapon, "damage"),
       penetrationMm: numberField(modules.weapon, "penetrationMm"),
       rangeM: numberField(modules.weapon, "rangeM"),
       muzzleVelocityMps: numberField(modules.weapon, "muzzleVelocityMps"),
+      launchAngleDeg: numberField(modules.weapon, "launchAngleDeg"),
+      gravityMps2: numberField(modules.weapon, "gravityMps2"),
+      blastRadiusM: numberField(modules.weapon, "blastRadiusM"),
       projectileRadiusM: numberField(modules.weapon, "projectileRadiusM"),
       aimToleranceDeg: numberField(modules.weapon, "aimToleranceDeg"),
       reloadTicks: numberField(modules.weapon, "reloadTicks"),
@@ -239,7 +245,7 @@ function defaultModules(): UnitModulesFrame {
   return {
     mobility: { id: "", maxSpeedMps: 0, maxHullTurnDegps: 0 },
     turret: { id: "", maxTurnDegps: 0 },
-    weapon: { id: "", damage: 0, penetrationMm: 0, rangeM: 0, muzzleVelocityMps: 0, projectileRadiusM: 0, aimToleranceDeg: 0, reloadTicks: 0 },
+    weapon: { id: "", fireMode: "direct", damage: 0, penetrationMm: 0, rangeM: 0, muzzleVelocityMps: 0, launchAngleDeg: 0, gravityMps2: 9.81, blastRadiusM: 0, projectileRadiusM: 0, aimToleranceDeg: 0, reloadTicks: 0 },
     armor: { id: "", integrity: 0, frontMm: 0, sideMm: 0, rearMm: 0 },
     body: { id: "", massKg: 0 },
     sensor: { id: "", rangeM: 0, fovDeg: 0, refreshTicks: 0 },

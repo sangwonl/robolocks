@@ -528,6 +528,14 @@ double robolocks_battle_runtime_projectile_radius_m(RobolocksBattleRuntimeHandle
   return projectile->radius_m;
 }
 
+double robolocks_battle_runtime_projectile_height_m(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+  const auto* projectile = projectile_at(handle, projectile_index);
+  if (projectile == nullptr) {
+    return 0.0;
+  }
+  return projectile->height_m;
+}
+
 size_t robolocks_battle_runtime_action_count(RobolocksBattleRuntimeHandle handle) {
   const auto* runtime = as_runtime(handle);
   if (runtime == nullptr) {

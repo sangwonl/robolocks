@@ -120,6 +120,10 @@ TEST_CASE("battle loader resolves module specs from catalog ids and applies inli
 
   REQUIRE(config.tanks[1].mobility.max_speed_mps == Catch::Approx(3.0));
   REQUIRE(config.tanks[1].mobility.max_hull_turn_degps == Catch::Approx(60.0));
+  REQUIRE(config.tanks[1].weapon.fire_mode == robolocks::WeaponFireMode::Ballistic);
+  REQUIRE(config.tanks[1].weapon.launch_angle_deg == Catch::Approx(45.0));
+  REQUIRE(config.tanks[1].weapon.gravity_mps2 == Catch::Approx(9.81));
+  REQUIRE(config.tanks[1].weapon.blast_radius_m == Catch::Approx(2.5));
   REQUIRE(config.tanks[1].weapon.reload_ticks == 45);
 }
 

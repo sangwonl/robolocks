@@ -82,6 +82,20 @@ std::string optional_string(const nlohmann::json& object, const char* key) {
   return object.at(key).get<std::string>();
 }
 
+WeaponFireMode optional_weapon_fire_mode(const nlohmann::json& object, WeaponFireMode fallback) {
+  if (!object.contains("fireMode")) {
+    return fallback;
+  }
+  const auto mode = required_string(object, "fireMode");
+  if (mode == "direct") {
+    return WeaponFireMode::Direct;
+  }
+  if (mode == "ballistic") {
+    return WeaponFireMode::Ballistic;
+  }
+  throw std::runtime_error("Expected weapon fireMode to be direct or ballistic");
+}
+
 bool optional_bool(const nlohmann::json& object, const char* key, bool fallback) {
   if (!object.contains(key)) {
     return fallback;
@@ -264,10 +278,14 @@ WeaponComponent optional_weapon_component(const nlohmann::json& tank, const Modu
     return weapon;
   }
   weapon.id = optional_string(*weapon_json, "id");
+  weapon.fire_mode = optional_weapon_fire_mode(*weapon_json, weapon.fire_mode);
   weapon.damage = optional_number(*weapon_json, "damage", weapon.damage);
   weapon.penetration_mm = optional_number(*weapon_json, "penetrationMm", weapon.penetration_mm);
   weapon.range_m = optional_number(*weapon_json, "rangeM", weapon.range_m);
   weapon.muzzle_velocity_mps = optional_number(*weapon_json, "muzzleVelocityMps", weapon.muzzle_velocity_mps);
+  weapon.launch_angle_deg = optional_number(*weapon_json, "launchAngleDeg", weapon.launch_angle_deg);
+  weapon.gravity_mps2 = optional_number(*weapon_json, "gravityMps2", weapon.gravity_mps2);
+  weapon.blast_radius_m = optional_number(*weapon_json, "blastRadiusM", weapon.blast_radius_m);
   weapon.projectile_radius_m = optional_number(*weapon_json, "projectileRadiusM", weapon.projectile_radius_m);
   weapon.aim_tolerance_deg = optional_number(*weapon_json, "aimToleranceDeg", weapon.aim_tolerance_deg);
   weapon.reload_ticks = optional_u32(*weapon_json, "reloadTicks", weapon.reload_ticks);

@@ -61,11 +61,17 @@ class Battlefield {
   struct ProjectileState {
     std::uint64_t projectile_id = 0;
     UnitId owner_unit_id;
+    WeaponFireMode fire_mode = WeaponFireMode::Direct;
     Vec2 previous_position;
     Vec2 position;
     Vec2 velocity;
+    double previous_height_m = 0.0;
+    double height_m = 0.0;
+    double vertical_velocity_mps = 0.0;
+    double gravity_mps2 = 9.81;
     double damage = 0.0;
     double penetration_mm = 0.0;
+    double blast_radius_m = 0.0;
     double radius_m = 0.05;
     double remaining_range_m = 0.0;
   };

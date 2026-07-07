@@ -202,6 +202,7 @@ test("battlefield renderer draws active projectiles from replay state", () => {
       previousPosition: { x: 18, y: 12 },
       position: { x: 20, y: 12 },
       radiusM: 0.08,
+      heightM: 4,
     },
   ];
 
@@ -209,7 +210,8 @@ test("battlefield renderer draws active projectiles from replay state", () => {
 
   assert(context.calls.some(([name, args]) => name === "moveTo" && args[0] === 256 && args[1] === 184));
   assert(context.calls.some(([name, args]) => name === "lineTo" && args[0] === 280 && args[1] === 184));
-  assert(context.calls.some(([name, args]) => name === "arc" && args[0] === 280 && args[1] === 184 && args[2] === 3));
+  assert(context.calls.some(([name, args]) => name === "arc" && args[0] === 280 && args[1] === 184 && args[2] === 2));
+  assert(context.calls.some(([name, args]) => name === "arc" && args[0] === 280 && args[1] === 184 && args[2] > 3));
 });
 
 test("battlefield renderer suppresses legacy fired-shot tracer when projectile state is present", () => {
@@ -231,6 +233,7 @@ test("battlefield renderer suppresses legacy fired-shot tracer when projectile s
       previousPosition: { x: 18, y: 12 },
       position: { x: 20, y: 12 },
       radiusM: 0.08,
+      heightM: 0,
     },
   ];
 

@@ -40,12 +40,21 @@ struct ArmorComponent {
   double rear_mm = 30.0;
 };
 
+enum class WeaponFireMode {
+  Direct,
+  Ballistic,
+};
+
 struct WeaponComponent {
   std::string id;
+  WeaponFireMode fire_mode = WeaponFireMode::Direct;
   double damage = 25.0;
   double penetration_mm = 100.0;
   double range_m = 80.0;
   double muzzle_velocity_mps = 1000.0;
+  double launch_angle_deg = 0.0;
+  double gravity_mps2 = 9.81;
+  double blast_radius_m = 0.0;
   double projectile_radius_m = 0.05;
   double aim_tolerance_deg = 5.0;
   Tick reload_ticks = 30;

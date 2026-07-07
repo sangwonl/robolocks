@@ -1,18 +1,22 @@
 {
-  "matchId": "catalog_duel_v0",
+  "matchId": "howitzer_duel_v0",
   "seed": 1,
   "tickRate": 30,
   "tickLimit": 9000,
   "moduleCatalog": "../modules/tank_modules_v0.json",
+  "bounds": {
+    "min": { "x": 0, "y": 0 },
+    "max": { "x": 40, "y": 24 }
+  },
   "tanks": [
     {
       "unitId": 1,
       "name": "Blue",
-      "spawn": { "x": 6, "y": 12, "headingDeg": 0 },
+      "spawn": { "x": 4, "y": 12, "headingDeg": 0 },
       "modules": {
-        "mobility": { "id": "tracked_chassis_mk1" },
+        "mobility": { "id": "tracked_chassis_mk1", "maxSpeedMps": 0 },
         "turret": { "id": "light_turret_mk1" },
-        "weapon": { "id": "cannon_75mm_mk1" },
+        "weapon": { "id": "howitzer_105mm_test", "muzzleVelocityMps": 17, "rangeM": 40 },
         "armor": { "id": "rolled_armor_mk1" },
         "body": { "id": "medium_hull_mk1" },
         "sensor": { "id": "visual_optic_mk1" }
@@ -21,18 +25,11 @@
     {
       "unitId": 2,
       "name": "Red",
-      "spawn": { "x": 34, "y": 12, "headingDeg": 180 },
+      "spawn": { "x": 33, "y": 12, "headingDeg": 180 },
       "modules": {
-        "mobility": { "id": "slow_chassis_test" },
+        "mobility": { "id": "slow_chassis_test", "maxSpeedMps": 0 },
         "turret": { "id": "light_turret_mk1" },
-        "weapon": {
-          "id": "slow_cannon_test",
-          "fireMode": "ballistic",
-          "launchAngleDeg": 45,
-          "gravityMps2": 9.81,
-          "blastRadiusM": 2.5,
-          "reloadTicks": 45
-        },
+        "weapon": { "id": "slow_cannon_test" },
         "armor": { "id": "rolled_armor_mk1" },
         "body": { "id": "medium_hull_mk1" },
         "sensor": { "id": "visual_optic_mk1" }
@@ -44,13 +41,13 @@
       "unitId": 1,
       "type": "builtin",
       "id": "hold_line",
-      "hold": { "x": 17, "y": 12 }
+      "hold": { "x": 4, "y": 12 }
     },
     {
       "unitId": 2,
       "type": "builtin",
       "id": "hold_line",
-      "hold": { "x": 23, "y": 12 }
+      "hold": { "x": 33, "y": 12 }
     }
   ]
 }

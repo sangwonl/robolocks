@@ -4,6 +4,7 @@ const METERS_TO_PX = 12;
 const ORIGIN_OFFSET_PX = 40;
 const FALLBACK_WIDTH_PX = 960;
 const FALLBACK_HEIGHT_PX = 640;
+const PROJECTILE_HEIGHT_RADIUS_PX_PER_M = 0.6;
 
 export type BattlefieldRenderer = {
   clear(): void;
@@ -265,8 +266,21 @@ function drawProjectiles(context: CanvasRenderingContext2D, frame: BattleFrame):
     context.lineWidth = 2;
     context.stroke();
 
+    const heightM = Math.max(0, projectile.heightM);
+    const shadowRadiusPx = Math.max(2, projectile.radiusM * METERS_TO_PX * 0.7);
     context.beginPath();
-    context.arc(position.x, position.y, Math.max(3, projectile.radiusM * METERS_TO_PX), 0, Math.PI * 2);
+    context.arc(position.x, position.y, shadowRadiusPx, 0, Math.PI * 2);
+    context.fillStyle = "rgba(5, 7, 8, 0.28)";
+    context.fill();
+
+    context.beginPath();
+    context.arc(
+      position.x,
+      position.y,
+      Math.max(3, projectile.radiusM * METERS_TO_PX + heightM * PROJECTILE_HEIGHT_RADIUS_PX_PER_M),
+      0,
+      Math.PI * 2
+    );
     context.fillStyle = "#fff3a3";
     context.fill();
     context.restore();

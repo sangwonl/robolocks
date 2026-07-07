@@ -330,6 +330,7 @@ function readProjectiles(
       previousPosition: { x: projectilePreviousX(handle, i), y: projectilePreviousY(handle, i) },
       position: { x: projectileX(handle, i), y: projectileY(handle, i) },
       radiusM: projectileRadius(handle, i),
+      heightM: 0,
     });
   }
   return projectiles;
@@ -430,7 +431,7 @@ function defaultModules(): UnitModulesFrame {
   return {
     mobility: { id: "tracked_chassis_mk1", maxSpeedMps: 6, maxHullTurnDegps: 120 },
     turret: { id: "light_turret_mk1", maxTurnDegps: 180 },
-    weapon: { id: "cannon_75mm_mk1", damage: 25, penetrationMm: 120, rangeM: 80, muzzleVelocityMps: 620, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
+    weapon: { id: "cannon_75mm_mk1", fireMode: "direct", damage: 25, penetrationMm: 120, rangeM: 80, muzzleVelocityMps: 620, launchAngleDeg: 0, gravityMps2: 9.81, blastRadiusM: 0, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
     armor: { id: "rolled_armor_mk1", integrity: 100, frontMm: 100, sideMm: 70, rearMm: 45 },
     body: { id: "medium_hull_mk1", massKg: 30000 },
     sensor: { id: "visual_optic_mk1", rangeM: 60, fovDeg: 120, refreshTicks: 1 },

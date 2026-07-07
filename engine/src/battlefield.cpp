@@ -206,6 +206,7 @@ WorldSnapshot Battlefield::snapshot() const {
       .previous_position = projectile.previous_position,
       .position = projectile.position,
       .radius_m = projectile.radius_m,
+      .height_m = projectile.height_m,
     });
   }
   return out;
@@ -518,17 +519,26 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
     unit.weapon_intent_min_hit_chance = 0.0;
     unit.weapon_intent_updated_tick = tick_;
     const Vec2 direction = forward_vector(unit.turret.heading_deg);
+    const bool ballistic = unit.weapon.fire_mode == WeaponFireMode::Ballistic;
+    const double launch_angle_rad = unit.weapon.launch_angle_deg * kPi / 180.0;
+    const double horizontal_velocity_mps = ballistic
+      ? unit.weapon.muzzle_velocity_mps * std::cos(launch_angle_rad)
+      : unit.weapon.muzzle_velocity_mps;
     projectiles_.push_back(ProjectileState{
       .projectile_id = next_projectile_id_++,
       .owner_unit_id = unit.unit_id,
+      .fire_mode = unit.weapon.fire_mode,
       .previous_position = unit.transform.position,
       .position = unit.transform.position,
       .velocity = Vec2{
-        direction.x * unit.weapon.muzzle_velocity_mps,
-        direction.y * unit.weapon.muzzle_velocity_mps,
+        direction.x * horizontal_velocity_mps,
+        direction.y * horizontal_velocity_mps,
       },
+      .vertical_velocity_mps = ballistic ? unit.weapon.muzzle_velocity_mps * std::sin(launch_angle_rad) : 0.0,
+      .gravity_mps2 = unit.weapon.gravity_mps2,
       .damage = unit.weapon.damage,
       .penetration_mm = unit.weapon.penetration_mm,
+      .blast_radius_m = unit.weapon.blast_radius_m,
       .radius_m = unit.weapon.projectile_radius_m,
       .remaining_range_m = unit.weapon.range_m,
     });
@@ -544,6 +554,7 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
   active_projectiles.reserve(projectiles_.size());
   for (auto projectile : projectiles_) {
     projectile.previous_position = projectile.position;
+    projectile.previous_height_m = projectile.height_m;
     const double max_distance = std::max(0.0, projectile.remaining_range_m);
     const double requested_distance = length(projectile.velocity) * tick_dt_sec_;
     const double distance = std::min(requested_distance, max_distance);
@@ -555,6 +566,42 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
       projectile.position.y + direction.y * distance,
     };
     projectile.remaining_range_m -= distance;
+
+    if (projectile.fire_mode == WeaponFireMode::Ballistic) {
+      projectile.height_m = projectile.height_m
+        + projectile.vertical_velocity_mps * tick_dt_sec_
+        - 0.5 * projectile.gravity_mps2 * tick_dt_sec_ * tick_dt_sec_;
+      projectile.vertical_velocity_mps -= projectile.gravity_mps2 * tick_dt_sec_;
+
+      if (projectile.height_m <= 0.0 && projectile.previous_height_m > 0.0) {
+        for (auto& target : units_) {
+          if (target.unit_id == projectile.owner_unit_id || target.armor.integrity <= 0.0) {
+            continue;
+          }
+          const double target_radius = collision_radius_for_shape(target.body.shape);
+          const double blast_radius = std::max(projectile.blast_radius_m, projectile.radius_m);
+          if (distance_between(projectile.position, target.transform.position) > blast_radius + target_radius) {
+            continue;
+          }
+          target.armor.integrity = std::max(0.0, target.armor.integrity - projectile.damage);
+          if (target.armor.integrity <= 0.0) {
+            Battlefield::clear_intents(target);
+          }
+          events.push_back(Event{
+            .tick = tick_,
+            .unit_id = target.unit_id,
+            .code = "armor_damage",
+            .message = "Ballistic projectile blast reduced armor integrity.",
+          });
+        }
+        continue;
+      }
+
+      if (projectile.remaining_range_m > 0.0) {
+        active_projectiles.push_back(projectile);
+      }
+      continue;
+    }
 
     std::optional<std::size_t> hit_target_index;
     for (std::size_t i = 0; i < units_.size(); i += 1) {

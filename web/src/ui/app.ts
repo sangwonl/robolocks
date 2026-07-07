@@ -3,8 +3,6 @@ import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
 import { createBattlefieldRenderer } from "./battlefieldRenderer.ts";
 
-export const DEFAULT_PRESET_REPLAY_URL = "/replays/preset_duel_python_v0.replay.json";
-
 export type RenderAppOptions = {
   defaultReplayUrl?: string | null;
   autoplayDefaultReplay?: boolean;
@@ -46,13 +44,16 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
 
   const battlefieldRenderer = createBattlefieldRenderer(battlefield);
   const defaultReplayUrl = options.defaultReplayUrl === undefined
-    ? DEFAULT_PRESET_REPLAY_URL
+    ? null
     : options.defaultReplayUrl;
-  const autoplayDefaultReplay = options.autoplayDefaultReplay ?? true;
+  const autoplayDefaultReplay = options.autoplayDefaultReplay ?? false;
   const fetchText = options.fetchText ?? fetchTextFromUrl;
   let loadedReplay: BattleReplay | null = null;
   let replayIndex = 0;
   let replayTimer: ReturnType<typeof setInterval> | null = null;
+
+  status.textContent = "Ready";
+  updateTransport();
 
   replay.addEventListener("change", () => {
     const file = replay.files?.[0];
@@ -232,7 +233,7 @@ function formatModuleItems(unit: BattleFrame["units"][number]): string {
   return `
     <li><span>move</span> ${unit.modules.mobility.id} ${unit.modules.mobility.maxSpeedMps.toFixed(1)}m/s ${unit.modules.mobility.maxHullTurnDegps.toFixed(0)}deg/s</li>
     <li><span>turret</span> ${unit.modules.turret.id} ${unit.modules.turret.maxTurnDegps.toFixed(0)}deg/s</li>
-    <li><span>weapon</span> ${unit.modules.weapon.id} dmg=${unit.modules.weapon.damage.toFixed(0)} pen=${unit.modules.weapon.penetrationMm.toFixed(0)}mm v=${unit.modules.weapon.muzzleVelocityMps.toFixed(0)}m/s r=${unit.modules.weapon.projectileRadiusM.toFixed(2)}m reload=${unit.modules.weapon.reloadTicks}</li>
+    <li><span>weapon</span> ${unit.modules.weapon.id} ${unit.modules.weapon.fireMode} dmg=${unit.modules.weapon.damage.toFixed(0)} pen=${unit.modules.weapon.penetrationMm.toFixed(0)}mm v=${unit.modules.weapon.muzzleVelocityMps.toFixed(0)}m/s angle=${unit.modules.weapon.launchAngleDeg.toFixed(0)}deg blast=${unit.modules.weapon.blastRadiusM.toFixed(1)}m reload=${unit.modules.weapon.reloadTicks}</li>
     <li><span>armor</span> ${unit.modules.armor.id} hp=${unit.modules.armor.integrity.toFixed(0)} ${unit.modules.armor.frontMm.toFixed(0)}/${unit.modules.armor.sideMm.toFixed(0)}/${unit.modules.armor.rearMm.toFixed(0)}mm</li>
     <li><span>body</span> ${unit.modules.body.id} mass=${unit.modules.body.massKg.toFixed(0)}kg</li>
     <li><span>sensor</span> ${unit.modules.sensor.id} ${unit.modules.sensor.rangeM.toFixed(0)}m/${unit.modules.sensor.fovDeg.toFixed(0)}deg</li>

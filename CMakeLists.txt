@@ -163,6 +163,7 @@ if(EMSCRIPTEN)
     _robolocks_battle_runtime_projectile_x
     _robolocks_battle_runtime_projectile_y
     _robolocks_battle_runtime_projectile_radius_m
+    _robolocks_battle_runtime_projectile_height_m
     _robolocks_battle_runtime_action_count
     _robolocks_battle_runtime_action_unit_id
     _robolocks_battle_runtime_action_type
