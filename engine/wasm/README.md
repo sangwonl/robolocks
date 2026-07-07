@@ -1,7 +1,9 @@
 # Robolocks WASM Kernel
 
-The web MVP loads the C++ kernel through Emscripten. The first export is intentionally small:
+The web shell loads the C++ engine runtime through Emscripten. The ABI is intentionally data-oriented:
 
-- `robolocks_engine_version() -> const char*`
+- create/destroy a preset `BattleRuntime`
+- step or run ticks inside the engine runtime
+- read snapshot fields through primitive accessors
 
-Later tasks add match creation, stepping, snapshots, and command submission exports. Keep this ABI data-oriented and serializable.
+Platform shells should not own command generation or simulation ticks.

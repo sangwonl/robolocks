@@ -26,3 +26,16 @@ TEST_CASE("advance_toward does not overshoot") {
   REQUIRE(clamped.x == Catch::Approx(10.0));
   REQUIRE(clamped.y == Catch::Approx(0.0));
 }
+
+TEST_CASE("angle_to returns a wrapped heading in degrees") {
+  REQUIRE(robolocks::angle_to(robolocks::Vec2{0.0, 0.0}, robolocks::Vec2{1.0, 0.0}) == Catch::Approx(0.0));
+  REQUIRE(robolocks::angle_to(robolocks::Vec2{0.0, 0.0}, robolocks::Vec2{0.0, 1.0}) == Catch::Approx(90.0));
+  REQUIRE(robolocks::angle_to(robolocks::Vec2{0.0, 0.0}, robolocks::Vec2{-1.0, 0.0}) == Catch::Approx(180.0));
+  REQUIRE(robolocks::angle_to(robolocks::Vec2{0.0, 0.0}, robolocks::Vec2{0.0, -1.0}) == Catch::Approx(270.0));
+}
+
+TEST_CASE("advance_angle_toward takes the shortest wrapped turn") {
+  REQUIRE(robolocks::advance_angle_toward(350.0, 10.0, 5.0) == Catch::Approx(355.0));
+  REQUIRE(robolocks::advance_angle_toward(350.0, 10.0, 20.0) == Catch::Approx(10.0));
+  REQUIRE(robolocks::advance_angle_toward(10.0, 350.0, 5.0) == Catch::Approx(5.0));
+}

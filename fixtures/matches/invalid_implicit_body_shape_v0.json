@@ -1,0 +1,30 @@
+{
+  "matchId": "invalid_implicit_body_shape_v0",
+  "seed": 1,
+  "tickRate": 30,
+  "tickLimit": 60,
+  "tanks": [
+    {
+      "unitId": 1,
+      "name": "Blue",
+      "spawn": { "x": 6, "y": 12, "headingDeg": 0 },
+      "modules": {
+        "body": {
+          "id": "medium_hull_mk1",
+          "radiusM": 1.2,
+          "lengthM": 5.6,
+          "widthM": 2.8,
+          "massKg": 30000
+        }
+      }
+    }
+  ],
+  "controllers": [
+    {
+      "unitId": 1,
+      "type": "builtin",
+      "id": "hold_line",
+      "hold": { "x": 17, "y": 12 }
+    }
+  ]
+}

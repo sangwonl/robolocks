@@ -1,5 +1,6 @@
 #pragma once
 
+#include <robolocks/battle_config.hpp>
 #include <robolocks/types.hpp>
 
 #include <string>
@@ -13,6 +14,26 @@ struct UnitSnapshot {
   double hull_heading_deg = 0.0;
   double turret_heading_deg = 0.0;
   double armor_integrity = 100.0;
+  Tick weapon_cooldown_ticks = 0;
+  BodyShapeType body_shape_type = BodyShapeType::Circle;
+  double body_radius_m = 1.0;
+  double body_length_m = 5.6;
+  double body_width_m = 2.8;
+  bool mobility_intent_active = false;
+  Vec2 mobility_intent_target;
+  double mobility_intent_remaining_m = 0.0;
+  Tick mobility_intent_age_ticks = 0;
+  bool turret_intent_active = false;
+  Vec2 turret_intent_target;
+  double turret_intent_error_deg = 0.0;
+  Tick turret_intent_age_ticks = 0;
+  bool hull_intent_active = false;
+  Vec2 hull_intent_target;
+  double hull_intent_error_deg = 0.0;
+  Tick hull_intent_age_ticks = 0;
+  bool weapon_intent_active = false;
+  double weapon_intent_min_hit_chance = 0.0;
+  Tick weapon_intent_age_ticks = 0;
 };
 
 struct Event {

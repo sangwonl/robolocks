@@ -5,5 +5,10 @@ FetchContent_Declare(Catch2
   GIT_TAG v3.8.1
 )
 
-FetchContent_MakeAvailable(Catch2)
+FetchContent_Declare(nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.3
+)
+
+FetchContent_MakeAvailable(Catch2 nlohmann_json)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)

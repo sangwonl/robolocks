@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(scriptDir, "..");
 const buildDir = resolve(process.env.ROBOLOCKS_WASM_BUILD_DIR ?? join(rootDir, "build-wasm-release"));
-const outputDir = resolve(process.env.ROBOLOCKS_WASM_OUT_DIR ?? join(rootDir, "web/public/wasm"));
+const publicWasmDir = resolve(process.env.ROBOLOCKS_WASM_OUT_DIR ?? join(rootDir, "web/public/wasm"));
+const generatedDir = resolve(process.env.ROBOLOCKS_WASM_JS_OUT_DIR ?? join(rootDir, "web/src/generated"));
 
 const searchDirs = [
   join(buildDir, "wasm"),
@@ -31,10 +32,12 @@ if (artifacts.length === 0) {
   throw new Error(`No robolocks_wasm artifacts found in ${searchDirs.join(", ")}`);
 }
 
-mkdirSync(outputDir, { recursive: true });
+mkdirSync(publicWasmDir, { recursive: true });
+mkdirSync(generatedDir, { recursive: true });
 
 for (const artifact of artifacts) {
-  const to = join(outputDir, artifact.name);
+  const isLoader = artifact.name.endsWith(".js") || artifact.name.endsWith(".mjs");
+  const to = join(isLoader ? generatedDir : publicWasmDir, artifact.name);
   copyFileSync(artifact.from, to);
   console.log(`synced ${artifact.from} -> ${to}`);
 }
