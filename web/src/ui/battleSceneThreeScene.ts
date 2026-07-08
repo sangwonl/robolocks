@@ -29,14 +29,9 @@ export function buildBattleScene(input: BattleSceneInput): THREE.Scene {
     for (const unit of input.frame.units) {
       scene.add(createUnit(unit));
     }
-    for (const action of input.frame.actions) {
-      if (action.type !== "scanArc") {
-        continue;
-      }
-      const unit = input.frame.units.find((candidate) => candidate.unitId === action.unitId);
-      if (unit) {
-        scene.add(createScanArc(unit, action));
-      }
+    for (const unit of input.frame.units) {
+      const scanAction = input.frame.actions.find((action) => action.unitId === unit.unitId && action.type === "scanArc");
+      scene.add(createScanArc(unit, scanAction));
     }
     for (const projectile of input.frame.projectiles) {
       const mesh = createProjectile(projectile);
@@ -234,12 +229,12 @@ function createProjectile(projectile: BattleFrame["projectiles"][number]): THREE
   return group;
 }
 
-function createScanArc(unit: UnitFrame, action: BattleFrame["actions"][number]): THREE.Mesh {
+function createScanArc(unit: UnitFrame, action?: BattleFrame["actions"][number]): THREE.Mesh {
   const sensorRange = Math.max(0, unit.modules.sensor.rangeMeters);
-  const actionRange = typeof action.rangeMeters === "number" && action.rangeMeters > 0 ? action.rangeMeters : sensorRange;
+  const actionRange = typeof action?.rangeMeters === "number" && action.rangeMeters > 0 ? action.rangeMeters : sensorRange;
   const rangeMeters = Math.min(actionRange, sensorRange);
-  const directionDegrees = action.directionDegrees ?? unit.hullHeadingDegrees;
-  const widthDegrees = Math.max(0, Math.min(action.widthDegrees ?? unit.modules.sensor.fovDegrees, unit.modules.sensor.fovDegrees));
+  const directionDegrees = action?.directionDegrees ?? unit.hullHeadingDegrees;
+  const widthDegrees = Math.max(0, Math.min(action?.widthDegrees ?? unit.modules.sensor.fovDegrees, unit.modules.sensor.fovDegrees));
   const segmentCount = Math.max(8, Math.ceil(widthDegrees / 6));
   const startDegrees = directionDegrees - widthDegrees / 2;
   const vertices: number[] = [0, 0.04, 0];
@@ -265,7 +260,7 @@ function createScanArc(unit: UnitFrame, action: BattleFrame["actions"][number]):
     new THREE.MeshBasicMaterial({
       color: unit.name.toLowerCase().includes("red") ? "#ff7a70" : "#77b7ff",
       transparent: true,
-      opacity: 0.16,
+      opacity: action ? 0.24 : 0.14,
       side: THREE.DoubleSide,
       depthWrite: false,
     }),

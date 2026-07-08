@@ -23,10 +23,6 @@ double distance(Vec2 a, Vec2 b) {
   return length(Vec2{b.x - a.x, b.y - a.y});
 }
 
-bool is_in_range(const UnitSnapshot& self, const UnitSnapshot& contact, const SensorSpec& sensor) {
-  return distance(self.position, contact.position) <= sensor.range_m;
-}
-
 bool is_in_fov(const UnitSnapshot& self, const UnitSnapshot& contact, double direction_deg, double width_deg) {
   if (width_deg >= 360.0) {
     return true;

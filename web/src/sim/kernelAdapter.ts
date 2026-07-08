@@ -86,7 +86,7 @@ type WasmModule = {
   cwrap(name: "robolocks_battle_runner_action_has_min_hit_chance", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_min_hit_chance", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_has_scan_arc", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_action_center", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_action_direction", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_width", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_has_range", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_range", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
@@ -273,7 +273,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
   const actionHasMinHitChance = module.cwrap("robolocks_battle_runner_action_has_min_hit_chance", "number", ["number", "number"]);
   const actionMinHitChance = module.cwrap("robolocks_battle_runner_action_min_hit_chance", "number", ["number", "number"]);
   const actionHasScanArc = module.cwrap("robolocks_battle_runner_action_has_scan_arc", "number", ["number", "number"]);
-  const actionCenterDeg = module.cwrap("robolocks_battle_runner_action_center", "number", ["number", "number"]);
+  const actionDirectionDeg = module.cwrap("robolocks_battle_runner_action_direction", "number", ["number", "number"]);
   const actionWidthDeg = module.cwrap("robolocks_battle_runner_action_width", "number", ["number", "number"]);
   const actionHasRange = module.cwrap("robolocks_battle_runner_action_has_range", "number", ["number", "number"]);
   const actionRange = module.cwrap("robolocks_battle_runner_action_range", "number", ["number", "number"]);
@@ -355,7 +355,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
         actionHasMinHitChance,
         actionMinHitChance,
         actionHasScanArc,
-        actionCenterDeg,
+        actionDirectionDeg,
         actionWidthDeg,
         actionHasRange,
         actionRange,
@@ -483,7 +483,7 @@ function readActions(
   actionHasMinHitChance: (handle: number, actionIndex: number) => number,
   actionMinHitChance: (handle: number, actionIndex: number) => number,
   actionHasScanArc: (handle: number, actionIndex: number) => number,
-  actionCenterDeg: (handle: number, actionIndex: number) => number,
+  actionDirectionDeg: (handle: number, actionIndex: number) => number,
   actionWidthDeg: (handle: number, actionIndex: number) => number,
   actionHasRange: (handle: number, actionIndex: number) => number,
   actionRange: (handle: number, actionIndex: number) => number,
@@ -505,7 +505,7 @@ function readActions(
       action.minHitChance = actionMinHitChance(handle, i);
     }
     if (actionHasScanArc(handle, i) !== 0) {
-      action.directionDegrees = actionCenterDeg(handle, i);
+      action.directionDegrees = actionDirectionDeg(handle, i);
       action.widthDegrees = actionWidthDeg(handle, i);
       if (actionHasRange(handle, i) !== 0) {
         action.rangeMeters = actionRange(handle, i);

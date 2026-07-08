@@ -84,7 +84,7 @@ test("replay parser reads CLI replay JSON frames", () => {
         ],
         actions: [
           { unitId: 1, type: "moveTo", channel: "mobility", position: { x: 12, y: 12 } },
-          { unitId: 1, type: "scanArc", channel: "sensor", centerDegrees: 0, widthDegrees: 120 },
+          { unitId: 1, type: "scanArc", channel: "sensor", directionDegrees: 0, widthDegrees: 120 },
         ],
       },
     ],

@@ -85,7 +85,7 @@ TEST_CASE("C API drives the battle runner and exposes snapshots") {
   REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 0)) == "scanArc");
   REQUIRE(std::string(robolocks_battle_runner_action_channel(runtime, 0)) == "sensor");
   REQUIRE(robolocks_battle_runner_action_has_scan_arc(runtime, 0) == 1);
-  REQUIRE(robolocks_battle_runner_action_center(runtime, 0) == Catch::Approx(0.0));
+  REQUIRE(robolocks_battle_runner_action_direction(runtime, 0) == Catch::Approx(0.0));
   REQUIRE(robolocks_battle_runner_action_width(runtime, 0) == Catch::Approx(360.0));
   REQUIRE(robolocks_battle_runner_action_unit_id(runtime, 1) == 1);
   REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 1)) == "moveTo");
@@ -147,7 +147,7 @@ TEST_CASE("C API research runner calls a registered JSON bot callback during ste
   REQUIRE(g_received_observation.at("selfId") == 1);
   REQUIRE(g_received_observation.at("contacts").size() == 0);
   REQUIRE(robolocks_battle_runner_tick(runtime) == 1);
-  REQUIRE(robolocks_battle_runner_action_count(runtime) == 3);
+  REQUIRE(robolocks_battle_runner_action_count(runtime) == 2);
   REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 0)) == "moveTo");
   REQUIRE(robolocks_battle_runner_action_position_x(runtime, 0) == Catch::Approx(17.0));
   REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 1)) == "aimAt");

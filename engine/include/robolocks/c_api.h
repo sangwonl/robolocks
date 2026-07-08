@@ -91,7 +91,7 @@ double robolocks_battle_runner_action_target_y(RobolocksBattleRunnerHandle handl
 int robolocks_battle_runner_action_has_min_hit_chance(RobolocksBattleRunnerHandle handle, size_t action_index);
 double robolocks_battle_runner_action_min_hit_chance(RobolocksBattleRunnerHandle handle, size_t action_index);
 int robolocks_battle_runner_action_has_scan_arc(RobolocksBattleRunnerHandle handle, size_t action_index);
-double robolocks_battle_runner_action_center(RobolocksBattleRunnerHandle handle, size_t action_index);
+double robolocks_battle_runner_action_direction(RobolocksBattleRunnerHandle handle, size_t action_index);
 double robolocks_battle_runner_action_width(RobolocksBattleRunnerHandle handle, size_t action_index);
 int robolocks_battle_runner_action_has_range(RobolocksBattleRunnerHandle handle, size_t action_index);
 double robolocks_battle_runner_action_range(RobolocksBattleRunnerHandle handle, size_t action_index);

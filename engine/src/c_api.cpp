@@ -122,8 +122,6 @@ const char* order_channel_name(robolocks::OrderKind kind) {
 
 }  // namespace
 
-extern "C" {
-
 namespace {
 
 const char* preset_duel_json() {
@@ -204,8 +202,7 @@ const char* research_duel_json() {
     }
   ],
   "controllers": [
-    {"unitId": 1, "type": "json_callback"},
-    {"unitId": 2, "type": "builtin", "id": "hold_line", "hold": {"x": 34, "y": 18}}
+    {"unitId": 1, "type": "json_callback"}
   ]
 })json";
 }
@@ -250,6 +247,8 @@ robolocks::BattleRunner runner_from_loaded(robolocks::LoadedBattle& loaded) {
 }
 
 }  // namespace
+
+extern "C" {
 
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_from_json(const char* json_config) {
   auto loaded = robolocks::load_battle_from_json_string(json_config);
@@ -837,7 +836,7 @@ int robolocks_battle_runner_action_has_scan_arc(RobolocksBattleRunnerHandle hand
     : 0;
 }
 
-double robolocks_battle_runner_action_center(RobolocksBattleRunnerHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_direction(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;
