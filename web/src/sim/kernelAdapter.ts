@@ -33,6 +33,7 @@ type WasmModule = {
   cwrap(name: "robolocks_battle_runner_unit_body_radius", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_body_length", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_body_width", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_modules_json", returnType: "string", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => string;
   cwrap(name: "robolocks_battle_runner_unit_mobility_intent_active", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_mobility_intent_target_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_mobility_intent_target_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
@@ -125,6 +126,7 @@ export type JsonBotTick = (observation: unknown) => unknown;
 
 export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
   botId: number;
+  battleConfigJson?: string;
   onTick: JsonBotTick;
   factory?: WasmFactory;
 }): Promise<KernelBattleRunner> {
@@ -146,6 +148,11 @@ export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
       "number",
       ["number"],
     );
+    const createFromJsonRuntime = module.cwrap(
+      "robolocks_battle_runner_create_from_json",
+      "number",
+      ["string"],
+    );
 
     callbackPointer = module.addFunction((botId: number, observationPointer: number): number => {
       const observation = JSON.parse(module.UTF8ToString(observationPointer));
@@ -166,7 +173,9 @@ export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
       ...module,
       cwrap(name: string, returnType: string | null, argTypes: string[]) {
         if (name === "robolocks_battle_runner_create_preset_duel") {
-          return () => createResearchDuel(options.botId);
+          return () => options.battleConfigJson
+            ? createFromJsonRuntime(options.battleConfigJson)
+            : createResearchDuel(options.botId);
         }
         return module.cwrap(name as never, returnType as never, argTypes as never);
       },
@@ -220,6 +229,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
   const bodyRadius = module.cwrap("robolocks_battle_runner_unit_body_radius", "number", ["number", "number"]);
   const bodyLength = module.cwrap("robolocks_battle_runner_unit_body_length", "number", ["number", "number"]);
   const bodyWidth = module.cwrap("robolocks_battle_runner_unit_body_width", "number", ["number", "number"]);
+  const unitModulesJson = module.cwrap("robolocks_battle_runner_unit_modules_json", "string", ["number", "number"]);
   const mobilityIntentActive = module.cwrap("robolocks_battle_runner_unit_mobility_intent_active", "number", ["number", "number"]);
   const mobilityIntentTargetX = module.cwrap("robolocks_battle_runner_unit_mobility_intent_target_x", "number", ["number", "number"]);
   const mobilityIntentTargetY = module.cwrap("robolocks_battle_runner_unit_mobility_intent_target_y", "number", ["number", "number"]);
@@ -318,7 +328,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
         armorIntegrity: unitArmor(runtimeHandle, i),
         weaponCooldownTicks: weaponCooldown(runtimeHandle, i),
         bodyShape: readBodyShape(runtimeHandle, i, bodyShapeType, bodyRadius, bodyLength, bodyWidth),
-        modules: defaultModules(),
+        modules: parseUnitModules(unitModulesJson(runtimeHandle, i)),
         intents: readIntents(runtimeHandle, i),
       });
     }
@@ -573,6 +583,87 @@ function defaultModules(): UnitModulesFrame {
     body: { id: "medium_hull_mk1", massKilograms: 30000 },
     sensor: { id: "visual_optic_mk1", rangeMeters: 60, fovDegrees: 120, refreshTicks: 1 },
   };
+}
+
+function parseUnitModules(payload: string): UnitModulesFrame {
+  try {
+    const modules = JSON.parse(payload) as Partial<UnitModulesFrame>;
+    return {
+      mobility: {
+        id: stringField(modules.mobility, "id"),
+        maxSpeedMetersPerSecond: numberField(modules.mobility, "maxSpeedMetersPerSecond"),
+        maxHullTurnDegreesPerSecond: numberField(modules.mobility, "maxHullTurnDegreesPerSecond"),
+      },
+      turret: {
+        id: stringField(modules.turret, "id"),
+        maxTurnDegreesPerSecond: numberField(modules.turret, "maxTurnDegreesPerSecond"),
+      },
+      weapon: {
+        id: stringField(modules.weapon, "id"),
+        fireMode: stringField(modules.weapon, "fireMode"),
+        damage: numberField(modules.weapon, "damage"),
+        penetrationMillimeters: numberField(modules.weapon, "penetrationMillimeters"),
+        rangeMeters: numberField(modules.weapon, "rangeMeters"),
+        muzzleVelocityMetersPerSecond: numberField(modules.weapon, "muzzleVelocityMetersPerSecond"),
+        muzzleOffsetMeters: vec3Field(modules.weapon, "muzzleOffsetMeters"),
+        launchAngleDegrees: numberField(modules.weapon, "launchAngleDegrees"),
+        gravityMetersPerSecondSquared: numberField(modules.weapon, "gravityMetersPerSecondSquared"),
+        blastRadiusMeters: numberField(modules.weapon, "blastRadiusMeters"),
+        projectileRadiusMeters: numberField(modules.weapon, "projectileRadiusMeters"),
+        aimToleranceDegrees: numberField(modules.weapon, "aimToleranceDegrees"),
+        reloadTicks: numberField(modules.weapon, "reloadTicks"),
+      },
+      armor: {
+        id: stringField(modules.armor, "id"),
+        integrity: numberField(modules.armor, "integrity"),
+        frontMillimeters: numberField(modules.armor, "frontMillimeters"),
+        sideMillimeters: numberField(modules.armor, "sideMillimeters"),
+        rearMillimeters: numberField(modules.armor, "rearMillimeters"),
+      },
+      body: {
+        id: stringField(modules.body, "id"),
+        massKilograms: numberField(modules.body, "massKilograms"),
+      },
+      sensor: {
+        id: stringField(modules.sensor, "id"),
+        rangeMeters: numberField(modules.sensor, "rangeMeters"),
+        fovDegrees: numberField(modules.sensor, "fovDegrees"),
+        refreshTicks: numberField(modules.sensor, "refreshTicks"),
+      },
+    };
+  } catch {
+    return defaultModules();
+  }
+}
+
+function stringField(payload: unknown, key: string): string {
+  const object = payload as Record<string, unknown>;
+  return typeof object === "object" && object !== null && typeof object[key] === "string"
+    ? object[key]
+    : "";
+}
+
+function numberField(payload: unknown, key: string): number {
+  const object = payload as Record<string, unknown>;
+  return typeof object === "object" && object !== null && typeof object[key] === "number"
+    ? object[key]
+    : 0;
+}
+
+function vec3Field(payload: unknown, key: string): { x: number; y: number; z: number } {
+  const object = payload as Record<string, unknown>;
+  const value = typeof object === "object" && object !== null ? object[key] : null;
+  const vector = value as { x?: unknown; y?: unknown; z?: unknown };
+  if (
+    typeof vector === "object" &&
+    vector !== null &&
+    typeof vector.x === "number" &&
+    typeof vector.y === "number" &&
+    typeof vector.z === "number"
+  ) {
+    return { x: vector.x, y: vector.y, z: vector.z };
+  }
+  return { x: 0, y: 0, z: 0 };
 }
 
 export function createFallbackPresetDuel(): KernelBattleRunner {

@@ -55,6 +55,10 @@ TEST_CASE("C API drives the battle runner and exposes snapshots") {
   REQUIRE(robolocks_battle_runner_unit_weapon_cooldown(runtime, 0) == 30);
   REQUIRE(robolocks_battle_runner_unit_body_shape_type(runtime, 0) == 1);
   REQUIRE(robolocks_battle_runner_unit_body_radius(runtime, 0) == Catch::Approx(1.2));
+  const auto unit_modules = nlohmann::json::parse(robolocks_battle_runner_unit_modules_json(runtime, 0));
+  REQUIRE(unit_modules.at("mobility").at("id") == "tracked_chassis_mk1");
+  REQUIRE(unit_modules.at("weapon").at("muzzleOffsetMeters").at("x") == Catch::Approx(3.6));
+  REQUIRE(unit_modules.at("sensor").at("rangeMeters") == Catch::Approx(60.0));
   REQUIRE(robolocks_battle_runner_unit_mobility_intent_active(runtime, 0) == 1);
   REQUIRE(robolocks_battle_runner_unit_mobility_intent_target_x(runtime, 0) == Catch::Approx(17.0));
   REQUIRE(robolocks_battle_runner_unit_mobility_intent_target_y(runtime, 0) == Catch::Approx(12.0));

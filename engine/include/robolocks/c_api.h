@@ -38,6 +38,7 @@ int robolocks_battle_runner_unit_body_shape_type(RobolocksBattleRunnerHandle han
 double robolocks_battle_runner_unit_body_radius(RobolocksBattleRunnerHandle handle, size_t unit_index);
 double robolocks_battle_runner_unit_body_length(RobolocksBattleRunnerHandle handle, size_t unit_index);
 double robolocks_battle_runner_unit_body_width(RobolocksBattleRunnerHandle handle, size_t unit_index);
+const char* robolocks_battle_runner_unit_modules_json(RobolocksBattleRunnerHandle handle, size_t unit_index);
 int robolocks_battle_runner_unit_mobility_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index);
 double robolocks_battle_runner_unit_mobility_intent_target_x(RobolocksBattleRunnerHandle handle, size_t unit_index);
 double robolocks_battle_runner_unit_mobility_intent_target_y(RobolocksBattleRunnerHandle handle, size_t unit_index);

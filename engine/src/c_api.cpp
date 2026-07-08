@@ -3,6 +3,7 @@
 #include <robolocks/battle_loader.hpp>
 #include <robolocks/battle_runner.hpp>
 #include <robolocks/builtin_controllers.hpp>
+#include <robolocks/controller_protocol_json.hpp>
 #include <robolocks/json_callback_bot_controller.hpp>
 
 #include <memory>
@@ -11,6 +12,8 @@
 #include <utility>
 #include <variant>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 namespace {
 
@@ -414,6 +417,13 @@ double robolocks_battle_runner_unit_body_width(RobolocksBattleRunnerHandle handl
     return 0.0;
   }
   return unit->body_width_m;
+}
+
+const char* robolocks_battle_runner_unit_modules_json(RobolocksBattleRunnerHandle handle, size_t unit_index) {
+  static thread_local std::string modules_json;
+  const auto* unit = unit_at(handle, unit_index);
+  modules_json = unit == nullptr ? "{}" : robolocks::unit_modules_to_json(unit->modules).dump();
+  return modules_json.c_str();
 }
 
 int robolocks_battle_runner_unit_mobility_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index) {

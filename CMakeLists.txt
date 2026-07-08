@@ -159,6 +159,7 @@ if(EMSCRIPTEN)
     _robolocks_battle_runner_unit_body_radius
     _robolocks_battle_runner_unit_body_length
     _robolocks_battle_runner_unit_body_width
+    _robolocks_battle_runner_unit_modules_json
     _robolocks_battle_runner_unit_mobility_intent_active
     _robolocks_battle_runner_unit_mobility_intent_target_x
     _robolocks_battle_runner_unit_mobility_intent_target_y

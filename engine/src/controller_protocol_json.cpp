@@ -302,14 +302,25 @@ nlohmann::json unit_spec_to_json(const UnitSpec& spec) {
       {"position", vec2_to_json(spec.transform.position)},
       {"hullHeadingDegrees", spec.transform.hull_heading_deg},
     }},
-    {"modules", {
-      {"mobility", mobility_spec_to_json(spec.mobility)},
-      {"turret", turret_spec_to_json(spec.turret)},
-      {"weapon", weapon_spec_to_json(spec.weapon)},
-      {"armor", armor_spec_to_json(spec.armor)},
-      {"body", body_spec_to_json(spec.body)},
-      {"sensor", sensor_spec_to_json(spec.sensor)},
-    }},
+    {"modules", unit_modules_to_json(UnitModulesSnapshot{
+      .mobility = spec.mobility,
+      .turret = spec.turret,
+      .weapon = spec.weapon,
+      .armor = spec.armor,
+      .body = spec.body,
+      .sensor = spec.sensor,
+    })},
+  };
+}
+
+nlohmann::json unit_modules_to_json(const UnitModulesSnapshot& modules) {
+  return nlohmann::json{
+    {"mobility", mobility_spec_to_json(modules.mobility)},
+    {"turret", turret_spec_to_json(modules.turret)},
+    {"weapon", weapon_spec_to_json(modules.weapon)},
+    {"armor", armor_spec_to_json(modules.armor)},
+    {"body", body_spec_to_json(modules.body)},
+    {"sensor", sensor_spec_to_json(modules.sensor)},
   };
 }
 

@@ -37,6 +37,14 @@ test("wasm preset duel adapter reads unit intents from the C API", async () => {
     ["robolocks_battle_runner_unit_body_radius", () => 1.2],
     ["robolocks_battle_runner_unit_body_length", () => 5.6],
     ["robolocks_battle_runner_unit_body_width", () => 2.8],
+    ["robolocks_battle_runner_unit_modules_json", () => JSON.stringify({
+      mobility: { id: "custom_tracks", maxSpeedMetersPerSecond: 4, maxHullTurnDegreesPerSecond: 90 },
+      turret: { id: "slow_turret", maxTurnDegreesPerSecond: 45 },
+      weapon: { id: "test_launcher", fireMode: "ballistic", damage: 12, penetrationMillimeters: 30, rangeMeters: 44, muzzleVelocityMetersPerSecond: 50, muzzleOffsetMeters: { x: 2.1, y: 0.2, z: 1.4 }, launchAngleDegrees: 35, gravityMetersPerSecondSquared: 9.81, blastRadiusMeters: 3, projectileRadiusMeters: 0.12, aimToleranceDegrees: 6, reloadTicks: 80 },
+      armor: { id: "thin_plate", integrity: 40, frontMillimeters: 30, sideMillimeters: 20, rearMillimeters: 10 },
+      body: { id: "light_body", massKilograms: 12000 },
+      sensor: { id: "short_range_optic", rangeMeters: 24, fovDegrees: 70, refreshTicks: 2 },
+    })],
     ["robolocks_battle_runner_unit_mobility_intent_active", () => 1],
     ["robolocks_battle_runner_unit_mobility_intent_target_x", () => 17],
     ["robolocks_battle_runner_unit_mobility_intent_target_y", () => 12],
@@ -83,6 +91,10 @@ test("wasm preset duel adapter reads unit intents from the C API", async () => {
   assert.equal(obstacles[0].id, "north_cover");
   assert.deepEqual(obstacles[0].position, { x: 20, y: 6 });
   assert.equal(frame.units[0].weaponCooldownTicks, 18);
+  assert.equal(frame.units[0].modules.mobility.id, "custom_tracks");
+  assert.equal(frame.units[0].modules.weapon.fireMode, "ballistic");
+  assert.equal(frame.units[0].modules.weapon.muzzleOffsetMeters.x, 2.1);
+  assert.equal(frame.units[0].modules.sensor.rangeMeters, 24);
   assert.equal(frame.units[0].intents.mobility.active, true);
   assert.deepEqual(frame.units[0].intents.mobility.target, { x: 17, y: 12 });
   assert.equal(frame.units[0].intents.mobility.remainingMeters, 10.8);
@@ -188,4 +200,83 @@ test("wasm research duel adapter lets the battle runner call a JSON bot callback
   assert.equal(allocations.length, 2);
   assert.equal(releasedPointer, allocations[1]);
   assert.equal(stringsByPointer.has(releasedPointer), false);
+});
+
+test("wasm research duel adapter can create a runner from injected battle config JSON", async () => {
+  let registeredCallback = null;
+  let registeredReleaseCallback = null;
+  let receivedConfig = "";
+  let nextPointer = 1000;
+  const stringsByPointer = new Map([
+    [444, JSON.stringify({ selfId: 1, tick: 1, contacts: [] })],
+  ]);
+  const calls = new Map([
+    ["robolocks_battle_runner_set_json_bot_callback", (callbackPointer, releaseCallbackPointer) => {
+      registeredCallback = callbackPointer;
+      registeredReleaseCallback = releaseCallbackPointer;
+    }],
+    ["robolocks_battle_runner_create_from_json", (jsonConfig) => {
+      receivedConfig = jsonConfig;
+      return 88;
+    }],
+    ["robolocks_battle_runner_destroy", () => undefined],
+    ["robolocks_battle_runner_step", () => {
+      const responsePointer = registeredCallback(1, 444, 0);
+      registeredReleaseCallback(responsePointer, 0);
+    }],
+    ["robolocks_battle_runner_tick", () => 1],
+    ["robolocks_battle_runner_unit_count", () => 0],
+    ["robolocks_battle_runner_obstacle_count", () => 0],
+    ["robolocks_battle_runner_event_count", () => 0],
+    ["robolocks_battle_runner_projectile_count", () => 0],
+    ["robolocks_battle_runner_action_count", () => 0],
+  ]);
+  const factory = async () => ({
+    UTF8ToString(pointer) {
+      return stringsByPointer.get(pointer) ?? "";
+    },
+    lengthBytesUTF8(value) {
+      return Buffer.byteLength(value, "utf8");
+    },
+    stringToUTF8(value, pointer) {
+      stringsByPointer.set(pointer, value);
+    },
+    _malloc(byteLength) {
+      const pointer = nextPointer;
+      nextPointer += byteLength + 1;
+      return pointer;
+    },
+    _free(pointer) {
+      stringsByPointer.delete(pointer);
+    },
+    addFunction(fn) {
+      return fn;
+    },
+    removeFunction() {},
+    cwrap(name, returnType) {
+      const fn = calls.get(name);
+      if (fn) {
+        return fn;
+      }
+      return returnType === "string" ? () => "" : () => 0;
+    },
+  });
+
+  const runner = await createResearchDuelWithJsonBotFromWasmFactory({
+    botId: 1,
+    battleConfigJson: JSON.stringify({
+      battleId: "injected_research",
+      units: [{ unitId: 1, name: "Injected", modules: {}, spawn: { x: 0, y: 0, headingDeg: 0 } }],
+      controllers: [{ unitId: 1, type: "json_callback" }],
+    }),
+    onTick() {
+      return { orders: [] };
+    },
+    factory,
+  });
+
+  runner.step();
+  runner.destroy();
+
+  assert.equal(JSON.parse(receivedConfig).battleId, "injected_research");
 });
