@@ -3,14 +3,14 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
-import { buildBattlefieldScene } from "./battlefieldThreeScene.ts";
+import { buildBattleScene } from "./battleSceneThreeScene.ts";
 
-export type BattlefieldThreeViewProps = {
+export type BattleSceneThreeViewProps = {
   frame: BattleFrame | null;
   obstacles: StaticObstacleFrame[];
 };
 
-export function BattlefieldThreeView({ frame, obstacles }: BattlefieldThreeViewProps) {
+export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
@@ -26,7 +26,7 @@ export function BattlefieldThreeView({ frame, obstacles }: BattlefieldThreeViewP
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
-    renderer.domElement.className = "battlefield-webgl";
+    renderer.domElement.className = "battle-scene-webgl";
     host.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -99,7 +99,7 @@ export function BattlefieldThreeView({ frame, obstacles }: BattlefieldThreeViewP
   }, []);
 
   useEffect(() => {
-    const scene = buildBattlefieldScene({ frame, obstacles });
+    const scene = buildBattleScene({ frame, obstacles });
     sceneRef.current = scene;
     const renderer = rendererRef.current;
     const camera = cameraRef.current;
@@ -113,7 +113,7 @@ export function BattlefieldThreeView({ frame, obstacles }: BattlefieldThreeViewP
     };
   }, [frame, obstacles]);
 
-  return <div ref={hostRef} className="battlefield-three" aria-label="Battlefield viewport" />;
+  return <div ref={hostRef} className="battle-scene-three" aria-label="Battle scene viewport" />;
 }
 
 function disposeScene(scene: THREE.Scene): void {

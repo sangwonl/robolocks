@@ -18,9 +18,9 @@ UI -> Simulation Worker -> Kernel step -> Snapshot/Event frame -> UI
 Bot execution follows the same rule:
 
 ```text
-Observation -> Bot Runtime -> Commands -> Kernel step
+Observation -> Bot Runtime -> Orders -> Kernel step
 ```
 
 ## Determinism Rule
 
-The same engine version, runtime target, config, seed, catalog version, map, and commands must reproduce the same battle.
+The same engine version, runtime target, config, seed, catalog version, map, and orders must reproduce the same battle.

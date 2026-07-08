@@ -8,14 +8,14 @@ const TURRET_WIDTH_RATIO = 0.48;
 const TURRET_LENGTH_RATIO = 0.52;
 const BARREL_LENGTH_RATIO = 0.55;
 
-export type BattlefieldSceneInput = {
+export type BattleSceneInput = {
   frame: BattleFrame | null;
   obstacles: StaticObstacleFrame[];
 };
 
-export function buildBattlefieldScene(input: BattlefieldSceneInput): THREE.Scene {
+export function buildBattleScene(input: BattleSceneInput): THREE.Scene {
   const scene = new THREE.Scene();
-  scene.name = "robolocks-battlefield";
+  scene.name = "robolocks-battle-scene";
   scene.background = new THREE.Color("#1b211b");
 
   scene.add(createGround());

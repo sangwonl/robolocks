@@ -1,6 +1,17 @@
 import math
 
-from robolocks_bot import AimAt, FaceArmorToward, FireIfSolution, MoveTo, ScanArc, run_bot
+from robolocks import (
+    AimAt,
+    BattleState,
+    FaceArmorToward,
+    FireIfSolution,
+    MoveTo,
+    OrderLike,
+    ScanArc,
+    Vec2,
+    distance,
+    run_bot,
+)
 
 
 ARENA_MIN_X = 2.5
@@ -10,29 +21,29 @@ ARENA_MAX_Y = 21.5
 
 PATROLS = {
     1: [
-        {"x": 9.0, "y": 17.0},
-        {"x": 15.0, "y": 18.0},
-        {"x": 21.0, "y": 15.0},
-        {"x": 17.0, "y": 7.0},
+        Vec2(9.0, 17.0),
+        Vec2(15.0, 18.0),
+        Vec2(21.0, 15.0),
+        Vec2(17.0, 7.0),
     ],
     2: [
-        {"x": 31.0, "y": 7.0},
-        {"x": 25.0, "y": 6.0},
-        {"x": 19.0, "y": 9.0},
-        {"x": 23.0, "y": 17.0},
+        Vec2(31.0, 7.0),
+        Vec2(25.0, 6.0),
+        Vec2(19.0, 9.0),
+        Vec2(23.0, 17.0),
     ],
 }
 
 FLANKS = {
     1: [
-        {"x": 12.0, "y": 18.0},
-        {"x": 20.0, "y": 19.0},
-        {"x": 27.0, "y": 15.0},
+        Vec2(12.0, 18.0),
+        Vec2(20.0, 19.0),
+        Vec2(27.0, 15.0),
     ],
     2: [
-        {"x": 28.0, "y": 6.0},
-        {"x": 20.0, "y": 5.0},
-        {"x": 13.0, "y": 9.0},
+        Vec2(28.0, 6.0),
+        Vec2(20.0, 5.0),
+        Vec2(13.0, 9.0),
     ],
 }
 
@@ -42,13 +53,9 @@ def waypoint_for_tick(points, tick, phase_ticks):
     return points[index]
 
 
-def distance(a, b):
-    return math.hypot(a.x - b.x, a.y - b.y)
-
-
 def distance_point_to_segment(point, start, end):
-    dx = end["x"] - start.x
-    dy = end["y"] - start.y
+    dx = end.x - start.x
+    dy = end.y - start.y
     length_sq = dx * dx + dy * dy
     if length_sq <= 0.000001:
         return math.hypot(point.x - start.x, point.y - start.y)
@@ -59,8 +66,8 @@ def distance_point_to_segment(point, start, end):
     return math.hypot(point.x - closest_x, point.y - closest_y)
 
 
-def route_around_obstacles(state, target):
-    own = state.self.position
+def route_around_obstacles(state: BattleState, target: Vec2) -> Vec2:
+    own = state.own_unit.position
     best = None
     best_distance = 0.0
     for obstacle in state.map.obstacles:
@@ -70,8 +77,8 @@ def route_around_obstacles(state, target):
         segment_distance = distance_point_to_segment(obstacle.position, own, target)
         if segment_distance >= clearance:
             continue
-        to_target_x = target["x"] - own.x
-        to_target_y = target["y"] - own.y
+        to_target_x = target.x - own.x
+        to_target_y = target.y - own.y
         length_m = math.hypot(to_target_x, to_target_y)
         if length_m <= 0.000001:
             continue
@@ -82,7 +89,7 @@ def route_around_obstacles(state, target):
             obstacle.position.x + perp_x * clearance,
             obstacle.position.y + perp_y * clearance,
         )
-        detour_distance = math.hypot(detour["x"] - own.x, detour["y"] - own.y)
+        detour_distance = distance(detour, own)
         if best is None or detour_distance < best_distance:
             best = detour
             best_distance = detour_distance
@@ -95,7 +102,7 @@ MIN_TURRET_AGE_TICKS = 8
 
 
 def target_changed(current, target, threshold_m):
-    return distance(current, VecLike(target)) > threshold_m
+    return distance(current, target) > threshold_m
 
 
 def should_update_mobility(intent, move_target):
@@ -116,21 +123,15 @@ def should_update_turret(intent, target_pos):
     return False
 
 
-class VecLike:
-    def __init__(self, data):
-        self.x = float(data["x"])
-        self.y = float(data["y"])
-
-
 def clamp_point(x, y):
-    return {
-        "x": min(ARENA_MAX_X, max(ARENA_MIN_X, x)),
-        "y": min(ARENA_MAX_Y, max(ARENA_MIN_Y, y)),
-    }
+    return Vec2(
+        min(ARENA_MAX_X, max(ARENA_MIN_X, x)),
+        min(ARENA_MAX_Y, max(ARENA_MIN_Y, y)),
+    )
 
 
-def tactical_move(state, enemy):
-    own = state.self.position
+def tactical_move(state: BattleState, enemy) -> Vec2:
+    own = state.own_unit.position
     enemy_pos = enemy.position
     dx = own.x - enemy_pos.x
     dy = own.y - enemy_pos.y
@@ -158,32 +159,31 @@ def on_start(spec):
     pass
 
 
-def on_tick(state):
-    if state.self.armor_integrity <= 0:
+def on_tick(state: BattleState) -> list[OrderLike]:
+    own_unit = state.own_unit
+    if own_unit.armor_integrity <= 0:
         return []
 
     enemy = state.contacts.closest_enemy()
-    commands = []
+    orders: list[OrderLike] = []
 
     if enemy:
         move_target = route_around_obstacles(state, tactical_move(state, enemy))
-        if should_update_mobility(state.self.intents.mobility, move_target):
-            commands.append(MoveTo(move_target))
-        if should_update_turret(state.self.intents.turret, enemy.position):
-            commands.append(AimAt(enemy.position))
-        if state.self.weapon_cooldown_ticks == 0 and not state.self.intents.weapon.active:
-            commands.append(FireIfSolution(min_hit_chance=0.58))
-        return commands
+        if should_update_mobility(own_unit.intent.mobility, move_target):
+            orders.append(MoveTo(move_target))
+        if should_update_turret(own_unit.intent.turret, enemy.position):
+            orders.append(AimAt(enemy.position))
+        if own_unit.can_fire:
+            orders.append(FireIfSolution(min_hit_chance=0.58))
+        return orders
 
     patrol_target = route_around_obstacles(state, waypoint_for_tick(PATROLS[state.self_id], state.tick, 55))
-    if should_update_mobility(state.self.intents.mobility, patrol_target):
-        commands.append(MoveTo(patrol_target))
-    commands.append(ScanArc(center=state.self.hull_heading, width_deg=160))
-    if not commands and not state.self.intents.hull.active:
-        commands.append(FaceArmorToward(state.map.center()))
-    return [
-        *commands,
-    ]
+    if should_update_mobility(own_unit.intent.mobility, patrol_target):
+        orders.append(MoveTo(patrol_target))
+    orders.append(ScanArc(center=own_unit.hull_heading_deg, width_deg=160))
+    if not orders and not own_unit.intent.hull.active:
+        orders.append(FaceArmorToward(state.map.center))
+    return orders
 
 
 def on_end(result):

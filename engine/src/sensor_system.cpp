@@ -22,11 +22,11 @@ double distance(Vec2 a, Vec2 b) {
   return length(Vec2{b.x - a.x, b.y - a.y});
 }
 
-bool is_in_range(const UnitSnapshot& self, const UnitSnapshot& contact, const SensorComponent& sensor) {
+bool is_in_range(const UnitSnapshot& self, const UnitSnapshot& contact, const SensorSpec& sensor) {
   return distance(self.position, contact.position) <= sensor.range_m;
 }
 
-bool is_in_fov(const UnitSnapshot& self, const UnitSnapshot& contact, const SensorComponent& sensor) {
+bool is_in_fov(const UnitSnapshot& self, const UnitSnapshot& contact, const SensorSpec& sensor) {
   if (sensor.fov_deg >= 360.0) {
     return true;
   }
@@ -86,7 +86,7 @@ Observation SensorSystem::build_observation(const WorldSnapshot& snapshot, UnitI
   }
   observation.self = *self;
 
-  const SensorComponent sensor = sensor_for(self_id);
+  const SensorSpec sensor = sensor_for(self_id);
   for (const auto& unit : snapshot.units) {
     if (unit.unit_id == self_id) {
       continue;
@@ -116,22 +116,22 @@ Observation SensorSystem::build_observation(const WorldSnapshot& snapshot, UnitI
   return observation;
 }
 
-SensorComponent SensorSystem::sensor_for(UnitId unit_id) const {
+SensorSpec SensorSystem::sensor_for(UnitId unit_id) const {
   for (const auto& sensor : sensors_) {
     if (sensor.unit_id == unit_id) {
       return sensor.component;
     }
   }
-  return SensorComponent{};
+  return SensorSpec{};
 }
 
 std::vector<UnitSensorComponent> sensor_components_from_battle_config(const BattleConfig& config) {
   std::vector<UnitSensorComponent> sensors;
-  sensors.reserve(config.tanks.size());
-  for (const auto& tank : config.tanks) {
+  sensors.reserve(config.units.size());
+  for (const auto& unit_spec : config.units) {
     sensors.push_back(UnitSensorComponent{
-      .unit_id = tank.unit_id,
-      .component = tank.sensor,
+      .unit_id = unit_spec.unit_id,
+      .component = unit_spec.sensor,
     });
   }
   return sensors;

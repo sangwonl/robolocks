@@ -11,7 +11,7 @@ namespace robolocks {
 struct PhysicsBody {
   UnitId unit_id;
   Vec2 position;
-  BodyShapeComponent shape;
+  BodyShapeSpec shape;
   double heading_deg = 0.0;
   double mass_kg = 30000.0;
 };

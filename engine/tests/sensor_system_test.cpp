@@ -6,7 +6,7 @@ TEST_CASE("sensor system filters contacts by module range and field of view") {
   robolocks::SensorSystem sensors({
     robolocks::UnitSensorComponent{
       .unit_id = robolocks::UnitId{1},
-      .component = robolocks::SensorComponent{
+      .component = robolocks::SensorSpec{
         .range_m = 10.0,
         .fov_deg = 90.0,
         .refresh_ticks = 1,
@@ -59,7 +59,7 @@ TEST_CASE("sensor system uses all-around sensing when module fov is 360 degrees"
   robolocks::SensorSystem sensors({
     robolocks::UnitSensorComponent{
       .unit_id = robolocks::UnitId{1},
-      .component = robolocks::SensorComponent{
+      .component = robolocks::SensorSpec{
         .range_m = 10.0,
         .fov_deg = 360.0,
         .refresh_ticks = 1,
@@ -84,7 +84,7 @@ TEST_CASE("sensor system blocks contacts behind line-of-sight obstacles") {
     {
       robolocks::UnitSensorComponent{
         .unit_id = robolocks::UnitId{1},
-        .component = robolocks::SensorComponent{
+        .component = robolocks::SensorSpec{
           .range_m = 20.0,
           .fov_deg = 360.0,
           .refresh_ticks = 1,

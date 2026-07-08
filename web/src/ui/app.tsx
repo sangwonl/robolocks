@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { BattleAction, BattleEvent, BattleFrame, UnitFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
-import { BattlefieldThreeView } from "./BattlefieldThreeView.tsx";
+import { BattleSceneThreeView } from "./BattleSceneThreeView.tsx";
 
 export type RenderAppOptions = {
   defaultReplayUrl?: string | null;
@@ -145,8 +145,8 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
         <div className="status">{statusText}</div>
         <Inspector frame={frame} />
       </aside>
-      <section className="battlefield">
-        <BattlefieldThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? []} />
+      <section className="battle-scene">
+        <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? []} />
       </section>
     </section>
   );

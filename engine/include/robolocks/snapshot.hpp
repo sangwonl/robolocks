@@ -10,12 +10,12 @@
 namespace robolocks {
 
 struct UnitModulesSnapshot {
-  MobilityComponent mobility;
-  TurretComponent turret;
-  WeaponComponent weapon;
-  ArmorComponent armor;
-  BodyComponent body;
-  SensorComponent sensor;
+  MobilitySpec mobility;
+  TurretSpec turret;
+  WeaponSpec weapon;
+  ArmorSpec armor;
+  BodySpec body;
+  SensorSpec sensor;
 };
 
 struct UnitSnapshot {

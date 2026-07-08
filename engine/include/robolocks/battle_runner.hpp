@@ -1,6 +1,6 @@
 #pragma once
 
-#include <robolocks/battlefield.hpp>
+#include <robolocks/battle_simulation.hpp>
 #include <robolocks/bot_controller.hpp>
 #include <robolocks/sensor_system.hpp>
 
@@ -13,13 +13,13 @@ struct ControllerBinding {
   std::unique_ptr<BotController> controller;
 };
 
-class BattleRuntime {
+class BattleRunner {
  public:
-  explicit BattleRuntime(BattleConfig config);
-  BattleRuntime(BattleConfig config, std::vector<ControllerBinding> controllers);
+  explicit BattleRunner(BattleConfig config);
+  BattleRunner(BattleConfig config, std::vector<ControllerBinding> controllers);
 
-  static BattleRuntime preset_duel();
-  static BattleRuntime preset_duel(BattleConfig config);
+  static BattleRunner preset_duel();
+  static BattleRunner preset_duel(BattleConfig config);
 
   WorldSnapshot snapshot() const;
   const std::vector<StaticObstacle>& obstacles() const;
@@ -29,7 +29,7 @@ class BattleRuntime {
 
  private:
   std::vector<StaticObstacle> obstacles_;
-  Battlefield battlefield_;
+  BattleSimulation simulation_;
   SensorSystem sensor_system_;
   WorldSnapshot snapshot_;
   std::vector<ControllerBinding> controllers_;

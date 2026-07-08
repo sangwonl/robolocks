@@ -1,7 +1,7 @@
 #pragma once
 
 #include <robolocks/battle_loader.hpp>
-#include <robolocks/battle_runtime.hpp>
+#include <robolocks/battle_runner.hpp>
 
 #include <vector>
 

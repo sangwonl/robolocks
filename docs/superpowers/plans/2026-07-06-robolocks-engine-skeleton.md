@@ -17,8 +17,8 @@
 - Host `Math` functions are forbidden in simulation code; deterministic math must live in the kernel.
 - Module catalog, maps, and balance data live in JSON outside the compiled kernel.
 - The first deliverable uses preset tanks before the module builder is implemented.
-- Commands are public AI outputs; ControlIntent is internal; ActuatorCommand is the final low-level input.
-- Different command channels apply simultaneously; duplicate commands for one channel reject that channel and emit a diagnostic event.
+- Orders are public AI outputs; Intent is internal; ActuatorInput is the final low-level input.
+- Different order channels apply simultaneously; duplicate orders for one channel reject that channel and emit a diagnostic event.
 - Current workspace is not a git repository; skip commit steps unless a git repository is initialized before execution.
 
 ---
@@ -27,7 +27,7 @@
 
 - `CMakeLists.txt`: root CMake project, native executable/test targets, optional WASM target wiring.
 - `cmake/Dependencies.cmake`: FetchContent declarations for Catch2.
-- `engine/include/robolocks/*.hpp`: public kernel headers for IDs, math, match config, commands, state, snapshots, and kernel API.
+- `engine/include/robolocks/*.hpp`: public kernel headers for IDs, math, match config, orders, state, snapshots, and kernel API.
 - `engine/src/*.cpp`: pure C++ implementation.
 - `engine/tests/*.cpp`: native Catch2 tests.
 - `web/package.json`: web workspace scripts.
@@ -368,7 +368,7 @@ git commit -m "feat: add deterministic math primitives"
 
 ---
 
-### Task 3: Match Config, Commands, and Snapshots
+### Task 3: Match Config, Orders, and Snapshots
 
 **Files:**
 - Create: `engine/include/robolocks/command.hpp`
@@ -379,8 +379,8 @@ git commit -m "feat: add deterministic math primitives"
 
 **Interfaces:**
 - Consumes: `Vec2`, `UnitId`, `Tick`
-- Produces: `Command`, `CommandKind`, `CommandChannel`, `MoveToCommand`, `AimAtCommand`, `FireIfSolutionCommand`
-- Produces: `command_channel(CommandKind) -> CommandChannel`
+- Produces: `Order`, `OrderKind`, `OrderChannel`, `MoveToOrder`, `AimAtOrder`, `FireIfSolutionOrder`
+- Produces: `order_channel(OrderKind) -> OrderChannel`
 - Produces: `MatchConfig`, `TankPreset`, `WorldSnapshot`, `UnitSnapshot`, `Event`
 
 - [ ] **Step 1: Write command channel tests**
@@ -392,11 +392,11 @@ Create `engine/tests/command_test.cpp`:
 #include <robolocks/command.hpp>
 
 TEST_CASE("command kinds map to control channels") {
-  REQUIRE(robolocks::command_channel(robolocks::CommandKind::MoveTo) == robolocks::CommandChannel::Mobility);
-  REQUIRE(robolocks::command_channel(robolocks::CommandKind::AimAt) == robolocks::CommandChannel::Turret);
-  REQUIRE(robolocks::command_channel(robolocks::CommandKind::FireIfSolution) == robolocks::CommandChannel::Weapon);
-  REQUIRE(robolocks::command_channel(robolocks::CommandKind::ScanArc) == robolocks::CommandChannel::Sensor);
-  REQUIRE(robolocks::command_channel(robolocks::CommandKind::FaceArmorToward) == robolocks::CommandChannel::Hull);
+  REQUIRE(robolocks::order_channel(robolocks::OrderKind::MoveTo) == robolocks::OrderChannel::Mobility);
+  REQUIRE(robolocks::order_channel(robolocks::OrderKind::AimAt) == robolocks::OrderChannel::Turret);
+  REQUIRE(robolocks::order_channel(robolocks::OrderKind::FireIfSolution) == robolocks::OrderChannel::Weapon);
+  REQUIRE(robolocks::order_channel(robolocks::OrderKind::ScanArc) == robolocks::OrderChannel::Sensor);
+  REQUIRE(robolocks::order_channel(robolocks::OrderKind::FaceArmorToward) == robolocks::OrderChannel::Hull);
 }
 ```
 
@@ -430,7 +430,7 @@ Create `engine/include/robolocks/command.hpp`:
 
 namespace robolocks {
 
-enum class CommandKind {
+enum class OrderKind {
   MoveTo,
   AimAt,
   FireIfSolution,
@@ -438,7 +438,7 @@ enum class CommandKind {
   FaceArmorToward,
 };
 
-enum class CommandChannel {
+enum class OrderChannel {
   Mobility,
   Turret,
   Weapon,
@@ -446,43 +446,43 @@ enum class CommandChannel {
   Hull,
 };
 
-struct MoveToCommand {
+struct MoveToOrder {
   Vec2 position;
 };
 
-struct AimAtCommand {
+struct AimAtOrder {
   Vec2 target;
 };
 
-struct FireIfSolutionCommand {
+struct FireIfSolutionOrder {
   double min_hit_chance = 0.0;
 };
 
-struct ScanArcCommand {
+struct ScanArcOrder {
   double center_deg = 0.0;
   double width_deg = 0.0;
 };
 
-struct FaceArmorTowardCommand {
+struct FaceArmorTowardOrder {
   Vec2 target;
 };
 
-using CommandPayload = std::variant<
-  MoveToCommand,
-  AimAtCommand,
-  FireIfSolutionCommand,
-  ScanArcCommand,
-  FaceArmorTowardCommand
+using OrderPayload = std::variant<
+  MoveToOrder,
+  AimAtOrder,
+  FireIfSolutionOrder,
+  ScanArcOrder,
+  FaceArmorTowardOrder
 >;
 
-struct Command {
-  CommandKind kind;
-  CommandPayload payload;
+struct Order {
+  OrderKind kind;
+  OrderPayload payload;
 };
 
-using CommandList = std::vector<Command>;
+using OrderList = std::vector<Order>;
 
-CommandChannel command_channel(CommandKind kind);
+OrderChannel order_channel(OrderKind kind);
 
 }  // namespace robolocks
 ```
@@ -492,20 +492,20 @@ CommandChannel command_channel(CommandKind kind);
 Append to `engine/include/robolocks/command.hpp` before the namespace close:
 
 ```cpp
-inline CommandChannel command_channel(CommandKind kind) {
+inline OrderChannel order_channel(OrderKind kind) {
   switch (kind) {
-    case CommandKind::MoveTo:
-      return CommandChannel::Mobility;
-    case CommandKind::AimAt:
-      return CommandChannel::Turret;
-    case CommandKind::FireIfSolution:
-      return CommandChannel::Weapon;
-    case CommandKind::ScanArc:
-      return CommandChannel::Sensor;
-    case CommandKind::FaceArmorToward:
-      return CommandChannel::Hull;
+    case OrderKind::MoveTo:
+      return OrderChannel::Mobility;
+    case OrderKind::AimAt:
+      return OrderChannel::Turret;
+    case OrderKind::FireIfSolution:
+      return OrderChannel::Weapon;
+    case OrderKind::ScanArc:
+      return OrderChannel::Sensor;
+    case OrderKind::FaceArmorToward:
+      return OrderChannel::Hull;
   }
-  return CommandChannel::Mobility;
+  return OrderChannel::Mobility;
 }
 ```
 
@@ -601,11 +601,11 @@ git commit -m "feat: define match and command types"
 - Modify: `CMakeLists.txt`
 
 **Interfaces:**
-- Consumes: `MatchConfig`, `CommandList`, `WorldSnapshot`
+- Consumes: `MatchConfig`, `OrderList`, `WorldSnapshot`
 - Produces: `Match`
 - Produces: `Match::snapshot() const -> WorldSnapshot`
-- Produces: `Match::step(const std::vector<UnitCommands>& commands) -> StepResult`
-- Produces: `UnitCommands`, `StepResult`
+- Produces: `Match::step(const std::vector<UnitOrders>& orders) -> StepResult`
+- Produces: `UnitOrders`, `StepResult`
 
 - [ ] **Step 1: Write deterministic movement test**
 
@@ -632,13 +632,13 @@ TEST_CASE("match step moves tank toward MoveTo target deterministically") {
 
   robolocks::Match match(config);
 
-  robolocks::Command move{
-    .kind = robolocks::CommandKind::MoveTo,
-    .payload = robolocks::MoveToCommand{robolocks::Vec2{10.0, 0.0}},
+  robolocks::Order move{
+    .kind = robolocks::OrderKind::MoveTo,
+    .payload = robolocks::MoveToOrder{robolocks::Vec2{10.0, 0.0}},
   };
 
   const auto result = match.step({
-    robolocks::UnitCommands{robolocks::UnitId{1}, {move}},
+    robolocks::UnitOrders{robolocks::UnitId{1}, {move}},
   });
 
   REQUIRE(result.snapshot.tick == 1);
@@ -647,23 +647,23 @@ TEST_CASE("match step moves tank toward MoveTo target deterministically") {
   REQUIRE(result.snapshot.units[0].position.y == Catch::Approx(0.0));
 }
 
-TEST_CASE("same commands produce same snapshots") {
+TEST_CASE("same orders produce same snapshots") {
   robolocks::MatchConfig config;
   config.tick_dt_sec = 1.0;
   config.tanks = {
     robolocks::TankPreset{robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 2.0, 100.0},
   };
 
-  robolocks::Command move{
-    .kind = robolocks::CommandKind::MoveTo,
-    .payload = robolocks::MoveToCommand{robolocks::Vec2{10.0, 0.0}},
+  robolocks::Order move{
+    .kind = robolocks::OrderKind::MoveTo,
+    .payload = robolocks::MoveToOrder{robolocks::Vec2{10.0, 0.0}},
   };
 
   robolocks::Match a(config);
   robolocks::Match b(config);
 
-  const auto ar = a.step({robolocks::UnitCommands{robolocks::UnitId{1}, {move}}});
-  const auto br = b.step({robolocks::UnitCommands{robolocks::UnitId{1}, {move}}});
+  const auto ar = a.step({robolocks::UnitOrders{robolocks::UnitId{1}, {move}}});
+  const auto br = b.step({robolocks::UnitOrders{robolocks::UnitId{1}, {move}}});
 
   REQUIRE(ar.snapshot.units[0].position.x == Catch::Approx(br.snapshot.units[0].position.x));
   REQUIRE(ar.snapshot.units[0].position.y == Catch::Approx(br.snapshot.units[0].position.y));
@@ -712,9 +712,9 @@ Create `engine/include/robolocks/match.hpp`:
 
 namespace robolocks {
 
-struct UnitCommands {
+struct UnitOrders {
   UnitId unit_id;
-  CommandList commands;
+  OrderList orders;
 };
 
 struct StepResult {
@@ -727,7 +727,7 @@ class Match {
   explicit Match(MatchConfig config);
 
   WorldSnapshot snapshot() const;
-  StepResult step(const std::vector<UnitCommands>& commands_by_unit);
+  StepResult step(const std::vector<UnitOrders>& orders_by_unit);
 
  private:
   struct UnitState {
@@ -790,20 +790,20 @@ WorldSnapshot Match::snapshot() const {
   return out;
 }
 
-StepResult Match::step(const std::vector<UnitCommands>& commands_by_unit) {
+StepResult Match::step(const std::vector<UnitOrders>& orders_by_unit) {
   std::vector<Event> events;
 
   for (auto& unit : units_) {
-    std::optional<MoveToCommand> move_to;
+    std::optional<MoveToOrder> move_to;
     bool duplicate_mobility = false;
 
-    for (const auto& unit_commands : commands_by_unit) {
-      if (!(unit_commands.unit_id == unit.unit_id)) {
+    for (const auto& unit_orders : orders_by_unit) {
+      if (!(unit_orders.unit_id == unit.unit_id)) {
         continue;
       }
 
-      for (const auto& command : unit_commands.commands) {
-        if (command_channel(command.kind) != CommandChannel::Mobility) {
+      for (const auto& command : unit_orders.orders) {
+        if (order_channel(command.kind) != OrderChannel::Mobility) {
           continue;
         }
 
@@ -812,7 +812,7 @@ StepResult Match::step(const std::vector<UnitCommands>& commands_by_unit) {
           continue;
         }
 
-        if (const auto* payload = std::get_if<MoveToCommand>(&command.payload)) {
+        if (const auto* payload = std::get_if<MoveToOrder>(&command.payload)) {
           move_to = *payload;
         }
       }
@@ -823,7 +823,7 @@ StepResult Match::step(const std::vector<UnitCommands>& commands_by_unit) {
         .tick = tick_,
         .unit_id = unit.unit_id,
         .code = "duplicate_mobility_command",
-        .message = "Mobility channel rejected because multiple commands were returned.",
+        .message = "Mobility channel rejected because multiple orders were returned.",
       });
       move_to.reset();
     }
@@ -1113,15 +1113,15 @@ export function renderApp(root: HTMLElement): void {
         <button id="run">Run Preset Duel</button>
         <pre id="log"></pre>
       </aside>
-      <section class="battlefield" id="battlefield"></section>
+      <section class="battle_simulation" id="battle_simulation"></section>
     </section>
   `;
 
   const log = root.querySelector<HTMLPreElement>("#log");
-  const battlefield = root.querySelector<HTMLElement>("#battlefield");
+  const battle_simulation = root.querySelector<HTMLElement>("#battle_simulation");
   const run = root.querySelector<HTMLButtonElement>("#run");
 
-  if (!log || !battlefield || !run) {
+  if (!log || !battle_simulation || !run) {
     throw new Error("Workbench elements were not created");
   }
 
@@ -1131,7 +1131,7 @@ export function renderApp(root: HTMLElement): void {
 
   worker.onmessage = (event: MessageEvent<SimWorkerResponse>) => {
     if (event.data.type === "battleFrame" || event.data.type === "battleComplete") {
-      drawFrame(battlefield, event.data.type === "battleFrame" ? event.data.frame : event.data.finalFrame);
+      drawFrame(battle_simulation, event.data.type === "battleFrame" ? event.data.frame : event.data.finalFrame);
       log.textContent = JSON.stringify(event.data, null, 2);
     }
   };
@@ -1203,7 +1203,7 @@ pre {
   color: #c9d0c2;
 }
 
-.battlefield {
+.battle_simulation {
   position: relative;
   overflow: hidden;
   background:
@@ -1429,7 +1429,7 @@ Create `fixtures/matches/preset_duel_v0.json`:
 
 ```json
 {
-  "matchId": "preset_duel_v0",
+  "battleId": "preset_duel_v0",
   "mapId": "duel_grid_v0",
   "seed": 1,
   "tickRate": 30,
@@ -1480,12 +1480,12 @@ UI -> Simulation Worker -> Kernel step -> Snapshot/Event frame -> UI
 Bot execution follows the same rule:
 
 ```text
-Observation -> Bot Runtime -> Commands -> Kernel step
+Observation -> Bot Runtime -> Orders -> Kernel step
 ```
 
 ## Determinism Rule
 
-The same engine version, runtime target, config, seed, catalog version, map, and commands must reproduce the same battle.
+The same engine version, runtime target, config, seed, catalog version, map, and orders must reproduce the same battle.
 ```
 
 - [ ] **Step 4: Verify fixture JSON parses**
@@ -1529,7 +1529,7 @@ Known follow-up plans:
 
 - Module catalog and build validation.
 - Bot protocol and JS bot runtime.
-- Observation model and command resolver expansion.
+- Observation model and order resolver expansion.
 - Map grid, line of sight, and deterministic A*.
 - Ballistics, armor, and damage channels.
 - Replay recorder and viewer.

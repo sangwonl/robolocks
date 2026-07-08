@@ -1,55 +1,55 @@
 #include <robolocks/c_api.h>
 
-#include <robolocks/battle_runtime.hpp>
+#include <robolocks/battle_runner.hpp>
 
 #include <memory>
 #include <variant>
 
 namespace {
 
-struct RobolocksBattleRuntime {
-  robolocks::BattleRuntime runtime;
+struct RobolocksBattleRunner {
+  robolocks::BattleRunner runner;
   robolocks::WorldSnapshot snapshot;
   robolocks::StepResult last_result;
 
-  explicit RobolocksBattleRuntime(robolocks::BattleRuntime battle_runtime)
-      : runtime(std::move(battle_runtime)), snapshot(runtime.snapshot()) {}
+  explicit RobolocksBattleRunner(robolocks::BattleRunner battle_runner)
+      : runner(std::move(battle_runner)), snapshot(runner.snapshot()) {}
 };
 
-RobolocksBattleRuntime* as_runtime(RobolocksBattleRuntimeHandle handle) {
-  return static_cast<RobolocksBattleRuntime*>(handle);
+RobolocksBattleRunner* as_runner(RobolocksBattleRunnerHandle handle) {
+  return static_cast<RobolocksBattleRunner*>(handle);
 }
 
-const robolocks::UnitSnapshot* unit_at(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr || unit_index >= runtime->snapshot.units.size()) {
+const robolocks::UnitSnapshot* unit_at(RobolocksBattleRunnerHandle handle, size_t unit_index) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr || unit_index >= runner->snapshot.units.size()) {
     return nullptr;
   }
-  return &runtime->snapshot.units[unit_index];
+  return &runner->snapshot.units[unit_index];
 }
 
-const robolocks::StaticObstacle* obstacle_at(RobolocksBattleRuntimeHandle handle, size_t obstacle_index) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr || obstacle_index >= runtime->runtime.obstacles().size()) {
+const robolocks::StaticObstacle* obstacle_at(RobolocksBattleRunnerHandle handle, size_t obstacle_index) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr || obstacle_index >= runner->runner.obstacles().size()) {
     return nullptr;
   }
-  return &runtime->runtime.obstacles()[obstacle_index];
+  return &runner->runner.obstacles()[obstacle_index];
 }
 
-const robolocks::Event* event_at(RobolocksBattleRuntimeHandle handle, size_t event_index) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr || event_index >= runtime->last_result.events.size()) {
+const robolocks::Event* event_at(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr || event_index >= runner->last_result.events.size()) {
     return nullptr;
   }
-  return &runtime->last_result.events[event_index];
+  return &runner->last_result.events[event_index];
 }
 
-const robolocks::ProjectileSnapshot* projectile_at(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr || projectile_index >= runtime->snapshot.projectiles.size()) {
+const robolocks::ProjectileSnapshot* projectile_at(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr || projectile_index >= runner->snapshot.projectiles.size()) {
     return nullptr;
   }
-  return &runtime->snapshot.projectiles[projectile_index];
+  return &runner->snapshot.projectiles[projectile_index];
 }
 
 struct ActionRef {
@@ -57,14 +57,14 @@ struct ActionRef {
   const robolocks::Order* order = nullptr;
 };
 
-ActionRef action_at(RobolocksBattleRuntimeHandle handle, size_t action_index) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr) {
+ActionRef action_at(RobolocksBattleRunnerHandle handle, size_t action_index) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
     return {};
   }
 
   size_t offset = 0;
-  for (const auto& unit_orders : runtime->last_result.orders_by_unit) {
+  for (const auto& unit_orders : runner->last_result.orders_by_unit) {
     if (action_index < offset + unit_orders.orders.size()) {
       return ActionRef{
         .unit_id = unit_orders.unit_id,
@@ -113,51 +113,51 @@ const char* order_channel_name(robolocks::OrderKind kind) {
 
 extern "C" {
 
-RobolocksBattleRuntimeHandle robolocks_battle_runtime_create_preset_duel(void) {
-  return new RobolocksBattleRuntime(robolocks::BattleRuntime::preset_duel());
+RobolocksBattleRunnerHandle robolocks_battle_runner_create_preset_duel(void) {
+  return new RobolocksBattleRunner(robolocks::BattleRunner::preset_duel());
 }
 
-void robolocks_battle_runtime_destroy(RobolocksBattleRuntimeHandle handle) {
-  delete as_runtime(handle);
+void robolocks_battle_runner_destroy(RobolocksBattleRunnerHandle handle) {
+  delete as_runner(handle);
 }
 
-void robolocks_battle_runtime_step(RobolocksBattleRuntimeHandle handle) {
-  auto* runtime = as_runtime(handle);
-  if (runtime == nullptr) {
+void robolocks_battle_runner_step(RobolocksBattleRunnerHandle handle) {
+  auto* runner = as_runner(handle);
+  if (runner == nullptr) {
     return;
   }
-  runtime->last_result = runtime->runtime.step_once();
-  runtime->snapshot = runtime->last_result.snapshot;
+  runner->last_result = runner->runner.step_once();
+  runner->snapshot = runner->last_result.snapshot;
 }
 
-void robolocks_battle_runtime_run_ticks(RobolocksBattleRuntimeHandle handle, uint64_t tick_count) {
-  auto* runtime = as_runtime(handle);
-  if (runtime == nullptr) {
+void robolocks_battle_runner_run_ticks(RobolocksBattleRunnerHandle handle, uint64_t tick_count) {
+  auto* runner = as_runner(handle);
+  if (runner == nullptr) {
     return;
   }
   for (uint64_t i = 0; i < tick_count; i += 1) {
-    runtime->last_result = runtime->runtime.step_once();
+    runner->last_result = runner->runner.step_once();
   }
-  runtime->snapshot = runtime->runtime.snapshot();
+  runner->snapshot = runner->runner.snapshot();
 }
 
-uint64_t robolocks_battle_runtime_tick(RobolocksBattleRuntimeHandle handle) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr) {
+uint64_t robolocks_battle_runner_tick(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
     return 0;
   }
-  return runtime->snapshot.tick;
+  return runner->snapshot.tick;
 }
 
-size_t robolocks_battle_runtime_unit_count(RobolocksBattleRuntimeHandle handle) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr) {
+size_t robolocks_battle_runner_unit_count(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
     return 0;
   }
-  return runtime->snapshot.units.size();
+  return runner->snapshot.units.size();
 }
 
-uint32_t robolocks_battle_runtime_unit_id(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+uint32_t robolocks_battle_runner_unit_id(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0;
@@ -165,7 +165,7 @@ uint32_t robolocks_battle_runtime_unit_id(RobolocksBattleRuntimeHandle handle, s
   return unit->unit_id.value;
 }
 
-double robolocks_battle_runtime_unit_x(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_x(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -173,7 +173,7 @@ double robolocks_battle_runtime_unit_x(RobolocksBattleRuntimeHandle handle, size
   return unit->position.x;
 }
 
-double robolocks_battle_runtime_unit_y(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_y(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -181,7 +181,7 @@ double robolocks_battle_runtime_unit_y(RobolocksBattleRuntimeHandle handle, size
   return unit->position.y;
 }
 
-double robolocks_battle_runtime_unit_hull_heading_deg(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_hull_heading_deg(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -189,7 +189,7 @@ double robolocks_battle_runtime_unit_hull_heading_deg(RobolocksBattleRuntimeHand
   return unit->hull_heading_deg;
 }
 
-double robolocks_battle_runtime_unit_turret_heading_deg(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_turret_heading_deg(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -197,7 +197,7 @@ double robolocks_battle_runtime_unit_turret_heading_deg(RobolocksBattleRuntimeHa
   return unit->turret_heading_deg;
 }
 
-double robolocks_battle_runtime_unit_armor(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_armor(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -205,8 +205,8 @@ double robolocks_battle_runtime_unit_armor(RobolocksBattleRuntimeHandle handle, 
   return unit->armor_integrity;
 }
 
-uint64_t robolocks_battle_runtime_unit_weapon_cooldown_ticks(
-  RobolocksBattleRuntimeHandle handle,
+uint64_t robolocks_battle_runner_unit_weapon_cooldown_ticks(
+  RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
   const auto* unit = unit_at(handle, unit_index);
@@ -216,7 +216,7 @@ uint64_t robolocks_battle_runtime_unit_weapon_cooldown_ticks(
   return unit->weapon_cooldown_ticks;
 }
 
-int robolocks_battle_runtime_unit_body_shape_type(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+int robolocks_battle_runner_unit_body_shape_type(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0;
@@ -230,7 +230,7 @@ int robolocks_battle_runtime_unit_body_shape_type(RobolocksBattleRuntimeHandle h
   return 0;
 }
 
-double robolocks_battle_runtime_unit_body_radius_m(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_body_radius_m(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -238,7 +238,7 @@ double robolocks_battle_runtime_unit_body_radius_m(RobolocksBattleRuntimeHandle 
   return unit->body_radius_m;
 }
 
-double robolocks_battle_runtime_unit_body_length_m(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_body_length_m(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -246,7 +246,7 @@ double robolocks_battle_runtime_unit_body_length_m(RobolocksBattleRuntimeHandle 
   return unit->body_length_m;
 }
 
-double robolocks_battle_runtime_unit_body_width_m(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_body_width_m(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -254,126 +254,126 @@ double robolocks_battle_runtime_unit_body_width_m(RobolocksBattleRuntimeHandle h
   return unit->body_width_m;
 }
 
-int robolocks_battle_runtime_unit_mobility_intent_active(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+int robolocks_battle_runner_unit_mobility_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit != nullptr && unit->mobility_intent_active ? 1 : 0;
 }
 
-double robolocks_battle_runtime_unit_mobility_intent_target_x(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_mobility_intent_target_x(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->mobility_intent_target.x;
 }
 
-double robolocks_battle_runtime_unit_mobility_intent_target_y(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_mobility_intent_target_y(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->mobility_intent_target.y;
 }
 
-double robolocks_battle_runtime_unit_mobility_intent_remaining_m(
-  RobolocksBattleRuntimeHandle handle,
+double robolocks_battle_runner_unit_mobility_intent_remaining_m(
+  RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->mobility_intent_remaining_m;
 }
 
-uint64_t robolocks_battle_runtime_unit_mobility_intent_age_ticks(
-  RobolocksBattleRuntimeHandle handle,
+uint64_t robolocks_battle_runner_unit_mobility_intent_age_ticks(
+  RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0 : unit->mobility_intent_age_ticks;
 }
 
-int robolocks_battle_runtime_unit_turret_intent_active(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+int robolocks_battle_runner_unit_turret_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit != nullptr && unit->turret_intent_active ? 1 : 0;
 }
 
-double robolocks_battle_runtime_unit_turret_intent_target_x(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_turret_intent_target_x(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->turret_intent_target.x;
 }
 
-double robolocks_battle_runtime_unit_turret_intent_target_y(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_turret_intent_target_y(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->turret_intent_target.y;
 }
 
-double robolocks_battle_runtime_unit_turret_intent_error_deg(
-  RobolocksBattleRuntimeHandle handle,
+double robolocks_battle_runner_unit_turret_intent_error_deg(
+  RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->turret_intent_error_deg;
 }
 
-uint64_t robolocks_battle_runtime_unit_turret_intent_age_ticks(
-  RobolocksBattleRuntimeHandle handle,
+uint64_t robolocks_battle_runner_unit_turret_intent_age_ticks(
+  RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0 : unit->turret_intent_age_ticks;
 }
 
-int robolocks_battle_runtime_unit_hull_intent_active(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+int robolocks_battle_runner_unit_hull_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit != nullptr && unit->hull_intent_active ? 1 : 0;
 }
 
-double robolocks_battle_runtime_unit_hull_intent_target_x(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_hull_intent_target_x(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->hull_intent_target.x;
 }
 
-double robolocks_battle_runtime_unit_hull_intent_target_y(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_hull_intent_target_y(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->hull_intent_target.y;
 }
 
-double robolocks_battle_runtime_unit_hull_intent_error_deg(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_hull_intent_error_deg(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->hull_intent_error_deg;
 }
 
-uint64_t robolocks_battle_runtime_unit_hull_intent_age_ticks(
-  RobolocksBattleRuntimeHandle handle,
+uint64_t robolocks_battle_runner_unit_hull_intent_age_ticks(
+  RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0 : unit->hull_intent_age_ticks;
 }
 
-int robolocks_battle_runtime_unit_weapon_intent_active(RobolocksBattleRuntimeHandle handle, size_t unit_index) {
+int robolocks_battle_runner_unit_weapon_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit != nullptr && unit->weapon_intent_active ? 1 : 0;
 }
 
-double robolocks_battle_runtime_unit_weapon_intent_min_hit_chance(
-  RobolocksBattleRuntimeHandle handle,
+double robolocks_battle_runner_unit_weapon_intent_min_hit_chance(
+  RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->weapon_intent_min_hit_chance;
 }
 
-uint64_t robolocks_battle_runtime_unit_weapon_intent_age_ticks(
-  RobolocksBattleRuntimeHandle handle,
+uint64_t robolocks_battle_runner_unit_weapon_intent_age_ticks(
+  RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0 : unit->weapon_intent_age_ticks;
 }
 
-size_t robolocks_battle_runtime_obstacle_count(RobolocksBattleRuntimeHandle handle) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr) {
+size_t robolocks_battle_runner_obstacle_count(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
     return 0;
   }
-  return runtime->runtime.obstacles().size();
+  return runner->runner.obstacles().size();
 }
 
-const char* robolocks_battle_runtime_obstacle_id(RobolocksBattleRuntimeHandle handle, size_t obstacle_index) {
+const char* robolocks_battle_runner_obstacle_id(RobolocksBattleRunnerHandle handle, size_t obstacle_index) {
   const auto* obstacle = obstacle_at(handle, obstacle_index);
   if (obstacle == nullptr) {
     return "";
@@ -381,7 +381,7 @@ const char* robolocks_battle_runtime_obstacle_id(RobolocksBattleRuntimeHandle ha
   return obstacle->id.c_str();
 }
 
-double robolocks_battle_runtime_obstacle_x(RobolocksBattleRuntimeHandle handle, size_t obstacle_index) {
+double robolocks_battle_runner_obstacle_x(RobolocksBattleRunnerHandle handle, size_t obstacle_index) {
   const auto* obstacle = obstacle_at(handle, obstacle_index);
   if (obstacle == nullptr) {
     return 0.0;
@@ -389,7 +389,7 @@ double robolocks_battle_runtime_obstacle_x(RobolocksBattleRuntimeHandle handle, 
   return obstacle->position.x;
 }
 
-double robolocks_battle_runtime_obstacle_y(RobolocksBattleRuntimeHandle handle, size_t obstacle_index) {
+double robolocks_battle_runner_obstacle_y(RobolocksBattleRunnerHandle handle, size_t obstacle_index) {
   const auto* obstacle = obstacle_at(handle, obstacle_index);
   if (obstacle == nullptr) {
     return 0.0;
@@ -397,7 +397,7 @@ double robolocks_battle_runtime_obstacle_y(RobolocksBattleRuntimeHandle handle, 
   return obstacle->position.y;
 }
 
-double robolocks_battle_runtime_obstacle_radius_m(RobolocksBattleRuntimeHandle handle, size_t obstacle_index) {
+double robolocks_battle_runner_obstacle_radius_m(RobolocksBattleRunnerHandle handle, size_t obstacle_index) {
   const auto* obstacle = obstacle_at(handle, obstacle_index);
   if (obstacle == nullptr) {
     return 0.0;
@@ -405,7 +405,7 @@ double robolocks_battle_runtime_obstacle_radius_m(RobolocksBattleRuntimeHandle h
   return obstacle->radius_m;
 }
 
-int robolocks_battle_runtime_obstacle_blocks_movement(RobolocksBattleRuntimeHandle handle, size_t obstacle_index) {
+int robolocks_battle_runner_obstacle_blocks_movement(RobolocksBattleRunnerHandle handle, size_t obstacle_index) {
   const auto* obstacle = obstacle_at(handle, obstacle_index);
   if (obstacle == nullptr) {
     return 0;
@@ -413,7 +413,7 @@ int robolocks_battle_runtime_obstacle_blocks_movement(RobolocksBattleRuntimeHand
   return obstacle->blocks_movement ? 1 : 0;
 }
 
-int robolocks_battle_runtime_obstacle_blocks_line_of_sight(RobolocksBattleRuntimeHandle handle, size_t obstacle_index) {
+int robolocks_battle_runner_obstacle_blocks_line_of_sight(RobolocksBattleRunnerHandle handle, size_t obstacle_index) {
   const auto* obstacle = obstacle_at(handle, obstacle_index);
   if (obstacle == nullptr) {
     return 0;
@@ -421,15 +421,15 @@ int robolocks_battle_runtime_obstacle_blocks_line_of_sight(RobolocksBattleRuntim
   return obstacle->blocks_line_of_sight ? 1 : 0;
 }
 
-size_t robolocks_battle_runtime_event_count(RobolocksBattleRuntimeHandle handle) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr) {
+size_t robolocks_battle_runner_event_count(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
     return 0;
   }
-  return runtime->last_result.events.size();
+  return runner->last_result.events.size();
 }
 
-uint64_t robolocks_battle_runtime_event_tick(RobolocksBattleRuntimeHandle handle, size_t event_index) {
+uint64_t robolocks_battle_runner_event_tick(RobolocksBattleRunnerHandle handle, size_t event_index) {
   const auto* event = event_at(handle, event_index);
   if (event == nullptr) {
     return 0;
@@ -437,7 +437,7 @@ uint64_t robolocks_battle_runtime_event_tick(RobolocksBattleRuntimeHandle handle
   return event->tick;
 }
 
-uint32_t robolocks_battle_runtime_event_unit_id(RobolocksBattleRuntimeHandle handle, size_t event_index) {
+uint32_t robolocks_battle_runner_event_unit_id(RobolocksBattleRunnerHandle handle, size_t event_index) {
   const auto* event = event_at(handle, event_index);
   if (event == nullptr) {
     return 0;
@@ -445,7 +445,7 @@ uint32_t robolocks_battle_runtime_event_unit_id(RobolocksBattleRuntimeHandle han
   return event->unit_id.value;
 }
 
-const char* robolocks_battle_runtime_event_code(RobolocksBattleRuntimeHandle handle, size_t event_index) {
+const char* robolocks_battle_runner_event_code(RobolocksBattleRunnerHandle handle, size_t event_index) {
   const auto* event = event_at(handle, event_index);
   if (event == nullptr) {
     return "";
@@ -453,7 +453,7 @@ const char* robolocks_battle_runtime_event_code(RobolocksBattleRuntimeHandle han
   return event->code.c_str();
 }
 
-const char* robolocks_battle_runtime_event_message(RobolocksBattleRuntimeHandle handle, size_t event_index) {
+const char* robolocks_battle_runner_event_message(RobolocksBattleRunnerHandle handle, size_t event_index) {
   const auto* event = event_at(handle, event_index);
   if (event == nullptr) {
     return "";
@@ -461,15 +461,15 @@ const char* robolocks_battle_runtime_event_message(RobolocksBattleRuntimeHandle 
   return event->message.c_str();
 }
 
-size_t robolocks_battle_runtime_projectile_count(RobolocksBattleRuntimeHandle handle) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr) {
+size_t robolocks_battle_runner_projectile_count(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
     return 0;
   }
-  return runtime->snapshot.projectiles.size();
+  return runner->snapshot.projectiles.size();
 }
 
-uint64_t robolocks_battle_runtime_projectile_id(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+uint64_t robolocks_battle_runner_projectile_id(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* projectile = projectile_at(handle, projectile_index);
   if (projectile == nullptr) {
     return 0;
@@ -477,8 +477,8 @@ uint64_t robolocks_battle_runtime_projectile_id(RobolocksBattleRuntimeHandle han
   return projectile->projectile_id;
 }
 
-uint32_t robolocks_battle_runtime_projectile_owner_unit_id(
-  RobolocksBattleRuntimeHandle handle,
+uint32_t robolocks_battle_runner_projectile_owner_unit_id(
+  RobolocksBattleRunnerHandle handle,
   size_t projectile_index
 ) {
   const auto* projectile = projectile_at(handle, projectile_index);
@@ -488,7 +488,7 @@ uint32_t robolocks_battle_runtime_projectile_owner_unit_id(
   return projectile->owner_unit_id.value;
 }
 
-double robolocks_battle_runtime_projectile_previous_x(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+double robolocks_battle_runner_projectile_previous_x(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* projectile = projectile_at(handle, projectile_index);
   if (projectile == nullptr) {
     return 0.0;
@@ -496,7 +496,7 @@ double robolocks_battle_runtime_projectile_previous_x(RobolocksBattleRuntimeHand
   return projectile->previous_position.x;
 }
 
-double robolocks_battle_runtime_projectile_previous_y(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+double robolocks_battle_runner_projectile_previous_y(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* projectile = projectile_at(handle, projectile_index);
   if (projectile == nullptr) {
     return 0.0;
@@ -504,7 +504,7 @@ double robolocks_battle_runtime_projectile_previous_y(RobolocksBattleRuntimeHand
   return projectile->previous_position.y;
 }
 
-double robolocks_battle_runtime_projectile_x(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+double robolocks_battle_runner_projectile_x(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* projectile = projectile_at(handle, projectile_index);
   if (projectile == nullptr) {
     return 0.0;
@@ -512,7 +512,7 @@ double robolocks_battle_runtime_projectile_x(RobolocksBattleRuntimeHandle handle
   return projectile->position.x;
 }
 
-double robolocks_battle_runtime_projectile_y(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+double robolocks_battle_runner_projectile_y(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* projectile = projectile_at(handle, projectile_index);
   if (projectile == nullptr) {
     return 0.0;
@@ -520,7 +520,7 @@ double robolocks_battle_runtime_projectile_y(RobolocksBattleRuntimeHandle handle
   return projectile->position.y;
 }
 
-double robolocks_battle_runtime_projectile_radius_m(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+double robolocks_battle_runner_projectile_radius_m(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* projectile = projectile_at(handle, projectile_index);
   if (projectile == nullptr) {
     return 0.0;
@@ -528,7 +528,7 @@ double robolocks_battle_runtime_projectile_radius_m(RobolocksBattleRuntimeHandle
   return projectile->radius_m;
 }
 
-double robolocks_battle_runtime_projectile_height_m(RobolocksBattleRuntimeHandle handle, size_t projectile_index) {
+double robolocks_battle_runner_projectile_height_m(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* projectile = projectile_at(handle, projectile_index);
   if (projectile == nullptr) {
     return 0.0;
@@ -536,20 +536,20 @@ double robolocks_battle_runtime_projectile_height_m(RobolocksBattleRuntimeHandle
   return projectile->height_m;
 }
 
-size_t robolocks_battle_runtime_action_count(RobolocksBattleRuntimeHandle handle) {
-  const auto* runtime = as_runtime(handle);
-  if (runtime == nullptr) {
+size_t robolocks_battle_runner_action_count(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
     return 0;
   }
 
   size_t count = 0;
-  for (const auto& unit_orders : runtime->last_result.orders_by_unit) {
+  for (const auto& unit_orders : runner->last_result.orders_by_unit) {
     count += unit_orders.orders.size();
   }
   return count;
 }
 
-uint32_t robolocks_battle_runtime_action_unit_id(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+uint32_t robolocks_battle_runner_action_unit_id(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0;
@@ -557,7 +557,7 @@ uint32_t robolocks_battle_runtime_action_unit_id(RobolocksBattleRuntimeHandle ha
   return action.unit_id.value;
 }
 
-const char* robolocks_battle_runtime_action_type(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+const char* robolocks_battle_runner_action_type(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return "";
@@ -565,7 +565,7 @@ const char* robolocks_battle_runtime_action_type(RobolocksBattleRuntimeHandle ha
   return order_kind_name(action.order->kind);
 }
 
-const char* robolocks_battle_runtime_action_channel(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+const char* robolocks_battle_runner_action_channel(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return "";
@@ -573,7 +573,7 @@ const char* robolocks_battle_runtime_action_channel(RobolocksBattleRuntimeHandle
   return order_channel_name(action.order->kind);
 }
 
-int robolocks_battle_runtime_action_has_position(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+int robolocks_battle_runner_action_has_position(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   return action.order != nullptr
     && std::holds_alternative<robolocks::MoveToOrder>(action.order->payload)
@@ -581,7 +581,7 @@ int robolocks_battle_runtime_action_has_position(RobolocksBattleRuntimeHandle ha
     : 0;
 }
 
-double robolocks_battle_runtime_action_position_x(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_position_x(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;
@@ -590,7 +590,7 @@ double robolocks_battle_runtime_action_position_x(RobolocksBattleRuntimeHandle h
   return payload == nullptr ? 0.0 : payload->position.x;
 }
 
-double robolocks_battle_runtime_action_position_y(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_position_y(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;
@@ -599,7 +599,7 @@ double robolocks_battle_runtime_action_position_y(RobolocksBattleRuntimeHandle h
   return payload == nullptr ? 0.0 : payload->position.y;
 }
 
-int robolocks_battle_runtime_action_has_target(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+int robolocks_battle_runner_action_has_target(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0;
@@ -610,7 +610,7 @@ int robolocks_battle_runtime_action_has_target(RobolocksBattleRuntimeHandle hand
     : 0;
 }
 
-double robolocks_battle_runtime_action_target_x(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_target_x(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;
@@ -624,7 +624,7 @@ double robolocks_battle_runtime_action_target_x(RobolocksBattleRuntimeHandle han
   return 0.0;
 }
 
-double robolocks_battle_runtime_action_target_y(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_target_y(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;
@@ -638,7 +638,7 @@ double robolocks_battle_runtime_action_target_y(RobolocksBattleRuntimeHandle han
   return 0.0;
 }
 
-int robolocks_battle_runtime_action_has_min_hit_chance(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+int robolocks_battle_runner_action_has_min_hit_chance(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   return action.order != nullptr
     && std::holds_alternative<robolocks::FireIfSolutionOrder>(action.order->payload)
@@ -646,7 +646,7 @@ int robolocks_battle_runtime_action_has_min_hit_chance(RobolocksBattleRuntimeHan
     : 0;
 }
 
-double robolocks_battle_runtime_action_min_hit_chance(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_min_hit_chance(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;
@@ -655,7 +655,7 @@ double robolocks_battle_runtime_action_min_hit_chance(RobolocksBattleRuntimeHand
   return payload == nullptr ? 0.0 : payload->min_hit_chance;
 }
 
-int robolocks_battle_runtime_action_has_scan_arc(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+int robolocks_battle_runner_action_has_scan_arc(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   return action.order != nullptr
     && std::holds_alternative<robolocks::ScanArcOrder>(action.order->payload)
@@ -663,7 +663,7 @@ int robolocks_battle_runtime_action_has_scan_arc(RobolocksBattleRuntimeHandle ha
     : 0;
 }
 
-double robolocks_battle_runtime_action_center_deg(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_center_deg(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;
@@ -672,7 +672,7 @@ double robolocks_battle_runtime_action_center_deg(RobolocksBattleRuntimeHandle h
   return payload == nullptr ? 0.0 : payload->center_deg;
 }
 
-double robolocks_battle_runtime_action_width_deg(RobolocksBattleRuntimeHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_width_deg(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;

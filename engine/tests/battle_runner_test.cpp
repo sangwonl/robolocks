@@ -1,7 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <robolocks/battle_runtime.hpp>
+#include <robolocks/battle_runner.hpp>
 #include <robolocks/bot_controller.hpp>
 
 #include <memory>
@@ -23,7 +23,7 @@ class RecordingController final : public robolocks::BotController {
   }
 };
 
-robolocks::TankPreset make_tank(
+robolocks::UnitSpec make_unit(
   robolocks::UnitId unit_id,
   const char* name,
   robolocks::Vec2 position,
@@ -31,24 +31,24 @@ robolocks::TankPreset make_tank(
   double armor_integrity = 100.0,
   double hull_heading_deg = 0.0,
   double turret_heading_deg = 0.0,
-  robolocks::SensorComponent sensor = {}
+  robolocks::SensorSpec sensor = {}
 ) {
-  return robolocks::TankPreset{
+  return robolocks::UnitSpec{
     .unit_id = unit_id,
     .name = name,
-    .transform = robolocks::TransformComponent{
+    .transform = robolocks::TransformSpec{
       .position = position,
       .hull_heading_deg = hull_heading_deg,
     },
-    .mobility = robolocks::MobilityComponent{
+    .mobility = robolocks::MobilitySpec{
       .max_speed_mps = max_speed_mps,
       .max_hull_turn_degps = 120.0,
     },
-    .turret = robolocks::TurretComponent{
+    .turret = robolocks::TurretSpec{
       .heading_deg = turret_heading_deg,
       .max_turn_degps = 180.0,
     },
-    .armor = robolocks::ArmorComponent{
+    .armor = robolocks::ArmorSpec{
       .integrity = armor_integrity,
     },
     .sensor = sensor,
@@ -58,7 +58,7 @@ robolocks::TankPreset make_tank(
 }  // namespace
 
 TEST_CASE("preset duel runner owns order generation and advances ticks") {
-  auto runner = robolocks::BattleRuntime::preset_duel();
+  auto runner = robolocks::BattleRunner::preset_duel();
 
   REQUIRE(runner.snapshot().tick == 0);
 
@@ -81,14 +81,14 @@ TEST_CASE("preset duel runner owns order generation and advances ticks") {
   REQUIRE(snapshot.units[1].hull_heading_deg == Catch::Approx(180.0));
 }
 
-TEST_CASE("runner can execute externally supplied commands without controllers") {
+TEST_CASE("runner can execute externally supplied orders without controllers") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;
-  config.tanks = {
-    make_tank(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}),
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}),
   };
 
-  robolocks::BattleRuntime runner(config);
+  robolocks::BattleRunner runner(config);
   const auto result = runner.step_once({
     robolocks::UnitOrders{
       robolocks::UnitId{1},
@@ -105,12 +105,12 @@ TEST_CASE("runner can execute externally supplied commands without controllers")
   REQUIRE(result.snapshot.units[0].position.x == Catch::Approx(2.0));
 }
 
-TEST_CASE("battle runtime calls bot controllers with per-unit observations") {
+TEST_CASE("battle runner calls bot controllers with per-unit observations") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;
-  config.tanks = {
-    make_tank(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}),
-    make_tank(robolocks::UnitId{2}, "Red", robolocks::Vec2{5.0, 0.0}),
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{5.0, 0.0}),
   };
 
   auto controller = std::make_unique<RecordingController>();
@@ -119,7 +119,7 @@ TEST_CASE("battle runtime calls bot controllers with per-unit observations") {
   std::vector<robolocks::ControllerBinding> controllers;
   controllers.push_back(robolocks::ControllerBinding{robolocks::UnitId{1}, std::move(controller)});
 
-  robolocks::BattleRuntime runner(config, std::move(controllers));
+  robolocks::BattleRunner runner(config, std::move(controllers));
   const auto result = runner.step_once();
 
   REQUIRE(result.snapshot.tick == 1);
@@ -132,11 +132,11 @@ TEST_CASE("battle runtime calls bot controllers with per-unit observations") {
   REQUIRE(raw_controller->last_observation.contacts[0].position.x == Catch::Approx(5.0));
 }
 
-TEST_CASE("battle runtime limits bot observations through tank sensor specs") {
+TEST_CASE("battle runner limits bot observations through unit sensor specs") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;
-  config.tanks = {
-    make_tank(
+  config.units = {
+    make_unit(
       robolocks::UnitId{1},
       "Blue",
       robolocks::Vec2{0.0, 0.0},
@@ -144,13 +144,13 @@ TEST_CASE("battle runtime limits bot observations through tank sensor specs") {
       100.0,
       0.0,
       0.0,
-      robolocks::SensorComponent{
+      robolocks::SensorSpec{
         .range_m = 10.0,
         .fov_deg = 90.0,
         .refresh_ticks = 1,
       }
     ),
-    make_tank(robolocks::UnitId{2}, "Red", robolocks::Vec2{0.0, 8.0}),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{0.0, 8.0}),
   };
 
   auto controller = std::make_unique<RecordingController>();
@@ -159,7 +159,7 @@ TEST_CASE("battle runtime limits bot observations through tank sensor specs") {
   std::vector<robolocks::ControllerBinding> controllers;
   controllers.push_back(robolocks::ControllerBinding{robolocks::UnitId{1}, std::move(controller)});
 
-  robolocks::BattleRuntime runner(config, std::move(controllers));
+  robolocks::BattleRunner runner(config, std::move(controllers));
   runner.step_once();
 
   REQUIRE(raw_controller->last_observation.contacts.empty());

@@ -1,10 +1,10 @@
 {
-  "matchId": "invalid_unknown_module_v0",
+  "battleId": "invalid_unknown_module_v0",
   "seed": 1,
   "tickRate": 30,
   "tickLimit": 9000,
   "moduleCatalog": "../modules/tank_modules_v0.json",
-  "tanks": [
+  "units": [
     {
       "unitId": 1,
       "name": "Blue",

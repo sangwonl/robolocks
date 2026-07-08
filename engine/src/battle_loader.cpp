@@ -122,7 +122,7 @@ struct ModuleCatalog {
   std::map<std::string, nlohmann::json> sensor;
 };
 
-const nlohmann::json* optional_module(const nlohmann::json& tank, const char* module_key);
+const nlohmann::json* optional_module(const nlohmann::json& unit, const char* module_key);
 
 std::string resolve_relative_path(const std::filesystem::path& base_dir, const std::string& path) {
   if (path.empty()) {
@@ -193,11 +193,11 @@ const nlohmann::json* catalog_module_by_id(
 }
 
 std::optional<nlohmann::json> resolved_module_json(
-  const nlohmann::json& tank,
+  const nlohmann::json& unit,
   const char* module_key,
   const std::map<std::string, nlohmann::json>& catalog_modules
 ) {
-  const auto* inline_module = optional_module(tank, module_key);
+  const auto* inline_module = optional_module(unit, module_key);
   if (inline_module == nullptr) {
     return std::nullopt;
   }
@@ -218,18 +218,18 @@ std::optional<nlohmann::json> resolved_module_json(
   return resolved;
 }
 
-double optional_spawn_heading_deg(const nlohmann::json& tank) {
-  if (!tank.contains("spawn") || !tank.at("spawn").is_object()) {
+double optional_spawn_heading_deg(const nlohmann::json& unit) {
+  if (!unit.contains("spawn") || !unit.at("spawn").is_object()) {
     throw std::runtime_error("Expected vector field: spawn");
   }
-  return optional_number(tank.at("spawn"), "headingDeg", 0.0);
+  return optional_number(unit.at("spawn"), "headingDeg", 0.0);
 }
 
-const nlohmann::json* optional_module(const nlohmann::json& tank, const char* module_key) {
-  if (!tank.contains("modules")) {
+const nlohmann::json* optional_module(const nlohmann::json& unit, const char* module_key) {
+  if (!unit.contains("modules")) {
     return nullptr;
   }
-  const auto& modules = tank.at("modules");
+  const auto& modules = unit.at("modules");
   if (!modules.is_object()) {
     throw std::runtime_error("Expected modules object");
   }
@@ -243,9 +243,9 @@ const nlohmann::json* optional_module(const nlohmann::json& tank, const char* mo
   return &module;
 }
 
-MobilityComponent optional_mobility_component(const nlohmann::json& tank, const ModuleCatalog& catalog) {
-  MobilityComponent mobility;
-  const auto mobility_json = resolved_module_json(tank, "mobility", catalog.mobility);
+MobilitySpec optional_mobility_component(const nlohmann::json& unit, const ModuleCatalog& catalog) {
+  MobilitySpec mobility;
+  const auto mobility_json = resolved_module_json(unit, "mobility", catalog.mobility);
   if (!mobility_json.has_value()) {
     return mobility;
   }
@@ -255,14 +255,14 @@ MobilityComponent optional_mobility_component(const nlohmann::json& tank, const 
   return mobility;
 }
 
-TurretComponent optional_turret_component(
-  const nlohmann::json& tank,
+TurretSpec optional_turret_component(
+  const nlohmann::json& unit,
   const ModuleCatalog& catalog,
   double spawn_heading_deg
 ) {
-  TurretComponent turret;
+  TurretSpec turret;
   turret.heading_deg = spawn_heading_deg;
-  const auto turret_json = resolved_module_json(tank, "turret", catalog.turret);
+  const auto turret_json = resolved_module_json(unit, "turret", catalog.turret);
   if (!turret_json.has_value()) {
     return turret;
   }
@@ -271,9 +271,9 @@ TurretComponent optional_turret_component(
   return turret;
 }
 
-WeaponComponent optional_weapon_component(const nlohmann::json& tank, const ModuleCatalog& catalog) {
-  WeaponComponent weapon;
-  const auto weapon_json = resolved_module_json(tank, "weapon", catalog.weapon);
+WeaponSpec optional_weapon_component(const nlohmann::json& unit, const ModuleCatalog& catalog) {
+  WeaponSpec weapon;
+  const auto weapon_json = resolved_module_json(unit, "weapon", catalog.weapon);
   if (!weapon_json.has_value()) {
     return weapon;
   }
@@ -292,9 +292,9 @@ WeaponComponent optional_weapon_component(const nlohmann::json& tank, const Modu
   return weapon;
 }
 
-ArmorComponent optional_armor_component(const nlohmann::json& tank, const ModuleCatalog& catalog) {
-  ArmorComponent armor;
-  const auto armor_json = resolved_module_json(tank, "armor", catalog.armor);
+ArmorSpec optional_armor_component(const nlohmann::json& unit, const ModuleCatalog& catalog) {
+  ArmorSpec armor;
+  const auto armor_json = resolved_module_json(unit, "armor", catalog.armor);
   if (!armor_json.has_value()) {
     return armor;
   }
@@ -306,7 +306,7 @@ ArmorComponent optional_armor_component(const nlohmann::json& tank, const Module
   return armor;
 }
 
-BodyShapeComponent required_body_shape_component(const nlohmann::json& body_json) {
+BodyShapeSpec required_body_shape_component(const nlohmann::json& body_json) {
   if (!body_json.contains("shape") || !body_json.at("shape").is_object()) {
     throw std::runtime_error("Expected modules.body.shape object");
   }
@@ -314,7 +314,7 @@ BodyShapeComponent required_body_shape_component(const nlohmann::json& body_json
   const auto& shape_json = body_json.at("shape");
   const auto shape_type = required_string(shape_json, "type");
 
-  BodyShapeComponent shape;
+  BodyShapeSpec shape;
   shape.radius_m = required_positive_number(shape_json, "radiusM");
 
   if (shape_type == "circle") {
@@ -332,9 +332,9 @@ BodyShapeComponent required_body_shape_component(const nlohmann::json& body_json
   throw std::runtime_error("Unsupported modules.body.shape.type: " + shape_type);
 }
 
-BodyComponent optional_body_component(const nlohmann::json& tank, const ModuleCatalog& catalog) {
-  BodyComponent body;
-  const auto body_json = resolved_module_json(tank, "body", catalog.body);
+BodySpec optional_body_component(const nlohmann::json& unit, const ModuleCatalog& catalog) {
+  BodySpec body;
+  const auto body_json = resolved_module_json(unit, "body", catalog.body);
   if (!body_json.has_value()) {
     return body;
   }
@@ -344,9 +344,9 @@ BodyComponent optional_body_component(const nlohmann::json& tank, const ModuleCa
   return body;
 }
 
-SensorComponent optional_sensor_component(const nlohmann::json& tank, const ModuleCatalog& catalog) {
-  SensorComponent sensor;
-  const auto sensor_json = resolved_module_json(tank, "sensor", catalog.sensor);
+SensorSpec optional_sensor_component(const nlohmann::json& unit, const ModuleCatalog& catalog) {
+  SensorSpec sensor;
+  const auto sensor_json = resolved_module_json(unit, "sensor", catalog.sensor);
   if (!sensor_json.has_value()) {
     return sensor;
   }
@@ -386,6 +386,13 @@ std::vector<StaticObstacle> optional_obstacles(const nlohmann::json& data) {
   return obstacles;
 }
 
+const nlohmann::json& required_units_array(const nlohmann::json& data) {
+  if (!data.contains("units") || !data.at("units").is_array()) {
+    throw std::runtime_error("Expected units array");
+  }
+  return data.at("units");
+}
+
 }  // namespace
 
 LoadedBattle load_battle_from_file(const std::string& path) {
@@ -399,7 +406,7 @@ LoadedBattle load_battle_from_file(const std::string& path) {
   const auto base_dir = std::filesystem::path(path).parent_path();
 
   LoadedBattle loaded;
-  loaded.config.battle_id = required_string(data, "matchId");
+  loaded.config.battle_id = required_string(data, "battleId");
   loaded.config.seed = required_u32(data, "seed");
 
   const double tick_rate = required_number(data, "tickRate");
@@ -411,26 +418,22 @@ LoadedBattle load_battle_from_file(const std::string& path) {
   loaded.config.obstacles = optional_obstacles(data);
   const auto module_catalog = load_module_catalog(base_dir, data);
 
-  if (!data.contains("tanks") || !data.at("tanks").is_array()) {
-    throw std::runtime_error("Expected tanks array");
-  }
-
-  loaded.config.tanks.clear();
-  for (const auto& tank : data.at("tanks")) {
-    const double spawn_heading_deg = optional_spawn_heading_deg(tank);
-    loaded.config.tanks.push_back(TankPreset{
-      .unit_id = UnitId{required_u32(tank, "unitId")},
-      .name = required_string(tank, "name"),
-      .transform = TransformComponent{
-        .position = required_vec2(tank, "spawn"),
+  loaded.config.units.clear();
+  for (const auto& unit : required_units_array(data)) {
+    const double spawn_heading_deg = optional_spawn_heading_deg(unit);
+    loaded.config.units.push_back(UnitSpec{
+      .unit_id = UnitId{required_u32(unit, "unitId")},
+      .name = required_string(unit, "name"),
+      .transform = TransformSpec{
+        .position = required_vec2(unit, "spawn"),
         .hull_heading_deg = spawn_heading_deg,
       },
-      .mobility = optional_mobility_component(tank, module_catalog),
-      .turret = optional_turret_component(tank, module_catalog, spawn_heading_deg),
-      .weapon = optional_weapon_component(tank, module_catalog),
-      .armor = optional_armor_component(tank, module_catalog),
-      .body = optional_body_component(tank, module_catalog),
-      .sensor = optional_sensor_component(tank, module_catalog),
+      .mobility = optional_mobility_component(unit, module_catalog),
+      .turret = optional_turret_component(unit, module_catalog, spawn_heading_deg),
+      .weapon = optional_weapon_component(unit, module_catalog),
+      .armor = optional_armor_component(unit, module_catalog),
+      .body = optional_body_component(unit, module_catalog),
+      .sensor = optional_sensor_component(unit, module_catalog),
     });
   }
 

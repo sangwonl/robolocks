@@ -1,5 +1,7 @@
 build-*/
 node_modules/
+__pycache__/
+*.py[cod]
 web/dist/
 .emscripten_cache/
 .emsdk/

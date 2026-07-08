@@ -1,5 +1,5 @@
 {
-  "matchId": "preset_duel_v0",
+  "battleId": "preset_duel_v0",
   "mapId": "duel_grid_v0",
   "seed": 1,
   "tickRate": 30,
@@ -18,7 +18,7 @@
       "blocksLineOfSight": true
     }
   ],
-  "tanks": [
+  "units": [
     {
       "unitId": 1,
       "name": "Blue",

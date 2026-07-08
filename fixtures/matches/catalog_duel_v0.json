@@ -1,10 +1,10 @@
 {
-  "matchId": "catalog_duel_v0",
+  "battleId": "catalog_duel_v0",
   "seed": 1,
   "tickRate": 30,
   "tickLimit": 9000,
   "moduleCatalog": "../modules/tank_modules_v0.json",
-  "tanks": [
+  "units": [
     {
       "unitId": 1,
       "name": "Blue",

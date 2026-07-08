@@ -9,7 +9,7 @@ namespace robolocks {
 
 struct UnitSensorComponent {
   UnitId unit_id;
-  SensorComponent component;
+  SensorSpec component;
 };
 
 class SensorSystem {
@@ -24,7 +24,7 @@ class SensorSystem {
   std::vector<UnitSensorComponent> sensors_;
   std::vector<StaticObstacle> obstacles_;
 
-  SensorComponent sensor_for(UnitId unit_id) const;
+  SensorSpec sensor_for(UnitId unit_id) const;
 };
 
 std::vector<UnitSensorComponent> sensor_components_from_battle_config(const BattleConfig& config);

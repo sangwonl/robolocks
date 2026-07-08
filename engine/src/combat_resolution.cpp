@@ -30,7 +30,7 @@ double splash_damage_at_distance(double base_damage, double impact_distance_m, d
   return base_damage * falloff;
 }
 
-double ballistic_ideal_range_m(const WeaponComponent& weapon) {
+double ballistic_ideal_range_m(const WeaponSpec& weapon) {
   if (weapon.gravity_mps2 <= 0.0) {
     return weapon.range_m;
   }
@@ -39,7 +39,7 @@ double ballistic_ideal_range_m(const WeaponComponent& weapon) {
     / weapon.gravity_mps2;
 }
 
-double ballistic_range_hit_chance(const WeaponComponent& weapon, double distance_m, double target_radius_m) {
+double ballistic_range_hit_chance(const WeaponSpec& weapon, double distance_m, double target_radius_m) {
   if (weapon.fire_mode != WeaponFireMode::Ballistic) {
     return 1.0;
   }

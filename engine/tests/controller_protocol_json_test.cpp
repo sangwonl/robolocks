@@ -94,7 +94,7 @@ TEST_CASE("controller protocol serializes observation for external bots") {
 TEST_CASE("controller protocol parses external bot order list") {
   const auto json = nlohmann::json::parse(R"json(
     {
-      "commands": [
+      "orders": [
         {"type": "moveTo", "position": {"x": 17.0, "y": 12.0}},
         {"type": "aimAt", "target": {"x": 22.0, "y": 12.0}},
         {"type": "faceArmorToward", "target": {"x": 24.0, "y": 12.0}},
@@ -104,31 +104,31 @@ TEST_CASE("controller protocol parses external bot order list") {
     }
   )json");
 
-  const auto commands = robolocks::orders_from_json(json);
+  const auto orders = robolocks::orders_from_json(json);
 
-  REQUIRE(commands.size() == 5);
+  REQUIRE(orders.size() == 5);
 
-  REQUIRE(commands[0].kind == robolocks::OrderKind::MoveTo);
-  const auto& move_to = std::get<robolocks::MoveToOrder>(commands[0].payload);
+  REQUIRE(orders[0].kind == robolocks::OrderKind::MoveTo);
+  const auto& move_to = std::get<robolocks::MoveToOrder>(orders[0].payload);
   REQUIRE(move_to.position.x == Catch::Approx(17.0));
   REQUIRE(move_to.position.y == Catch::Approx(12.0));
 
-  REQUIRE(commands[1].kind == robolocks::OrderKind::AimAt);
-  const auto& aim_at = std::get<robolocks::AimAtOrder>(commands[1].payload);
+  REQUIRE(orders[1].kind == robolocks::OrderKind::AimAt);
+  const auto& aim_at = std::get<robolocks::AimAtOrder>(orders[1].payload);
   REQUIRE(aim_at.target.x == Catch::Approx(22.0));
   REQUIRE(aim_at.target.y == Catch::Approx(12.0));
 
-  REQUIRE(commands[2].kind == robolocks::OrderKind::FaceArmorToward);
-  const auto& face = std::get<robolocks::FaceArmorTowardOrder>(commands[2].payload);
+  REQUIRE(orders[2].kind == robolocks::OrderKind::FaceArmorToward);
+  const auto& face = std::get<robolocks::FaceArmorTowardOrder>(orders[2].payload);
   REQUIRE(face.target.x == Catch::Approx(24.0));
   REQUIRE(face.target.y == Catch::Approx(12.0));
 
-  REQUIRE(commands[3].kind == robolocks::OrderKind::FireIfSolution);
-  const auto& fire = std::get<robolocks::FireIfSolutionOrder>(commands[3].payload);
+  REQUIRE(orders[3].kind == robolocks::OrderKind::FireIfSolution);
+  const auto& fire = std::get<robolocks::FireIfSolutionOrder>(orders[3].payload);
   REQUIRE(fire.min_hit_chance == Catch::Approx(0.65));
 
-  REQUIRE(commands[4].kind == robolocks::OrderKind::ScanArc);
-  const auto& scan = std::get<robolocks::ScanArcOrder>(commands[4].payload);
+  REQUIRE(orders[4].kind == robolocks::OrderKind::ScanArc);
+  const auto& scan = std::get<robolocks::ScanArcOrder>(orders[4].payload);
   REQUIRE(scan.center_deg == Catch::Approx(45.0));
   REQUIRE(scan.width_deg == Catch::Approx(90.0));
 }

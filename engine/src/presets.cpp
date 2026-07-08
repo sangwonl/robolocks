@@ -14,25 +14,25 @@ BattleConfig preset_duel_config() {
       .blocks_line_of_sight = true,
     },
   };
-  config.tanks = {
-    TankPreset{
+  config.units = {
+    UnitSpec{
       .unit_id = UnitId{1},
       .name = "Blue",
-      .transform = TransformComponent{
+      .transform = TransformSpec{
         .position = Vec2{6.0, 12.0},
         .hull_heading_deg = 0.0,
       },
-      .mobility = MobilityComponent{
+      .mobility = MobilitySpec{
         .id = "tracked_chassis_mk1",
         .max_speed_mps = 6.0,
         .max_hull_turn_degps = 120.0,
       },
-      .turret = TurretComponent{
+      .turret = TurretSpec{
         .id = "light_turret_mk1",
         .heading_deg = 0.0,
         .max_turn_degps = 180.0,
       },
-      .weapon = WeaponComponent{
+      .weapon = WeaponSpec{
         .id = "cannon_75mm_mk1",
         .damage = 25.0,
         .penetration_mm = 120.0,
@@ -42,47 +42,47 @@ BattleConfig preset_duel_config() {
         .aim_tolerance_deg = 5.0,
         .reload_ticks = 30,
       },
-      .armor = ArmorComponent{
+      .armor = ArmorSpec{
         .id = "rolled_armor_mk1",
         .integrity = 100.0,
         .front_mm = 100.0,
         .side_mm = 70.0,
         .rear_mm = 45.0,
       },
-      .body = BodyComponent{
+      .body = BodySpec{
         .id = "medium_hull_mk1",
-        .shape = BodyShapeComponent{
+        .shape = BodyShapeSpec{
           .type = BodyShapeType::Box,
           .radius_m = 1.2,
           .length_m = 5.6,
           .width_m = 2.8,
         },
       },
-      .sensor = SensorComponent{
+      .sensor = SensorSpec{
         .id = "visual_optic_mk1",
         .range_m = 60.0,
         .fov_deg = 120.0,
         .refresh_ticks = 1,
       },
     },
-    TankPreset{
+    UnitSpec{
       .unit_id = UnitId{2},
       .name = "Red",
-      .transform = TransformComponent{
+      .transform = TransformSpec{
         .position = Vec2{34.0, 12.0},
         .hull_heading_deg = 180.0,
       },
-      .mobility = MobilityComponent{
+      .mobility = MobilitySpec{
         .id = "tracked_chassis_mk1",
         .max_speed_mps = 6.0,
         .max_hull_turn_degps = 120.0,
       },
-      .turret = TurretComponent{
+      .turret = TurretSpec{
         .id = "light_turret_mk1",
         .heading_deg = 180.0,
         .max_turn_degps = 180.0,
       },
-      .weapon = WeaponComponent{
+      .weapon = WeaponSpec{
         .id = "cannon_75mm_mk1",
         .damage = 25.0,
         .penetration_mm = 120.0,
@@ -92,23 +92,23 @@ BattleConfig preset_duel_config() {
         .aim_tolerance_deg = 5.0,
         .reload_ticks = 30,
       },
-      .armor = ArmorComponent{
+      .armor = ArmorSpec{
         .id = "rolled_armor_mk1",
         .integrity = 100.0,
         .front_mm = 100.0,
         .side_mm = 70.0,
         .rear_mm = 45.0,
       },
-      .body = BodyComponent{
+      .body = BodySpec{
         .id = "medium_hull_mk1",
-        .shape = BodyShapeComponent{
+        .shape = BodyShapeSpec{
           .type = BodyShapeType::Box,
           .radius_m = 1.2,
           .length_m = 5.6,
           .width_m = 2.8,
         },
       },
-      .sensor = SensorComponent{
+      .sensor = SensorSpec{
         .id = "visual_optic_mk1",
         .range_m = 60.0,
         .fov_deg = 120.0,

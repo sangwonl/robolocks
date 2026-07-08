@@ -1,157 +1,128 @@
-import json
-import sys
+from __future__ import annotations
+
+import math
+
+from robolocks import (
+    AimAt,
+    BattleState,
+    FaceArmorToward,
+    FireIfSolution,
+    MoveTo,
+    OrderLike,
+    ScanArc,
+    Vec2,
+    distance,
+    run_bot,
+)
 
 
-class Vec2:
-    def __init__(self, data):
-        self.x = float(data["x"])
-        self.y = float(data["y"])
-
-    def to_json(self):
-        return {"x": self.x, "y": self.y}
+ARENA_MIN_X = 2.5
+ARENA_MAX_X = 37.5
+ARENA_MIN_Y = 2.5
+ARENA_MAX_Y = 21.5
+DESIRED_RANGE_M = 17.0
 
 
-class Unit:
-    def __init__(self, data):
-        self.unit_id = int(data["unitId"])
-        self.position = Vec2(data["position"])
-        self.hull_heading = float(data["hullHeadingDeg"])
-        self.turret_heading = float(data["turretHeadingDeg"])
-        self.armor_integrity = float(data["armorIntegrity"])
-        self.weapon_cooldown_ticks = int(data.get("weaponCooldownTicks", 0))
-        self.intents = Intents(data.get("intents", {}))
+def on_start(spec) -> None:
+    pass
 
 
-class AxisIntent:
-    def __init__(self, data):
-        self.active = bool(data.get("active", False))
-        self.target = Vec2(data.get("target", {"x": 0.0, "y": 0.0}))
-        self.remaining_m = float(data.get("remainingM", 0.0))
-        self.error_deg = float(data.get("errorDeg", 0.0))
-        self.age_ticks = int(data.get("ageTicks", 0))
+def on_tick(state: BattleState) -> list[OrderLike]:
+    own = state.own_unit
+    if own.armor_integrity <= 0:
+        return []
+
+    enemy = state.contacts.closest_enemy()
+    if enemy is None:
+        return [
+            MoveTo(state.map.center),
+            ScanArc(center=own.hull_heading_deg, width_deg=160),
+        ]
+
+    move_target = avoid_blocking_obstacles(state, spacing_target(state, enemy.position))
+    orders: list[OrderLike] = [
+        FaceArmorToward(enemy.position),
+        AimAt(enemy.position),
+    ]
+
+    if own.can_fire:
+        orders.append(FireIfSolution(min_hit_chance=0.6))
+
+    if own.intent.mobility.should_reissue(move_target, threshold_m=3.0, min_age_ticks=12):
+        orders.append(MoveTo(move_target))
+
+    return orders
 
 
-class Intents:
-    def __init__(self, data):
-        self.mobility = AxisIntent(data.get("mobility", {}))
-        self.turret = AxisIntent(data.get("turret", {}))
-        self.hull = AxisIntent(data.get("hull", {}))
-        self.weapon = WeaponIntent(data.get("weapon", {}))
+def on_end(result) -> None:
+    pass
 
 
-class WeaponIntent:
-    def __init__(self, data):
-        self.active = bool(data.get("active", False))
-        self.min_hit_chance = float(data.get("minHitChance", 0.0))
-        self.age_ticks = int(data.get("ageTicks", 0))
+def spacing_target(state: BattleState, enemy_position: Vec2) -> Vec2:
+    own = state.own_unit.position
+    dx = own.x - enemy_position.x
+    dy = own.y - enemy_position.y
+    range_m = math.hypot(dx, dy)
+    if range_m < 0.001:
+        return state.map.center
+
+    away_x = dx / range_m
+    away_y = dy / range_m
+    side = 1.0 if (state.tick // 45 + state.self_id) % 2 == 0 else -1.0
+    strafe_x = -away_y * side
+    strafe_y = away_x * side
+
+    if range_m < DESIRED_RANGE_M - 3.0:
+        return clamp_point(own.x + away_x * 6.0 + strafe_x * 3.0, own.y + away_y * 6.0 + strafe_y * 3.0)
+
+    if range_m > DESIRED_RANGE_M + 6.0:
+        return clamp_point(own.x - away_x * 6.0 + strafe_x * 2.0, own.y - away_y * 6.0 + strafe_y * 2.0)
+
+    return clamp_point(own.x + strafe_x * 6.0, own.y + strafe_y * 6.0)
 
 
-class Contacts:
-    def __init__(self, contacts):
-        self._contacts = [Unit(contact) for contact in contacts]
+def avoid_blocking_obstacles(state: BattleState, target: Vec2) -> Vec2:
+    own = state.own_unit.position
+    for obstacle in state.map.obstacles:
+        if not obstacle.blocks_movement:
+            continue
+        clearance_m = obstacle.radius_m + 4.0
+        if distance_point_to_segment(obstacle.position, own, target) > clearance_m:
+            continue
 
-    def __iter__(self):
-        return iter(self._contacts)
+        path_x = target.x - own.x
+        path_y = target.y - own.y
+        path_len = math.hypot(path_x, path_y)
+        if path_len < 0.001:
+            continue
 
-    def __len__(self):
-        return len(self._contacts)
+        side = 1.0 if state.self_id == 1 else -1.0
+        return clamp_point(
+            obstacle.position.x + (-path_y / path_len) * clearance_m * side,
+            obstacle.position.y + (path_x / path_len) * clearance_m * side,
+        )
 
-    def closest_enemy(self):
-        if not self._contacts:
-            return None
-        return self._contacts[0]
-
-
-class Obstacle:
-    def __init__(self, data):
-        self.id = str(data.get("id", ""))
-        self.position = Vec2(data["position"])
-        self.radius_m = float(data.get("radiusM", 1.0))
-        self.blocks_movement = bool(data.get("blocksMovement", True))
-        self.blocks_line_of_sight = bool(data.get("blocksLineOfSight", True))
-
-
-class Map:
-    def __init__(self, data=None):
-        data = data or {}
-        self.obstacles = [Obstacle(obstacle) for obstacle in data.get("obstacles", [])]
-
-    def center(self):
-        return Vec2({"x": 20.0, "y": 12.0})
+    return target
 
 
-class State:
-    def __init__(self, observation):
-        self.tick = int(observation["tick"])
-        self.self_id = int(observation["selfId"])
-        self.self = Unit(observation["self"])
-        self.contacts = Contacts(observation.get("contacts", []))
-        self.map = Map(observation.get("map", {}))
+def distance_point_to_segment(point: Vec2, start: Vec2, end: Vec2) -> float:
+    dx = end.x - start.x
+    dy = end.y - start.y
+    length_sq = dx * dx + dy * dy
+    if length_sq <= 0.000001:
+        return distance(point, start)
+
+    t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / length_sq
+    t = min(1.0, max(0.0, t))
+    closest = Vec2(start.x + dx * t, start.y + dy * t)
+    return distance(point, closest)
 
 
-class MoveTo:
-    def __init__(self, position):
-        self.position = position
-
-    def to_json(self):
-        return {"type": "moveTo", "position": _vec_to_json(self.position)}
-
-
-class AimAt:
-    def __init__(self, target):
-        self.target = target
-
-    def to_json(self):
-        return {"type": "aimAt", "target": _vec_to_json(self.target)}
+def clamp_point(x: float, y: float) -> Vec2:
+    return Vec2(
+        min(ARENA_MAX_X, max(ARENA_MIN_X, x)),
+        min(ARENA_MAX_Y, max(ARENA_MIN_Y, y)),
+    )
 
 
-class FaceArmorToward:
-    def __init__(self, target):
-        self.target = target
-
-    def to_json(self):
-        return {"type": "faceArmorToward", "target": _vec_to_json(self.target)}
-
-
-class FireIfSolution:
-    def __init__(self, min_hit_chance):
-        self.min_hit_chance = float(min_hit_chance)
-
-    def to_json(self):
-        return {"type": "fireIfSolution", "minHitChance": self.min_hit_chance}
-
-
-class ScanArc:
-    def __init__(self, center, width_deg):
-        self.center = center
-        self.width_deg = float(width_deg)
-
-    def to_json(self):
-        return {
-            "type": "scanArc",
-            "centerDeg": float(self.center),
-            "widthDeg": self.width_deg,
-        }
-
-
-def run_bot(on_tick, on_start=None, on_end=None):
-    if on_start is not None:
-        on_start(None)
-    for line in sys.stdin:
-        state = State(json.loads(line))
-        commands = on_tick(state)
-        print(json.dumps({"commands": [_command_to_json(command) for command in commands]}), flush=True)
-    if on_end is not None:
-        on_end(None)
-
-
-def _command_to_json(command):
-    if hasattr(command, "to_json"):
-        return command.to_json()
-    return command
-
-
-def _vec_to_json(value):
-    if hasattr(value, "to_json"):
-        return value.to_json()
-    return {"x": float(value["x"]), "y": float(value["y"])}
+run_bot(on_tick, on_start=on_start, on_end=on_end)

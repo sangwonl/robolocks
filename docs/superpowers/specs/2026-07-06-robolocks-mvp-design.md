@@ -2,9 +2,9 @@
 
 ## Summary
 
-Robolocks starts as a web-based top-down modular tank AI arena. The first version focuses on a single advanced tank platform rather than a full combined-arms battlefield. Players build a tank from an official module catalog, write AI logic for it, run deterministic battles, and inspect the result through replay, event logs, and tactical overlays.
+Robolocks starts as a web-based top-down modular tank AI arena. The first version focuses on a single advanced unit platform rather than a full combined-arms battle simulation. Players build a unit from an official module catalog, write AI logic for it, run deterministic battles, and inspect the result through replay, event logs, and tactical overlays.
 
-The long-term direction is a modern combat management game that can grow from individual tank AI to groups, command logic, drones, and other unit classes. The MVP keeps that path open by designing the simulation core, module system, bot protocol, and replay format as engine-level boundaries rather than UI-specific features.
+The long-term direction is a modern combat management game that can grow from individual tank AI to groups, control logic, drones, and other unit classes. The MVP keeps that path open by designing the simulation core, module system, bot protocol, and replay format as engine-level boundaries rather than UI-specific features.
 
 ## Product Goals
 
@@ -18,14 +18,14 @@ The long-term direction is a modern combat management game that can grow from in
 
 Included:
 
-- One unit family: tanks.
+- One initial unit archetype: tank-style ground unit.
 - Official module catalog with point costs and compatibility rules.
 - Standard 500-point league as the primary ruleset.
 - Top-down tactical view (2D renderer first; 3D-style visuals are a later renderer-only swap).
 - 1v1 duel as the first battle mode.
-- Bot code using a high-level Command API.
+- Bot code using a high-level Order API.
 - Deterministic fixed-tick simulation.
-- C++/WASM engine kernel with a native headless build for tests and CLI match runs.
+- C++/WASM engine kernel with a native headless build for tests and CLI battle runs.
 - Replay and debug event logging.
 - Web app with module builder, code editor, battle viewer, and debug panel.
 
@@ -43,7 +43,7 @@ Deferred:
 Internal milestones inside the MVP:
 
 1. Engine kernel skeleton: deterministic sim loop, native headless build, determinism tests passing.
-2. First playable: two preset tanks, bot API over the worker protocol, 1v1 duel, minimal renderer.
+2. First playable: two preset units, bot API over the worker protocol, 1v1 duel, minimal renderer.
 3. Replay: recording, re-simulation playback, event log viewer.
 4. Module system: catalog, build validation, module builder UI.
 5. Polish: tactical overlays, debug panel, balance pass on the initial catalog.
@@ -65,7 +65,7 @@ The first screen should be the usable workbench, not a marketing page. The expec
 
 - Module builder.
 - Code editor.
-- Top-down battlefield.
+- Top-down battle simulation.
 - Replay timeline.
 - Event log and selected-unit inspector.
 
@@ -76,8 +76,8 @@ The engine kernel is written in C++ and compiled to WASM from the start. TypeScr
 ```text
 Engine Kernel (C++ -> WASM, one module loaded in both workers)
   - deterministic sim core
-    - match runner
-    - command resolver
+    - battle runner
+    - order resolver
     - vehicle controllers
     - sensors, ballistics, damage
     - replay recorder
@@ -119,7 +119,7 @@ Packaging:
 ```text
 C++ engine kernel
   -> WASM for web (simulation worker + bot worker)
-  -> native build for headless tests and CLI match runs (from day one)
+  -> native build for headless tests and CLI battle runs (from day one)
   -> native viewer and VS Code extension later reuse the same core
 ```
 
@@ -129,11 +129,11 @@ The simulation core should feel like a data-in/data-out engine:
 
 ```ts
 // sim-side surface (simulation worker)
-createMatch(config): MatchHandle
-getObservation(match, unitId): Observation
-stepMatch(match, commandsByUnit): StepResult
-getSnapshot(match): WorldSnapshot
-getReplayFrame(match): ReplayFrame
+createBattle(config): MatchHandle
+getObservation(battle, unitId): Observation
+stepBattle(battle, ordersByUnit): StepResult
+getSnapshot(battle): WorldSnapshot
+getReplayFrame(battle): ReplayFrame
 
 // bot-side surface (bot worker)
 createMapQuery(mapData, observation): MapQueryHandle
@@ -143,32 +143,32 @@ These are the kernel's WASM exports. The native build exposes the same boundary 
 
 ## Tick Model
 
-The MVP uses a no-delay command model.
+The MVP uses a no-delay order model.
 
 Per tick:
 
 1. Build observations for each bot.
 2. Run bot decisions.
-3. Receive Commands.
-4. Validate and resolve Commands by control channel.
-5. Convert Commands to internal ControlIntent.
-6. Convert ControlIntent to ActuatorCommand.
-7. Clamp ActuatorCommand by module limits.
+3. Receive Orders.
+4. Validate and resolve Orders by control channel.
+5. Convert Orders to internal Intent.
+6. Convert Intent to ActuatorInput.
+7. Clamp ActuatorInput by module limits.
 8. Step movement, turret, sensor, weapon, ballistics, and damage systems.
 9. Record events.
 10. Produce snapshot and replay frame.
 
-Future delayed-command scheduling can be added later:
+Future delayed-order scheduling can be added later:
 
 ```text
-effective_tick = current_tick + command_delay
+effective_tick = current_tick + order_delay
 ```
 
-For MVP, `command_delay = 0`.
+For MVP, `order_delay = 0`.
 
 ## Bot API
 
-The public bot API starts at the Command level. The example below is Python-flavored pseudocode; the first supported bot language is an open decision.
+The public bot API starts at the Order level. The example below is Python-flavored pseudocode; the first supported bot language is an open decision.
 
 ```python
 def on_start(spec):
@@ -196,17 +196,17 @@ def on_end(result):
 
 Terminology:
 
-- Command: public AI output expressing intent, such as `MoveTo`, `AimAt`, or `FireIfSolution`.
-- ControlIntent: internal channel-level target resolved by the engine.
-- ActuatorCommand: final low-level input to the physics step, such as throttle, steering, brake, turret rate, and fire trigger.
+- Order: public AI output expressing intent, such as `MoveTo`, `AimAt`, or `FireIfSolution`.
+- Intent: internal channel-level target resolved by the engine.
+- ActuatorInput: final low-level input to the physics step, such as throttle, steering, brake, turret rate, and fire trigger.
 
-The initial public API should expose Commands only. A later advanced mode can expose direct ActuatorCommand control.
+The initial public API should expose Orders only. A later advanced mode can expose direct ActuatorInput control.
 
 Helper quality is module-driven. Convenience values such as `predicted_position`, the hit chance behind `FireIfSolution`, and cover scores are computed from the tank's own fire control and sensor modules, so better modules produce better helpers — and hand-written logic can outperform the built-ins. Raw observation data is always available alongside the helpers, so the helpers are a floor, not a ceiling, for bot skill.
 
-## Command Channels
+## Order Channels
 
-Commands are interpreted in parallel by control channel.
+Orders are interpreted in parallel by control channel.
 
 - Mobility: `MoveTo`, `HoldPosition`, `SetSpeed`.
 - Hull orientation: `FaceArmorToward`, `TurnHullTo`.
@@ -214,9 +214,9 @@ Commands are interpreted in parallel by control channel.
 - Weapon: `Fire`, `FireIfSolution`, `SelectAmmo`.
 - Sensor: `ScanArc`, `FocusScan`, `TrackContact`.
 
-`TrackContact` is a single command that occupies both the turret/aim and sensor channels; it conflicts with any other command on either channel.
+`TrackContact` is a single order that occupies both the turret/aim and sensor channels; it conflicts with any other order on either channel.
 
-Different channels can apply simultaneously. Conflicts inside the same channel follow one rule in every mode: if a bot returns more than one command for the same channel in one tick, the engine rejects all commands on that channel, keeps the other channels, and emits a diagnostic event. Execution semantics never differ between development and ranked play — only diagnostic verbosity does — so a bot tested in development behaves identically in ranked matches.
+Different channels can apply simultaneously. Conflicts inside the same channel follow one rule in every mode: if a bot returns more than one order for the same channel in one tick, the engine rejects all orders on that channel, keeps the other channels, and emits a diagnostic event. Execution semantics never differ between development and ranked play — only diagnostic verbosity does — so a bot tested in development behaves identically in ranked matches.
 
 ## Observation Model
 
@@ -263,7 +263,7 @@ Module specs should be concrete and simulation-facing. Example fields include mu
 
 ## Build Validation
 
-The engine validates builds before a match.
+The engine validates builds before a battle.
 
 Checks:
 
@@ -331,16 +331,16 @@ Initial damage channels:
 
 The damage model should avoid a single HP-only implementation because module builds need visible combat consequences.
 
-## Match End Conditions
+## Battle End Conditions
 
 A 1v1 duel ends when one of the following occurs:
 
 - Destruction: a tank whose armor integrity reaches zero is destroyed; the opponent wins.
 - Combat ineffective: a tank that can neither move nor fire (mobility and gun channels both disabled) loses after a short grace period.
 - Tick limit: matches are capped at a fixed simulated duration (default 5 minutes). At the cap, the winner is decided by remaining armor integrity, then by total damage dealt.
-- Draw: if both tiebreakers are equal, the match is a draw. Ranked formats may rerun with a new seed instead of recording a draw.
+- Draw: if both tiebreakers are equal, the battle is a draw. Ranked formats may rerun with a new seed instead of recording a draw.
 
-The tick limit, grace period, and tiebreaker order are league rules, stored in match config and in the replay.
+The tick limit, grace period, and tiebreaker order are league rules, stored in battle config and in the replay.
 
 ## Replay and Debugging
 
@@ -348,13 +348,13 @@ Replay is a first-class feature.
 
 Replay data stores:
 
-- Match config.
+- Battle config.
 - Engine kernel version.
 - Module catalog version.
 - Map id.
 - Seed.
 - Bot metadata.
-- Commands per tick.
+- Orders per tick.
 - Events.
 - Periodic snapshots.
 
@@ -376,7 +376,7 @@ Lifecycle:
 
 ```text
 init(match_info, vehicle_spec, rules) -> ready
-tick(observation, events, budget) -> commands
+tick(observation, events, budget) -> orders
 end(result, replay_summary) -> ack
 ```
 
@@ -399,16 +399,16 @@ MVP:
 
 - Fixed tick simulation.
 - Local worker execution only.
-- No command delay.
+- No order delay.
 - Per-tick bot timeout with clear diagnostics.
 - Bit-exact determinism for the shipped web/WASM runtime: WASM float semantics plus the kernel's own deterministic math module. Host `Math` functions are forbidden in simulation code.
 - Native builds compile with strict IEEE settings (no fast-math) and are continuously checked against WASM. Native/WASM parity is a release gate for ranked/headless tooling, not a blocker for the earliest browser-only prototype.
-- Same engine version, runtime target, config, seed, catalog version, map, and commands must reproduce the same battle.
+- Same engine version, runtime target, config, seed, catalog version, map, and orders must reproduce the same battle.
 
 Future:
 
 - Runtime-class-specific time budgets.
-- Delayed command scheduling for remote or networked execution.
+- Delayed order scheduling for remote or networked execution.
 - Separate slow leagues for remote or LLM bots.
 
 ## Technical Stack
@@ -416,18 +416,18 @@ Future:
 Recommended MVP:
 
 - C++20 engine kernel compiled to WASM with Emscripten; CMake cross-platform build.
-- Native kernel build for headless tests and CLI match runs from day one.
+- Native kernel build for headless tests and CLI battle runs from day one.
 - TypeScript for the web app, UI, and worker plumbing.
 - Web Workers for simulation and bot runtime separation.
 - Monaco editor for code editing.
 - Lightweight 2D WebGL/Canvas renderer for the top-down view first. Because the renderer only reads snapshots and replay frames, upgrading to Three.js later is a renderer-only swap.
-- JSON for module catalog, match config, and replay v0.
+- JSON for module catalog, battle config, and replay v0.
 
 Future:
 
 - Native viewer for standalone battle/replay inspection.
 - VS Code extension as launcher/editor integration.
-- Remote/networked match runner reusing the same kernel.
+- Remote/networked battle runner reusing the same kernel.
 
 ## Testing Strategy
 
@@ -435,9 +435,9 @@ Core tests run against the native kernel build for speed; CI cross-checks WASM.
 
 - Determinism tests: same seed and inputs produce same snapshots/events.
 - Golden replay tests: recorded replays re-simulate identically on every commit.
-- Native/WASM parity tests: the same match produces identical snapshots on both builds.
+- Native/WASM parity tests: the same battle produces identical snapshots on both builds.
 - Module validation tests.
-- Command resolution tests.
+- Order resolution tests.
 - Sensor visibility tests.
 - Ballistics and penetration tests.
 - Replay round-trip tests.
@@ -445,7 +445,7 @@ Core tests run against the native kernel build for speed; CI cross-checks WASM.
 Bot/runtime tests:
 
 - Timeout handling.
-- Invalid command diagnostics.
+- Invalid order diagnostics.
 - Observation does not leak hidden world state.
 
 UI tests:
@@ -459,4 +459,4 @@ UI tests:
 - Whether the first bot language is JavaScript/TypeScript only, or Python via Pyodide from the first release.
 - Exact first module catalog size.
 - Exact initial maps and obstacles.
-- Whether ammo is finite per match, and whether loadout size costs points. Finite ammo strongly affects both balance and bot logic, so this should be decided before the ballistics system is built.
+- Whether ammo is finite per battle, and whether loadout size costs points. Finite ammo strongly affects both balance and bot logic, so this should be decided before the ballistics system is built.

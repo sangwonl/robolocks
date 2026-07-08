@@ -1,5 +1,5 @@
 #include <robolocks/battle_loader.hpp>
-#include <robolocks/battle_runtime.hpp>
+#include <robolocks/battle_runner.hpp>
 #include <robolocks/controller_factory.hpp>
 #include <robolocks/presets.hpp>
 #include <robolocks/snapshot.hpp>
@@ -415,7 +415,7 @@ void print_stream_frame(std::string_view type, const robolocks::WorldSnapshot& s
   out << "}\n";
 }
 
-void print_snapshot_stream(robolocks::BattleRuntime& runtime, robolocks::Tick ticks, std::ostream& out) {
+void print_snapshot_stream(robolocks::BattleRunner& runtime, robolocks::Tick ticks, std::ostream& out) {
   if (ticks == 0) {
     print_stream_frame("battleComplete", runtime.snapshot(), out);
     return;
@@ -430,7 +430,7 @@ void print_snapshot_stream(robolocks::BattleRuntime& runtime, robolocks::Tick ti
 }
 
 void write_replay_json(
-  robolocks::BattleRuntime& runtime,
+  robolocks::BattleRunner& runtime,
   robolocks::Tick ticks,
   double tick_rate,
   const std::vector<robolocks::StaticObstacle>& obstacles,
@@ -470,13 +470,13 @@ int main(int argc, char** argv) {
     if (!options.battle_path.has_value()) {
       auto config = robolocks::preset_duel_config();
       replay_obstacles = config.obstacles;
-      return robolocks::BattleRuntime::preset_duel(std::move(config));
+      return robolocks::BattleRunner::preset_duel(std::move(config));
     }
 
     auto loaded = robolocks::load_battle_from_file(*options.battle_path);
     options.tick_rate = 1.0 / loaded.config.tick_dt_sec;
     replay_obstacles = loaded.config.obstacles;
-    return robolocks::BattleRuntime(
+    return robolocks::BattleRunner(
       std::move(loaded.config),
       robolocks::create_controllers(loaded.controllers)
     );

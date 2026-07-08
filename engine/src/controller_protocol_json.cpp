@@ -193,12 +193,12 @@ nlohmann::json observation_to_json(const Observation& observation) {
 }
 
 OrderList orders_from_json(const nlohmann::json& json) {
-  if (!json.contains("commands") || !json.at("commands").is_array()) {
-    throw std::runtime_error("Expected commands array");
+  if (!json.contains("orders") || !json.at("orders").is_array()) {
+    throw std::runtime_error("Expected orders array");
   }
 
   OrderList orders;
-  for (const auto& order_json : json.at("commands")) {
+  for (const auto& order_json : json.at("orders")) {
     orders.push_back(order_from_json(order_json));
   }
   return orders;

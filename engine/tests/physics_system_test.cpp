@@ -32,13 +32,13 @@ TEST_CASE("physics system resolves collisions by inverse mass and emits contact 
     robolocks::PhysicsBody{
       .unit_id = robolocks::UnitId{1},
       .position = robolocks::Vec2{5.0, 5.0},
-      .shape = robolocks::BodyShapeComponent{.radius_m = 1.0},
+      .shape = robolocks::BodyShapeSpec{.radius_m = 1.0},
       .mass_kg = 1000.0,
     },
     robolocks::PhysicsBody{
       .unit_id = robolocks::UnitId{2},
       .position = robolocks::Vec2{4.0, 5.0},
-      .shape = robolocks::BodyShapeComponent{.radius_m = 1.0},
+      .shape = robolocks::BodyShapeSpec{.radius_m = 1.0},
       .mass_kg = 3000.0,
     },
   };
@@ -66,7 +66,7 @@ TEST_CASE("physics system separates overlapping oriented box hulls") {
     robolocks::PhysicsBody{
       .unit_id = robolocks::UnitId{1},
       .position = robolocks::Vec2{17.0, 12.0},
-      .shape = robolocks::BodyShapeComponent{
+      .shape = robolocks::BodyShapeSpec{
         .type = robolocks::BodyShapeType::Box,
         .radius_m = 1.2,
         .length_m = 5.6,
@@ -78,7 +78,7 @@ TEST_CASE("physics system separates overlapping oriented box hulls") {
     robolocks::PhysicsBody{
       .unit_id = robolocks::UnitId{2},
       .position = robolocks::Vec2{20.0, 12.0},
-      .shape = robolocks::BodyShapeComponent{
+      .shape = robolocks::BodyShapeSpec{
         .type = robolocks::BodyShapeType::Box,
         .radius_m = 1.2,
         .length_m = 5.6,
@@ -116,7 +116,7 @@ TEST_CASE("physics system separates box hulls from circular obstacles using hull
     robolocks::PhysicsBody{
       .unit_id = robolocks::UnitId{1},
       .position = robolocks::Vec2{22.0, 12.0},
-      .shape = robolocks::BodyShapeComponent{
+      .shape = robolocks::BodyShapeSpec{
         .type = robolocks::BodyShapeType::Box,
         .radius_m = 1.2,
         .length_m = 5.6,

@@ -1,5 +1,5 @@
 {
-  "matchId": "howitzer_duel_v0",
+  "battleId": "howitzer_duel_v0",
   "seed": 1,
   "tickRate": 30,
   "tickLimit": 9000,
@@ -8,7 +8,7 @@
     "min": { "x": 0, "y": 0 },
     "max": { "x": 40, "y": 24 }
   },
-  "tanks": [
+  "units": [
     {
       "unitId": 1,
       "name": "Blue",

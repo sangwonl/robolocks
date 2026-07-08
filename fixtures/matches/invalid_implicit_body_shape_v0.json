@@ -1,9 +1,9 @@
 {
-  "matchId": "invalid_implicit_body_shape_v0",
+  "battleId": "invalid_implicit_body_shape_v0",
   "seed": 1,
   "tickRate": 30,
   "tickLimit": 60,
-  "tanks": [
+  "units": [
     {
       "unitId": 1,
       "name": "Blue",

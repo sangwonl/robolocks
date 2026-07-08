@@ -1,12 +1,12 @@
 import { createPresetDuel } from "./kernelAdapter";
 import type { BattleFrame, SimWorkerRequest, SimWorkerResponse } from "../types/protocol";
-import type { KernelMatch } from "./kernelAdapter";
+import type { KernelBattleRunner } from "./kernelAdapter";
 
 function post(response: SimWorkerResponse): void {
   self.postMessage(response);
 }
 
-let match: KernelMatch | null = null;
+let battleRunner: KernelBattleRunner | null = null;
 let playTimer: ReturnType<typeof setInterval> | null = null;
 let currentLimit = 0;
 let messageQueue = Promise.resolve();
@@ -52,20 +52,20 @@ function enqueue(task: () => Promise<void>): void {
 
 async function resetLive(): Promise<void> {
   pauseLive();
-  match?.destroy();
-  match = await createPresetDuel();
-  post({ type: "battleStatic", obstacles: match.staticObstacles() });
-  post({ type: "battleFrame", frame: match.snapshot() });
+  battleRunner?.destroy();
+  battleRunner = await createPresetDuel();
+  post({ type: "battleStatic", obstacles: battleRunner.staticObstacles() });
+  post({ type: "battleFrame", frame: battleRunner.snapshot() });
 }
 
-async function ensureLive(): Promise<KernelMatch> {
-  if (match === null) {
+async function ensureLive(): Promise<KernelBattleRunner> {
+  if (battleRunner === null) {
     await resetLive();
   }
-  if (match === null) {
+  if (battleRunner === null) {
     throw new Error("Live simulation did not initialize");
   }
-  return match;
+  return battleRunner;
 }
 
 async function stepLive(): Promise<void> {

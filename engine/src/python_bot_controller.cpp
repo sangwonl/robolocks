@@ -3,6 +3,7 @@
 #include <robolocks/controller_protocol_json.hpp>
 
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -23,6 +24,26 @@ namespace {
 
 std::runtime_error system_error(const std::string& context) {
   return std::runtime_error(context + ": " + std::strerror(errno));
+}
+
+std::string python_sdk_dir() {
+#ifdef ROBOLOCKS_PYTHON_SDK_DIR
+  return ROBOLOCKS_PYTHON_SDK_DIR;
+#else
+  return "";
+#endif
+}
+
+std::string python_path_with_sdk() {
+  const auto sdk_dir = python_sdk_dir();
+  const char* existing = std::getenv("PYTHONPATH");
+  if (sdk_dir.empty()) {
+    return existing == nullptr ? "" : std::string(existing);
+  }
+  if (existing == nullptr || std::string(existing).empty()) {
+    return sdk_dir;
+  }
+  return sdk_dir + ":" + existing;
 }
 
 }  // namespace
@@ -103,6 +124,10 @@ void PythonBotController::start() {
     close(to_child[1]);
     close(from_child[0]);
     close(from_child[1]);
+    const auto python_path = python_path_with_sdk();
+    if (!python_path.empty()) {
+      setenv("PYTHONPATH", python_path.c_str(), 1);
+    }
     execlp("python3", "python3", script_path_.c_str(), static_cast<char*>(nullptr));
     _exit(127);
   }

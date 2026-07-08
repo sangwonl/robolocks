@@ -20,7 +20,7 @@ for line in sys.stdin:
     x = observation["self"]["position"]["x"] + 2.0
     y = observation["self"]["position"]["y"]
     print(json.dumps({
-        "commands": [
+        "orders": [
             {"type": "moveTo", "position": {"x": x, "y": y}},
             {"type": "aimAt", "target": observation["contacts"][0]["position"]}
         ]
@@ -48,18 +48,66 @@ for line in sys.stdin:
     100.0,
   });
 
-  const auto commands = controller.on_tick(observation);
+  const auto orders = controller.on_tick(observation);
 
-  REQUIRE(commands.size() == 2);
-  REQUIRE(commands[0].kind == robolocks::OrderKind::MoveTo);
-  const auto& move_to = std::get<robolocks::MoveToOrder>(commands[0].payload);
+  REQUIRE(orders.size() == 2);
+  REQUIRE(orders[0].kind == robolocks::OrderKind::MoveTo);
+  const auto& move_to = std::get<robolocks::MoveToOrder>(orders[0].payload);
   REQUIRE(move_to.position.x == Catch::Approx(8.0));
   REQUIRE(move_to.position.y == Catch::Approx(12.0));
 
-  REQUIRE(commands[1].kind == robolocks::OrderKind::AimAt);
-  const auto& aim_at = std::get<robolocks::AimAtOrder>(commands[1].payload);
+  REQUIRE(orders[1].kind == robolocks::OrderKind::AimAt);
+  const auto& aim_at = std::get<robolocks::AimAtOrder>(orders[1].payload);
   REQUIRE(aim_at.target.x == Catch::Approx(34.0));
   REQUIRE(aim_at.target.y == Catch::Approx(12.0));
+}
+
+TEST_CASE("python bot controller exposes the bundled python sdk on sys.path") {
+  const auto script_path = std::filesystem::temp_directory_path() / "robolocks_python_sdk_import_test.py";
+  {
+    std::ofstream script(script_path);
+    script << R"python(
+from robolocks import AimAt, BattleState, MoveTo, run_bot
+
+def on_tick(state: BattleState):
+    enemy = state.contacts.closest_enemy()
+    return [
+        MoveTo(state.own_unit.position.offset(x=2.0)),
+        AimAt(enemy.position),
+    ]
+
+run_bot(on_tick)
+)python";
+  }
+
+  robolocks::PythonBotController controller(script_path.string());
+
+  robolocks::Observation observation;
+  observation.tick = 7;
+  observation.self_id = robolocks::UnitId{1};
+  observation.self = robolocks::UnitSnapshot{
+    robolocks::UnitId{1},
+    robolocks::Vec2{6.0, 12.0},
+    0.0,
+    0.0,
+    100.0,
+  };
+  observation.contacts.push_back(robolocks::ContactObservation{
+    robolocks::UnitId{2},
+    robolocks::Vec2{34.0, 12.0},
+    180.0,
+    180.0,
+    100.0,
+  });
+
+  const auto orders = controller.on_tick(observation);
+
+  REQUIRE(orders.size() == 2);
+  REQUIRE(orders[0].kind == robolocks::OrderKind::MoveTo);
+  const auto& move_to = std::get<robolocks::MoveToOrder>(orders[0].payload);
+  REQUIRE(move_to.position.x == Catch::Approx(8.0));
+  REQUIRE(move_to.position.y == Catch::Approx(12.0));
+  REQUIRE(orders[1].kind == robolocks::OrderKind::AimAt);
 }
 
 TEST_CASE("python bot controller fails a tick when the bot misses its response deadline") {

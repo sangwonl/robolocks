@@ -8,31 +8,31 @@
 
 namespace robolocks {
 
-struct SensorComponent {
+struct SensorSpec {
   std::string id;
   double range_m = 1000.0;
   double fov_deg = 360.0;
   Tick refresh_ticks = 1;
 };
 
-struct TransformComponent {
+struct TransformSpec {
   Vec2 position;
   double hull_heading_deg = 0.0;
 };
 
-struct MobilityComponent {
+struct MobilitySpec {
   std::string id;
   double max_speed_mps = 8.0;
   double max_hull_turn_degps = 120.0;
 };
 
-struct TurretComponent {
+struct TurretSpec {
   std::string id;
   double heading_deg = 0.0;
   double max_turn_degps = 180.0;
 };
 
-struct ArmorComponent {
+struct ArmorSpec {
   std::string id;
   double integrity = 100.0;
   double front_mm = 60.0;
@@ -45,7 +45,7 @@ enum class WeaponFireMode {
   Ballistic,
 };
 
-struct WeaponComponent {
+struct WeaponSpec {
   std::string id;
   WeaponFireMode fire_mode = WeaponFireMode::Direct;
   double damage = 25.0;
@@ -65,16 +65,16 @@ enum class BodyShapeType {
   Box,
 };
 
-struct BodyShapeComponent {
+struct BodyShapeSpec {
   BodyShapeType type = BodyShapeType::Circle;
   double radius_m = 1.0;
   double length_m = 0.0;
   double width_m = 0.0;
 };
 
-struct BodyComponent {
+struct BodySpec {
   std::string id;
-  BodyShapeComponent shape;
+  BodyShapeSpec shape;
   double mass_kg = 30000.0;
 };
 
@@ -91,16 +91,16 @@ struct StaticObstacle {
   bool blocks_line_of_sight = true;
 };
 
-struct TankPreset {
+struct UnitSpec {
   UnitId unit_id;
   std::string name;
-  TransformComponent transform;
-  MobilityComponent mobility;
-  TurretComponent turret;
-  WeaponComponent weapon;
-  ArmorComponent armor;
-  BodyComponent body;
-  SensorComponent sensor;
+  TransformSpec transform;
+  MobilitySpec mobility;
+  TurretSpec turret;
+  WeaponSpec weapon;
+  ArmorSpec armor;
+  BodySpec body;
+  SensorSpec sensor;
 };
 
 struct BattleConfig {
@@ -110,7 +110,7 @@ struct BattleConfig {
   Tick tick_limit = 9000;
   BattleBounds bounds;
   std::vector<StaticObstacle> obstacles;
-  std::vector<TankPreset> tanks;
+  std::vector<UnitSpec> units;
 };
 
 }  // namespace robolocks
