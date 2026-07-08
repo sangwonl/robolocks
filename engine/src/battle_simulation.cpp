@@ -121,6 +121,7 @@ WorldSnapshot BattleSimulation::snapshot() const {
       .previous_position = projectile.previous_position,
       .position = projectile.position,
       .radius_m = projectile.radius_m,
+      .previous_height_m = projectile.previous_height_m,
       .height_m = projectile.height_m,
     });
   }

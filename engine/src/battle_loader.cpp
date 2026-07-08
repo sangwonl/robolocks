@@ -62,6 +62,18 @@ Vec2 required_vec2(const nlohmann::json& object, const char* key) {
   };
 }
 
+Vec3 required_vec3(const nlohmann::json& object, const char* key) {
+  if (!object.contains(key) || !object.at(key).is_object()) {
+    throw std::runtime_error(std::string("Expected vector field: ") + key);
+  }
+  const auto& vec = object.at(key);
+  return Vec3{
+    .x = required_number(vec, "x"),
+    .y = required_number(vec, "y"),
+    .z = required_number(vec, "z"),
+  };
+}
+
 double optional_number(const nlohmann::json& object, const char* key, double fallback) {
   if (!object.contains(key)) {
     return fallback;
@@ -111,6 +123,13 @@ Vec2 optional_vec2(const nlohmann::json& object, const char* key) {
     return Vec2{};
   }
   return required_vec2(object, key);
+}
+
+Vec3 optional_vec3(const nlohmann::json& object, const char* key) {
+  if (!object.contains(key)) {
+    return Vec3{};
+  }
+  return required_vec3(object, key);
 }
 
 struct ModuleCatalog {
@@ -283,6 +302,7 @@ WeaponSpec optional_weapon_component(const nlohmann::json& unit, const ModuleCat
   weapon.penetration_mm = optional_number(*weapon_json, "penetrationMm", weapon.penetration_mm);
   weapon.range_m = optional_number(*weapon_json, "rangeM", weapon.range_m);
   weapon.muzzle_velocity_mps = optional_number(*weapon_json, "muzzleVelocityMps", weapon.muzzle_velocity_mps);
+  weapon.muzzle_offset_m = optional_vec3(*weapon_json, "muzzleOffsetM");
   weapon.launch_angle_deg = optional_number(*weapon_json, "launchAngleDeg", weapon.launch_angle_deg);
   weapon.gravity_mps2 = optional_number(*weapon_json, "gravityMps2", weapon.gravity_mps2);
   weapon.blast_radius_m = optional_number(*weapon_json, "blastRadiusM", weapon.blast_radius_m);

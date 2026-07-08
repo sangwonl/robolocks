@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createFallbackPresetDuel, createPresetDuelFromWasmFactory } from "../src/sim/kernelAdapter.ts";
+import {
+  createFallbackPresetDuel,
+  createPresetDuelFromWasmFactory,
+  createResearchDuelWithJsonBotFromWasmFactory,
+} from "../src/sim/kernelAdapter.ts";
 
 test("preset duel keeps both units visible at the end of the run", () => {
   const runner = createFallbackPresetDuel();
@@ -92,4 +96,89 @@ test("wasm preset duel adapter reads unit intents from the C API", async () => {
   assert.equal(frame.units[0].intents.weapon.ageTicks, 6);
 
   runner.destroy();
+});
+
+test("wasm research duel adapter lets the battle runner call a JSON bot callback", async () => {
+  let registeredCallback = null;
+  let registeredReleaseCallback = null;
+  let releasedPointer = 0;
+  let nextPointer = 1000;
+  const stringsByPointer = new Map([
+    [444, JSON.stringify({ selfId: 1, tick: 9, contacts: [] })],
+  ]);
+  const allocations = [];
+  const calls = new Map([
+    ["robolocks_battle_runner_set_json_bot_callback", (callbackPointer, releaseCallbackPointer) => {
+      registeredCallback = callbackPointer;
+      registeredReleaseCallback = releaseCallbackPointer;
+    }],
+    ["robolocks_battle_runner_create_research_duel_with_json_bot", () => 77],
+    ["robolocks_battle_runner_destroy", () => undefined],
+    ["robolocks_battle_runner_step", () => {
+      const responsePointer = registeredCallback(1, 444, 0);
+      registeredReleaseCallback(responsePointer, 0);
+      releasedPointer = responsePointer;
+    }],
+    ["robolocks_battle_runner_tick", () => 1],
+    ["robolocks_battle_runner_unit_count", () => 0],
+    ["robolocks_battle_runner_obstacle_count", () => 0],
+    ["robolocks_battle_runner_event_count", () => 0],
+    ["robolocks_battle_runner_projectile_count", () => 0],
+    ["robolocks_battle_runner_action_count", () => 0],
+  ]);
+  const factory = async () => ({
+    UTF8ToString(pointer) {
+      return stringsByPointer.get(pointer) ?? "";
+    },
+    lengthBytesUTF8(value) {
+      return Buffer.byteLength(value, "utf8");
+    },
+    stringToUTF8(value, pointer) {
+      stringsByPointer.set(pointer, value);
+    },
+    _malloc(byteLength) {
+      const pointer = nextPointer;
+      nextPointer += byteLength + 1;
+      allocations.push(pointer);
+      return pointer;
+    },
+    _free(pointer) {
+      stringsByPointer.delete(pointer);
+    },
+    addFunction(fn) {
+      return fn;
+    },
+    removeFunction() {},
+    cwrap(name, returnType) {
+      const fn = calls.get(name);
+      if (fn) {
+        return fn;
+      }
+      return returnType === "string" ? () => "" : () => 0;
+    },
+  });
+
+  const received = [];
+  const runner = await createResearchDuelWithJsonBotFromWasmFactory({
+    botId: 1,
+    onTick(observation) {
+      received.push(observation);
+      return {
+        orders: [
+          { type: "moveTo", position: { x: 12, y: 7 } },
+        ],
+      };
+    },
+    factory,
+  });
+
+  runner.step();
+  runner.destroy();
+
+  assert.equal(received.length, 1);
+  assert.equal(received[0].selfId, 1);
+  assert.equal(received[0].tick, 9);
+  assert.equal(allocations.length, 1);
+  assert.equal(releasedPointer, allocations[0]);
+  assert.equal(stringsByPointer.has(releasedPointer), false);
 });

@@ -3,6 +3,12 @@ export type Vec2 = {
   y: number;
 };
 
+export type Vec3 = {
+  x: number;
+  y: number;
+  z: number;
+};
+
 export type BodyShapeFrame =
   | {
       type: "box";
@@ -45,6 +51,7 @@ export type UnitModulesFrame = {
     penetrationMm: number;
     rangeM: number;
     muzzleVelocityMps: number;
+    muzzleOffsetM: Vec3;
     launchAngleDeg: number;
     gravityMps2: number;
     blastRadiusM: number;
@@ -142,6 +149,7 @@ export type ProjectileFrame = {
   previousPosition: Vec2;
   position: Vec2;
   radiusM: number;
+  previousHeightM: number;
   heightM: number;
 };
 

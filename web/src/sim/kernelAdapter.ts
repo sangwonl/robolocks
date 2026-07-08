@@ -7,7 +7,16 @@ type InternalUnit = UnitFrame & {
 };
 
 type WasmModule = {
+  UTF8ToString(pointer: number): string;
+  lengthBytesUTF8(value: string): number;
+  stringToUTF8(value: string, pointer: number, maxBytesToWrite: number): void;
+  _malloc(byteLength: number): number;
+  _free(pointer: number): void;
+  addFunction(fn: (...args: number[]) => number | void, signature: string): number;
+  removeFunction(pointer: number): void;
   cwrap(name: "robolocks_battle_runner_create_preset_duel", returnType: "number", argTypes: []): () => number;
+  cwrap(name: "robolocks_battle_runner_create_research_duel_with_json_bot", returnType: "number", argTypes: ["number"]): (botId: number) => number;
+  cwrap(name: "robolocks_battle_runner_set_json_bot_callback", returnType: null, argTypes: ["number", "number", "number"]): (callback: number, releaseCallback: number, userData: number) => void;
   cwrap(name: "robolocks_battle_runner_destroy", returnType: null, argTypes: ["number"]): (handle: number) => void;
   cwrap(name: "robolocks_battle_runner_step", returnType: null, argTypes: ["number"]): (handle: number) => void;
   cwrap(name: "robolocks_battle_runner_tick", returnType: "number", argTypes: ["number"]): (handle: number) => number;
@@ -61,6 +70,7 @@ type WasmModule = {
   cwrap(name: "robolocks_battle_runner_projectile_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_projectile_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_projectile_radius_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_projectile_previous_height_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_projectile_height_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_count", returnType: "number", argTypes: ["number"]): (handle: number) => number;
   cwrap(name: "robolocks_battle_runner_action_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
@@ -90,6 +100,82 @@ export type KernelBattleRunner = {
 
 export async function createPresetDuel(): Promise<KernelBattleRunner> {
   return createWasmPresetDuel();
+}
+
+export type JsonBotTick = (observation: unknown) => unknown;
+
+export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
+  botId: number;
+  onTick: JsonBotTick;
+  factory?: WasmFactory;
+}): Promise<KernelBattleRunner> {
+  let callbackPointer = 0;
+  let releaseCallbackPointer = 0;
+  let wasmModule: WasmModule | undefined;
+  let setJsonBotCallback: ((callback: number, releaseCallback: number, userData: number) => void) | undefined;
+
+  const runner = await createPresetDuelFromWasmFactory(async (wasmOptions) => {
+    const module = await (options.factory ?? loadWasmFactory())(wasmOptions);
+    wasmModule = module;
+    setJsonBotCallback = module.cwrap(
+      "robolocks_battle_runner_set_json_bot_callback",
+      null,
+      ["number", "number", "number"],
+    );
+    const createResearchDuel = module.cwrap(
+      "robolocks_battle_runner_create_research_duel_with_json_bot",
+      "number",
+      ["number"],
+    );
+
+    callbackPointer = module.addFunction((botId: number, observationPointer: number): number => {
+      const observation = JSON.parse(module.UTF8ToString(observationPointer));
+      const response = JSON.stringify(options.onTick({ ...observation, botId }) ?? { orders: [] });
+      const byteLength = module.lengthBytesUTF8(response) + 1;
+      const responsePointer = module._malloc(byteLength);
+      module.stringToUTF8(response, responsePointer, byteLength);
+      return responsePointer;
+    }, "iiii");
+    releaseCallbackPointer = module.addFunction((responsePointer: number): void => {
+      if (responsePointer !== 0) {
+        module._free(responsePointer);
+      }
+    }, "vii");
+    setJsonBotCallback(callbackPointer, releaseCallbackPointer, 0);
+
+    return {
+      ...module,
+      cwrap(name: string, returnType: string | null, argTypes: string[]) {
+        if (name === "robolocks_battle_runner_create_preset_duel") {
+          return () => createResearchDuel(options.botId);
+        }
+        return module.cwrap(name as never, returnType as never, argTypes as never);
+      },
+    } as WasmModule;
+  });
+
+  return {
+    staticObstacles: runner.staticObstacles,
+    snapshot: runner.snapshot,
+    step: runner.step,
+    destroy(): void {
+      try {
+        runner.destroy();
+      } finally {
+        setJsonBotCallback?.(0, 0, 0);
+        if (callbackPointer !== 0) {
+          wasmModule?.removeFunction(callbackPointer);
+          callbackPointer = 0;
+        }
+        if (releaseCallbackPointer !== 0) {
+          wasmModule?.removeFunction(releaseCallbackPointer);
+          releaseCallbackPointer = 0;
+        }
+        setJsonBotCallback = undefined;
+        wasmModule = undefined;
+      }
+    },
+  };
 }
 
 export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loadWasmFactory()): Promise<KernelBattleRunner> {
@@ -153,6 +239,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
   const projectileX = module.cwrap("robolocks_battle_runner_projectile_x", "number", ["number", "number"]);
   const projectileY = module.cwrap("robolocks_battle_runner_projectile_y", "number", ["number", "number"]);
   const projectileRadius = module.cwrap("robolocks_battle_runner_projectile_radius_m", "number", ["number", "number"]);
+  const projectilePreviousHeight = module.cwrap("robolocks_battle_runner_projectile_previous_height_m", "number", ["number", "number"]);
   const projectileHeight = module.cwrap("robolocks_battle_runner_projectile_height_m", "number", ["number", "number"]);
   const actionCount = module.cwrap("robolocks_battle_runner_action_count", "number", ["number"]);
   const actionUnitId = module.cwrap("robolocks_battle_runner_action_unit_id", "number", ["number", "number"]);
@@ -228,6 +315,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
         projectileX,
         projectileY,
         projectileRadius,
+        projectilePreviousHeight,
         projectileHeight,
       ),
       events: readEvents(runtimeHandle, eventCount, eventTick, eventUnitId, eventCode, eventMessage),
@@ -339,6 +427,7 @@ function readProjectiles(
   projectileX: (handle: number, projectileIndex: number) => number,
   projectileY: (handle: number, projectileIndex: number) => number,
   projectileRadius: (handle: number, projectileIndex: number) => number,
+  projectilePreviousHeight: (handle: number, projectileIndex: number) => number,
   projectileHeight: (handle: number, projectileIndex: number) => number,
 ): ProjectileFrame[] {
   const projectiles: ProjectileFrame[] = [];
@@ -349,6 +438,7 @@ function readProjectiles(
       previousPosition: { x: projectilePreviousX(handle, i), y: projectilePreviousY(handle, i) },
       position: { x: projectileX(handle, i), y: projectileY(handle, i) },
       radiusM: projectileRadius(handle, i),
+      previousHeightM: projectilePreviousHeight(handle, i),
       heightM: projectileHeight(handle, i),
     });
   }
@@ -450,7 +540,7 @@ function defaultModules(): UnitModulesFrame {
   return {
     mobility: { id: "tracked_chassis_mk1", maxSpeedMps: 6, maxHullTurnDegps: 120 },
     turret: { id: "light_turret_mk1", maxTurnDegps: 180 },
-    weapon: { id: "cannon_75mm_mk1", fireMode: "direct", damage: 25, penetrationMm: 120, rangeM: 80, muzzleVelocityMps: 620, launchAngleDeg: 0, gravityMps2: 9.81, blastRadiusM: 0, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
+    weapon: { id: "cannon_75mm_mk1", fireMode: "direct", damage: 25, penetrationMm: 120, rangeM: 80, muzzleVelocityMps: 620, muzzleOffsetM: { x: 3.6, y: 0, z: 1.65 }, launchAngleDeg: 0, gravityMps2: 9.81, blastRadiusM: 0, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
     armor: { id: "rolled_armor_mk1", integrity: 100, frontMm: 100, sideMm: 70, rearMm: 45 },
     body: { id: "medium_hull_mk1", massKg: 30000 },
     sensor: { id: "visual_optic_mk1", rangeM: 60, fovDeg: 120, refreshTicks: 1 },

@@ -5,6 +5,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+include(FetchContent)
+FetchContent_Declare(nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 add_library(robolocks_core
   engine/src/version.cpp
   engine/src/math.cpp
@@ -16,6 +23,8 @@ add_library(robolocks_core
     engine/src/battle_simulation.cpp
   engine/src/physics_system.cpp
   engine/src/battle_runner.cpp
+  engine/src/controller_protocol_json.cpp
+  engine/src/json_callback_bot_controller.cpp
   engine/src/builtin_controllers.cpp
   engine/src/presets.cpp
   engine/src/sensor_system.cpp
@@ -25,6 +34,10 @@ add_library(robolocks_core
 target_include_directories(robolocks_core
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/include
+)
+
+target_link_libraries(robolocks_core PUBLIC
+  nlohmann_json::nlohmann_json
 )
 
 target_compile_options(robolocks_core PRIVATE
@@ -39,13 +52,11 @@ if(NOT EMSCRIPTEN)
   add_library(robolocks_native_io
     engine/src/battle_loader.cpp
     engine/src/controller_factory.cpp
-    engine/src/controller_protocol_json.cpp
     engine/src/python_bot_controller.cpp
   )
 
   target_link_libraries(robolocks_native_io PUBLIC
     robolocks_core
-    nlohmann_json::nlohmann_json
   )
 
   target_link_libraries(robolocks_core PUBLIC
@@ -75,6 +86,7 @@ if(NOT EMSCRIPTEN)
     engine/tests/battle_simulation_test.cpp
     engine/tests/physics_system_test.cpp
     engine/tests/battle_runner_test.cpp
+    engine/tests/json_callback_bot_controller_test.cpp
     engine/tests/c_api_test.cpp
     engine/tests/battle_loader_test.cpp
     engine/tests/controller_protocol_json_test.cpp
@@ -124,8 +136,12 @@ endif()
 
 if(EMSCRIPTEN)
   set(ROBOLOCKS_WASM_EXPORTED_FUNCTIONS
+    _malloc
+    _free
     _robolocks_engine_version
     _robolocks_battle_runner_create_preset_duel
+    _robolocks_battle_runner_create_research_duel_with_json_bot
+    _robolocks_battle_runner_set_json_bot_callback
     _robolocks_battle_runner_destroy
     _robolocks_battle_runner_step
     _robolocks_battle_runner_run_ticks
@@ -180,6 +196,7 @@ if(EMSCRIPTEN)
     _robolocks_battle_runner_projectile_x
     _robolocks_battle_runner_projectile_y
     _robolocks_battle_runner_projectile_radius_m
+    _robolocks_battle_runner_projectile_previous_height_m
     _robolocks_battle_runner_projectile_height_m
     _robolocks_battle_runner_action_count
     _robolocks_battle_runner_action_unit_id
@@ -215,6 +232,7 @@ if(EMSCRIPTEN)
     "SHELL:-sEXPORT_ES6=1"
     "SHELL:-sENVIRONMENT=worker"
     "SHELL:-sEXPORTED_FUNCTIONS=['${ROBOLOCKS_WASM_EXPORTED_FUNCTIONS_JOINED}']"
-    "SHELL:-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
+    "SHELL:-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','addFunction','removeFunction','UTF8ToString','stringToUTF8','lengthBytesUTF8']"
+    "SHELL:-sALLOW_TABLE_GROWTH=1"
   )
 endif()

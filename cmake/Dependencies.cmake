@@ -5,11 +5,6 @@ FetchContent_Declare(Catch2
   GIT_TAG v3.8.1
 )
 
-FetchContent_Declare(nlohmann_json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.11.3
-)
-
 set(JPH_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 set(JPH_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 set(JPH_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -21,5 +16,5 @@ FetchContent_Declare(JoltPhysics
   SOURCE_SUBDIR Build
 )
 
-FetchContent_MakeAvailable(Catch2 nlohmann_json JoltPhysics)
+FetchContent_MakeAvailable(Catch2 JoltPhysics)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)

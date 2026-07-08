@@ -35,8 +35,13 @@ double ballistic_ideal_range_m(const WeaponSpec& weapon) {
     return weapon.range_m;
   }
   const double launch_angle_rad = weapon.launch_angle_deg * kPi / 180.0;
-  return weapon.muzzle_velocity_mps * weapon.muzzle_velocity_mps * std::sin(2.0 * launch_angle_rad)
-    / weapon.gravity_mps2;
+  const double horizontal_velocity = weapon.muzzle_velocity_mps * std::cos(launch_angle_rad);
+  const double vertical_velocity = weapon.muzzle_velocity_mps * std::sin(launch_angle_rad);
+  const double launch_height_m = std::max(0.0, weapon.muzzle_offset_m.z);
+  const double flight_time = (
+    vertical_velocity + std::sqrt(vertical_velocity * vertical_velocity + 2.0 * weapon.gravity_mps2 * launch_height_m)
+  ) / weapon.gravity_mps2;
+  return horizontal_velocity * flight_time;
 }
 
 double ballistic_range_hit_chance(const WeaponSpec& weapon, double distance_m, double target_radius_m) {

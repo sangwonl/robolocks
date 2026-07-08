@@ -83,6 +83,7 @@ void print_body_shape_json(const robolocks::UnitSnapshot& unit, std::ostream& ou
 void print_intents_json(const robolocks::UnitSnapshot& unit, std::ostream& out);
 void print_modules_json(const robolocks::UnitSnapshot& unit, std::ostream& out);
 void print_vec_json(const robolocks::Vec2& vec, std::ostream& out);
+void print_vec3_json(const robolocks::Vec3& vec, std::ostream& out);
 void print_projectiles_json_compact(const std::vector<robolocks::ProjectileSnapshot>& projectiles, std::ostream& out);
 void print_event_payload_json_compact(const robolocks::EventPayload& payload, std::ostream& out);
 
@@ -187,6 +188,10 @@ void print_vec_json(const robolocks::Vec2& vec, std::ostream& out) {
   out << "{\"x\":" << vec.x << ",\"y\":" << vec.y << "}";
 }
 
+void print_vec3_json(const robolocks::Vec3& vec, std::ostream& out) {
+  out << "{\"x\":" << vec.x << ",\"y\":" << vec.y << ",\"z\":" << vec.z << "}";
+}
+
 const char* fire_mode_json(robolocks::WeaponFireMode mode) {
   switch (mode) {
     case robolocks::WeaponFireMode::Direct:
@@ -233,6 +238,9 @@ void print_modules_json(const robolocks::UnitSnapshot& unit, std::ostream& out) 
   out << "\"penetrationMm\":" << unit.modules.weapon.penetration_mm << ",";
   out << "\"rangeM\":" << unit.modules.weapon.range_m << ",";
   out << "\"muzzleVelocityMps\":" << unit.modules.weapon.muzzle_velocity_mps << ",";
+  out << "\"muzzleOffsetM\":";
+  print_vec3_json(unit.modules.weapon.muzzle_offset_m, out);
+  out << ",";
   out << "\"launchAngleDeg\":" << unit.modules.weapon.launch_angle_deg << ",";
   out << "\"gravityMps2\":" << unit.modules.weapon.gravity_mps2 << ",";
   out << "\"blastRadiusM\":" << unit.modules.weapon.blast_radius_m << ",";
@@ -345,6 +353,7 @@ void print_projectiles_json_compact(const std::vector<robolocks::ProjectileSnaps
     out << ",\"position\":";
     print_vec_json(projectile.position, out);
     out << ",\"radiusM\":" << projectile.radius_m << ",";
+    out << "\"previousHeightM\":" << projectile.previous_height_m << ",";
     out << "\"heightM\":" << projectile.height_m;
     out << "}";
     if (i + 1 < projectiles.size()) {

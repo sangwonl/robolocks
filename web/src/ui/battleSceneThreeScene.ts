@@ -6,7 +6,7 @@ const HULL_HEIGHT_M = 1.2;
 const TURRET_HEIGHT_M = 0.35;
 const TURRET_WIDTH_RATIO = 0.48;
 const TURRET_LENGTH_RATIO = 0.52;
-const BARREL_LENGTH_RATIO = 0.55;
+const MIN_BARREL_LENGTH_M = 0.25;
 
 export type BattleSceneInput = {
   frame: BattleFrame | null;
@@ -148,7 +148,6 @@ function createTurret(unit: UnitFrame): THREE.Group {
   const metrics = shapeMetrics(unit.bodyShape);
   const group = new THREE.Group();
   group.name = `unit-${unit.unitId}-turret`;
-  group.position.y = HULL_HEIGHT_M + TURRET_HEIGHT_M / 2;
 
   const turretLength = metrics.lengthM * TURRET_LENGTH_RATIO;
   const turretWidth = metrics.widthM * TURRET_WIDTH_RATIO;
@@ -158,22 +157,34 @@ function createTurret(unit: UnitFrame): THREE.Group {
   );
   turret.name = `unit-${unit.unitId}-turret-block`;
   turret.position.x = turretLength * 0.08;
+  turret.position.y = HULL_HEIGHT_M + TURRET_HEIGHT_M / 2;
   turret.castShadow = true;
   group.add(turret);
 
-  const barrelLength = Math.max(1.8, metrics.lengthM * BARREL_LENGTH_RATIO);
+  const muzzle = unit.modules.weapon.muzzleOffsetM;
+  const barrelBaseX = Math.min(muzzle.x - MIN_BARREL_LENGTH_M, turretLength * 0.35);
+  const barrelLength = Math.max(MIN_BARREL_LENGTH_M, muzzle.x - barrelBaseX);
   const barrel = new THREE.Mesh(
     new THREE.BoxGeometry(barrelLength, 0.14, 0.18),
     new THREE.MeshStandardMaterial({ color: "#11150f", roughness: 0.62, metalness: 0.22 }),
   );
   barrel.name = `unit-${unit.unitId}-barrel`;
-  barrel.position.x = turretLength * 0.4 + barrelLength / 2;
+  barrel.position.x = muzzle.x - barrelLength / 2;
+  barrel.position.y = muzzle.z;
+  barrel.position.z = muzzle.y;
+  barrel.userData = {
+    muzzleOffsetM: muzzle,
+    muzzleEndLocal: { x: muzzle.x, y: muzzle.z, z: muzzle.y },
+  };
   group.add(barrel);
 
   return group;
 }
 
-function createProjectile(projectile: BattleFrame["projectiles"][number]): THREE.Mesh {
+function createProjectile(projectile: BattleFrame["projectiles"][number]): THREE.Group {
+  const group = new THREE.Group();
+  group.name = `projectile-${projectile.projectileId}`;
+
   const radius = Math.max(0.09, projectile.radiusM);
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(radius, 16, 12),
@@ -184,16 +195,34 @@ function createProjectile(projectile: BattleFrame["projectiles"][number]): THREE
       roughness: 0.45,
     }),
   );
-  mesh.name = `projectile-${projectile.projectileId}`;
+  mesh.name = `projectile-${projectile.projectileId}-body`;
   mesh.position.copy(replayToWorld(projectile.position, projectile.heightM));
   mesh.castShadow = true;
+  group.add(mesh);
+
+  const trailGeometry = new THREE.BufferGeometry().setFromPoints([
+    replayToWorld(projectile.previousPosition, projectile.previousHeightM),
+    replayToWorld(projectile.position, projectile.heightM),
+  ]);
+  const trail = new THREE.Line(
+    trailGeometry,
+    new THREE.LineBasicMaterial({
+      color: "#fff1a8",
+      transparent: true,
+      opacity: 0.7,
+    }),
+  );
+  trail.name = `projectile-${projectile.projectileId}-trail`;
+  group.add(trail);
+
   mesh.userData = {
     projectileId: projectile.projectileId,
     ownerUnitId: projectile.ownerUnitId,
     radiusM: projectile.radiusM,
+    previousHeightM: projectile.previousHeightM,
     heightM: projectile.heightM,
   };
-  return mesh;
+  return group;
 }
 
 function shapeMetrics(shape: BodyShapeFrame): { lengthM: number; widthM: number } {

@@ -8,9 +8,18 @@ extern "C" {
 #endif
 
 typedef void* RobolocksBattleRunnerHandle;
+typedef const char* (*RobolocksJsonBotCallback)(uint32_t bot_id, const char* observation_json, void* user_data);
+typedef void (*RobolocksJsonBotReleaseCallback)(const char* response_json, void* user_data);
 
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_preset_duel(void);
+RobolocksBattleRunnerHandle robolocks_battle_runner_create_research_duel_with_json_bot(uint32_t bot_id);
 void robolocks_battle_runner_destroy(RobolocksBattleRunnerHandle handle);
+
+void robolocks_battle_runner_set_json_bot_callback(
+  RobolocksJsonBotCallback callback,
+  RobolocksJsonBotReleaseCallback release_callback,
+  void* user_data
+);
 
 void robolocks_battle_runner_step(RobolocksBattleRunnerHandle handle);
 void robolocks_battle_runner_run_ticks(RobolocksBattleRunnerHandle handle, uint64_t tick_count);
@@ -66,6 +75,7 @@ double robolocks_battle_runner_projectile_previous_y(RobolocksBattleRunnerHandle
 double robolocks_battle_runner_projectile_x(RobolocksBattleRunnerHandle handle, size_t projectile_index);
 double robolocks_battle_runner_projectile_y(RobolocksBattleRunnerHandle handle, size_t projectile_index);
 double robolocks_battle_runner_projectile_radius_m(RobolocksBattleRunnerHandle handle, size_t projectile_index);
+double robolocks_battle_runner_projectile_previous_height_m(RobolocksBattleRunnerHandle handle, size_t projectile_index);
 double robolocks_battle_runner_projectile_height_m(RobolocksBattleRunnerHandle handle, size_t projectile_index);
 size_t robolocks_battle_runner_action_count(RobolocksBattleRunnerHandle handle);
 uint32_t robolocks_battle_runner_action_unit_id(RobolocksBattleRunnerHandle handle, size_t action_index);

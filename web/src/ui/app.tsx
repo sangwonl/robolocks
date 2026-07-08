@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { BattleAction, BattleEvent, BattleFrame, UnitFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
+import { DEFAULT_RESEARCH_BOT_SOURCE, runResearchInBrowser } from "../research/research.ts";
 import { BattleSceneThreeView } from "./BattleSceneThreeView.tsx";
 
 export type RenderAppOptions = {
@@ -30,6 +31,9 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const [status, setStatus] = useState("Ready");
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [workbenchMode, setWorkbenchMode] = useState<"replay" | "research">("replay");
+  const [researchBotSource, setResearchBotSource] = useState(DEFAULT_RESEARCH_BOT_SOURCE);
+  const [researchTickCount, setResearchTickCount] = useState(180);
   const timerRef = useRef<number | null>(null);
 
   const fetchText = options.fetchText ?? fetchTextFromUrl;
@@ -93,11 +97,14 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   }
 
   function applyReplayText(text: string, autoplay: boolean): void {
-    const parsed = parseBattleReplay(text);
-    setLoadedReplay(parsed);
+    applyReplay(parseBattleReplay(text), autoplay);
+  }
+
+  function applyReplay(replay: BattleReplay, autoplay: boolean): void {
+    setLoadedReplay(replay);
     setReplayIndex(0);
     setStatus("Replay loaded");
-    setIsPlaying(autoplay && parsed.frames.length > 1);
+    setIsPlaying(autoplay && replay.frames.length > 1);
   }
 
   async function loadReplayFile(file: File): Promise<void> {
@@ -115,28 +122,90 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     }
   }
 
+  async function runResearch(): Promise<void> {
+    setIsPlaying(false);
+    setIsLoading(true);
+    setStatus("Running research");
+    try {
+      const replay = await runResearchInBrowser({
+        botSource: researchBotSource,
+        tickCount: researchTickCount,
+      });
+      applyReplay(replay, true);
+      setStatus(`Research run loaded - ${replay.frames.length} frames`);
+    } catch (error: unknown) {
+      setStatus(`Research run failed: ${errorMessage(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <section className="workbench">
       <aside className="panel">
         <div className="panel-title">
           <h1>Robolocks</h1>
-          <span>Replay Workbench</span>
+          <span>{workbenchMode === "research" ? "Unit Research" : "Replay Workbench"}</span>
         </div>
-        <label className="file-control">
-          Replay JSON
-          <input
-            type="file"
-            accept="application/json,.json"
-            disabled={isLoading}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = "";
-              if (file) {
-                void loadReplayFile(file);
-              }
-            }}
-          />
-        </label>
+        <div className="mode-switch" role="tablist" aria-label="Workbench mode">
+          <button
+            type="button"
+            className={workbenchMode === "replay" ? "active" : ""}
+            onClick={() => setWorkbenchMode("replay")}
+          >
+            Replay
+          </button>
+          <button
+            type="button"
+            className={workbenchMode === "research" ? "active" : ""}
+            onClick={() => setWorkbenchMode("research")}
+          >
+            Research
+          </button>
+        </div>
+        {workbenchMode === "replay" ? (
+          <label className="file-control">
+            Replay JSON
+            <input
+              type="file"
+              accept="application/json,.json"
+              disabled={isLoading}
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                if (file) {
+                  void loadReplayFile(file);
+                }
+              }}
+            />
+          </label>
+        ) : (
+          <div className="research-panel">
+            <label className="field-control">
+              Ticks
+              <input
+                type="number"
+                min={1}
+                max={900}
+                value={researchTickCount}
+                disabled={isLoading}
+                onChange={(event) => setResearchTickCount(Number(event.currentTarget.value))}
+              />
+            </label>
+            <label className="code-control">
+              Bot code
+              <textarea
+                spellCheck={false}
+                value={researchBotSource}
+                disabled={isLoading}
+                onChange={(event) => setResearchBotSource(event.currentTarget.value)}
+              />
+            </label>
+            <button type="button" disabled={isLoading} onClick={() => void runResearch()}>
+              Run Research
+            </button>
+          </div>
+        )}
         <div className="transport">
           <button disabled={!canStepBackward} onClick={() => setReplayIndex((value) => Math.max(0, value - 1))}>Prev</button>
           <button disabled={!canPlay} onClick={() => setIsPlaying((value) => !value)}>{isPlaying ? "Pause" : "Play"}</button>
@@ -231,10 +300,12 @@ function UnitSection({ title, items }: { title: string; items: { label: string; 
 }
 
 function moduleItems(unit: UnitFrame): { label: string; value: string }[] {
+  const muzzle = unit.modules.weapon.muzzleOffsetM;
+  const muzzleLabel = `${muzzle.x.toFixed(1)},${muzzle.y.toFixed(1)},${muzzle.z.toFixed(1)}m`;
   return [
     { label: "move", value: `${unit.modules.mobility.id} ${unit.modules.mobility.maxSpeedMps.toFixed(1)}m/s ${unit.modules.mobility.maxHullTurnDegps.toFixed(0)}deg/s` },
     { label: "turret", value: `${unit.modules.turret.id} ${unit.modules.turret.maxTurnDegps.toFixed(0)}deg/s` },
-    { label: "weapon", value: `${unit.modules.weapon.id} ${unit.modules.weapon.fireMode} dmg=${unit.modules.weapon.damage.toFixed(0)} pen=${unit.modules.weapon.penetrationMm.toFixed(0)}mm v=${unit.modules.weapon.muzzleVelocityMps.toFixed(0)}m/s angle=${unit.modules.weapon.launchAngleDeg.toFixed(0)}deg blast=${unit.modules.weapon.blastRadiusM.toFixed(1)}m reload=${unit.modules.weapon.reloadTicks}` },
+    { label: "weapon", value: `${unit.modules.weapon.id} ${unit.modules.weapon.fireMode} dmg=${unit.modules.weapon.damage.toFixed(0)} pen=${unit.modules.weapon.penetrationMm.toFixed(0)}mm v=${unit.modules.weapon.muzzleVelocityMps.toFixed(0)}m/s muzzle=${muzzleLabel} angle=${unit.modules.weapon.launchAngleDeg.toFixed(0)}deg blast=${unit.modules.weapon.blastRadiusM.toFixed(1)}m reload=${unit.modules.weapon.reloadTicks}` },
     { label: "armor", value: `${unit.modules.armor.id} hp=${unit.modules.armor.integrity.toFixed(0)} ${unit.modules.armor.frontMm.toFixed(0)}/${unit.modules.armor.sideMm.toFixed(0)}/${unit.modules.armor.rearMm.toFixed(0)}mm` },
     { label: "body", value: `${unit.modules.body.id} mass=${unit.modules.body.massKg.toFixed(0)}kg` },
     { label: "sensor", value: `${unit.modules.sensor.id} ${unit.modules.sensor.rangeM.toFixed(0)}m/${unit.modules.sensor.fovDeg.toFixed(0)}deg` },

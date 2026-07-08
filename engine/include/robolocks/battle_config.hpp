@@ -52,6 +52,7 @@ struct WeaponSpec {
   double penetration_mm = 100.0;
   double range_m = 80.0;
   double muzzle_velocity_mps = 1000.0;
+  Vec3 muzzle_offset_m;
   double launch_angle_deg = 0.0;
   double gravity_mps2 = 9.81;
   double blast_radius_m = 0.0;

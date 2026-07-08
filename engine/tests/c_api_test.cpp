@@ -3,7 +3,31 @@
 
 #include <robolocks/c_api.h>
 
+#include <nlohmann/json.hpp>
+
 #include <string>
+
+namespace {
+
+std::uint32_t g_called_bot_id = 0;
+nlohmann::json g_received_observation;
+std::string g_callback_response;
+int g_release_call_count = 0;
+const char* g_released_response = nullptr;
+
+const char* test_json_bot_callback(uint32_t bot_id, const char* observation_json, void* user_data) {
+  auto* response = static_cast<std::string*>(user_data);
+  g_called_bot_id = bot_id;
+  g_received_observation = nlohmann::json::parse(observation_json);
+  return response->c_str();
+}
+
+void test_json_bot_release_callback(const char* response_json, void*) {
+  g_release_call_count += 1;
+  g_released_response = response_json;
+}
+
+}  // namespace
 
 TEST_CASE("C API drives the battle runner and exposes snapshots") {
   RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_preset_duel();
@@ -58,7 +82,8 @@ TEST_CASE("C API drives the battle runner and exposes snapshots") {
   REQUIRE(robolocks_battle_runner_projectile_owner_unit_id(runtime, 0) == 1);
   REQUIRE(robolocks_battle_runner_projectile_x(runtime, 0) > 20.0);
   REQUIRE(robolocks_battle_runner_projectile_radius_m(runtime, 0) == Catch::Approx(0.08));
-  REQUIRE(robolocks_battle_runner_projectile_height_m(runtime, 0) == Catch::Approx(0.0));
+  REQUIRE(robolocks_battle_runner_projectile_previous_height_m(runtime, 0) == Catch::Approx(1.65));
+  REQUIRE(robolocks_battle_runner_projectile_height_m(runtime, 0) == Catch::Approx(1.65));
   REQUIRE(robolocks_battle_runner_action_count(runtime) == 6);
   REQUIRE(robolocks_battle_runner_action_unit_id(runtime, 0) == 1);
   REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 0)) == "moveTo");
@@ -86,4 +111,42 @@ TEST_CASE("C API drives the battle runner and exposes snapshots") {
   REQUIRE(robolocks_battle_runner_unit_hull_heading_deg(runtime, 1) == Catch::Approx(180.0));
 
   robolocks_battle_runner_destroy(runtime);
+}
+
+TEST_CASE("C API research runner calls a registered JSON bot callback during step") {
+  g_called_bot_id = 0;
+  g_received_observation = {};
+  g_release_call_count = 0;
+  g_released_response = nullptr;
+  g_callback_response = R"json({
+    "orders": [
+      {"type": "moveTo", "position": {"x": 17.0, "y": 12.0}},
+      {"type": "aimAt", "target": {"x": 34.0, "y": 18.0}}
+    ]
+  })json";
+  robolocks_battle_runner_set_json_bot_callback(
+    test_json_bot_callback,
+    test_json_bot_release_callback,
+    &g_callback_response
+  );
+
+  RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_research_duel_with_json_bot(1);
+  REQUIRE(runtime != nullptr);
+
+  robolocks_battle_runner_step(runtime);
+
+  REQUIRE(g_called_bot_id == 1);
+  REQUIRE(g_received_observation.at("selfId") == 1);
+  REQUIRE(g_received_observation.at("contacts").size() == 1);
+  REQUIRE(robolocks_battle_runner_tick(runtime) == 1);
+  REQUIRE(robolocks_battle_runner_action_count(runtime) == 5);
+  REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 0)) == "moveTo");
+  REQUIRE(robolocks_battle_runner_action_position_x(runtime, 0) == Catch::Approx(17.0));
+  REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 1)) == "aimAt");
+  REQUIRE(robolocks_battle_runner_action_target_x(runtime, 1) == Catch::Approx(34.0));
+  REQUIRE(g_release_call_count == 1);
+  REQUIRE(g_released_response == g_callback_response.c_str());
+
+  robolocks_battle_runner_destroy(runtime);
+  robolocks_battle_runner_set_json_bot_callback(nullptr, nullptr, nullptr);
 }
