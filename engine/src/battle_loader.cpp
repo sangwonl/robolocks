@@ -118,13 +118,6 @@ bool optional_bool(const nlohmann::json& object, const char* key, bool fallback)
   return object.at(key).get<bool>();
 }
 
-Vec2 optional_vec2(const nlohmann::json& object, const char* key) {
-  if (!object.contains(key)) {
-    return Vec2{};
-  }
-  return required_vec2(object, key);
-}
-
 Vec3 optional_vec3(const nlohmann::json& object, const char* key) {
   if (!object.contains(key)) {
     return Vec3{};
@@ -461,7 +454,6 @@ LoadedBattle load_battle_from_json(const nlohmann::json& data, const std::filesy
       .id = optional_string(controller, "id"),
       .path = controller_path,
       .resolved_path = resolve_relative_path(base_dir, controller_path),
-      .hold_position = optional_vec2(controller, "hold"),
     });
   }
 

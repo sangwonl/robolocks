@@ -13,7 +13,6 @@ struct ControllerConfig {
   std::string id;
   std::string path;
   std::string resolved_path;
-  Vec2 hold_position;
 };
 
 struct LoadedBattle {
