@@ -15,6 +15,7 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kMoveTargetEpsilon = 1.0e-9;
+constexpr double kPhysicsBlockedEpsilonM = 1.0e-3;
 constexpr double kMinHitChance = 0.0;
 constexpr double kMaxHitChance = 1.0;
 
@@ -725,7 +726,7 @@ StepResult Battlefield::step(const std::vector<UnitOrders>& orders_by_unit) {
         units_[i].transform.position,
         units_[i].mobility_intent_target
       );
-      if (post_physics_remaining > pre_physics_move_remaining[i] + kMoveTargetEpsilon) {
+      if (post_physics_remaining > pre_physics_move_remaining[i] + kPhysicsBlockedEpsilonM) {
         units_[i].mobility_intent_active = false;
       }
     }

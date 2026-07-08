@@ -5,8 +5,23 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <mutex>
 #include <string>
 #include <utility>
+
+#if ROBOLOCKS_USE_JOLT
+#include <Jolt/Jolt.h>
+#include <Jolt/Core/Factory.h>
+#include <Jolt/Core/JobSystemSingleThreaded.h>
+#include <Jolt/Core/TempAllocator.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/PhysicsSettings.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/RegisterTypes.h>
+#endif
 
 namespace robolocks {
 
@@ -256,12 +271,245 @@ void resolve_obstacles(
   body.position = clamp_body_to_bounds(body, bounds);
 }
 
+#if ROBOLOCKS_USE_JOLT
+namespace jolt_layers {
+constexpr JPH::ObjectLayer kNonMoving = 0;
+constexpr JPH::ObjectLayer kMoving = 1;
+constexpr JPH::ObjectLayer kLayerCount = 2;
+
+namespace broad_phase {
+constexpr JPH::BroadPhaseLayer kNonMoving(0);
+constexpr JPH::BroadPhaseLayer kMoving(1);
+constexpr JPH::uint kLayerCount = 2;
+}  // namespace broad_phase
+}  // namespace jolt_layers
+
+class BroadPhaseLayerInterface final : public JPH::BroadPhaseLayerInterface {
+ public:
+  BroadPhaseLayerInterface() {
+    object_to_broad_phase_[jolt_layers::kNonMoving] = jolt_layers::broad_phase::kNonMoving;
+    object_to_broad_phase_[jolt_layers::kMoving] = jolt_layers::broad_phase::kMoving;
+  }
+
+  JPH::uint GetNumBroadPhaseLayers() const override {
+    return jolt_layers::broad_phase::kLayerCount;
+  }
+
+  JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override {
+    return object_to_broad_phase_[layer];
+  }
+
+#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+  const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer layer) const override {
+    switch (static_cast<JPH::BroadPhaseLayer::Type>(layer)) {
+      case static_cast<JPH::BroadPhaseLayer::Type>(jolt_layers::broad_phase::kNonMoving):
+        return "non_moving";
+      case static_cast<JPH::BroadPhaseLayer::Type>(jolt_layers::broad_phase::kMoving):
+        return "moving";
+      default:
+        return "unknown";
+    }
+  }
+#endif
+
+ private:
+  JPH::BroadPhaseLayer object_to_broad_phase_[jolt_layers::kLayerCount];
+};
+
+class ObjectVsBroadPhaseLayerFilter final : public JPH::ObjectVsBroadPhaseLayerFilter {
+ public:
+  bool ShouldCollide(JPH::ObjectLayer object_layer, JPH::BroadPhaseLayer broad_phase_layer) const override {
+    if (object_layer == jolt_layers::kMoving) {
+      return broad_phase_layer == jolt_layers::broad_phase::kMoving ||
+             broad_phase_layer == jolt_layers::broad_phase::kNonMoving;
+    }
+    return broad_phase_layer == jolt_layers::broad_phase::kMoving;
+  }
+};
+
+class ObjectLayerPairFilter final : public JPH::ObjectLayerPairFilter {
+ public:
+  bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
+    if (a == jolt_layers::kNonMoving && b == jolt_layers::kNonMoving) {
+      return false;
+    }
+    return true;
+  }
+};
+
+void initialize_jolt_once() {
+  static std::once_flag once;
+  std::call_once(once, [] {
+    JPH::RegisterDefaultAllocator();
+    JPH::Factory::sInstance = new JPH::Factory();
+    JPH::RegisterTypes();
+  });
+}
+
+JPH::Vec3 to_jolt_position(Vec2 position, float half_height) {
+  return JPH::Vec3(
+    static_cast<float>(position.x),
+    half_height,
+    static_cast<float>(position.y)
+  );
+}
+
+JPH::Quat yaw_rotation(double heading_deg) {
+  return JPH::Quat::sRotation(
+    JPH::Vec3::sAxisY(),
+    static_cast<float>(-normalize_angle_deg(heading_deg) * kPi / 180.0)
+  );
+}
+
+JPH::RefConst<JPH::Shape> body_shape(const PhysicsBody& body) {
+  constexpr float kBodyHalfHeight = 0.6F;
+  if (has_box_shape(body)) {
+    return new JPH::BoxShape(JPH::Vec3(
+      static_cast<float>(body.shape.length_m * 0.5),
+      kBodyHalfHeight,
+      static_cast<float>(body.shape.width_m * 0.5)
+    ));
+  }
+
+  return new JPH::CylinderShape(kBodyHalfHeight, static_cast<float>(body.shape.radius_m));
+}
+
+JPH::RefConst<JPH::Shape> obstacle_shape(const StaticObstacle& obstacle) {
+  return new JPH::CylinderShape(0.75F, static_cast<float>(obstacle.radius_m));
+}
+
+std::vector<Event> jolt_resolve(
+  Tick tick,
+  const BattleBounds& bounds,
+  const std::vector<StaticObstacle>& obstacles,
+  std::vector<PhysicsBody>& bodies
+) {
+  initialize_jolt_once();
+
+  BroadPhaseLayerInterface broad_phase_layer_interface;
+  ObjectVsBroadPhaseLayerFilter object_vs_broad_phase_layer_filter;
+  ObjectLayerPairFilter object_layer_pair_filter;
+  JPH::PhysicsSystem physics;
+  physics.Init(
+    1024,
+    0,
+    1024,
+    1024,
+    broad_phase_layer_interface,
+    object_vs_broad_phase_layer_filter,
+    object_layer_pair_filter
+  );
+  auto settings = physics.GetPhysicsSettings();
+  settings.mBaumgarte = 1.0F;
+  settings.mPenetrationSlop = 0.0F;
+  settings.mMaxPenetrationDistance = 10.0F;
+  settings.mNumPositionSteps = 12;
+  settings.mAllowSleeping = false;
+  physics.SetPhysicsSettings(settings);
+  physics.SetGravity(JPH::Vec3::sZero());
+
+  JPH::BodyInterface& body_interface = physics.GetBodyInterface();
+  std::vector<JPH::BodyID> unit_body_ids;
+  unit_body_ids.reserve(bodies.size());
+
+  for (const auto& obstacle : obstacles) {
+    if (!obstacle.blocks_movement) {
+      continue;
+    }
+    JPH::BodyCreationSettings settings(
+      obstacle_shape(obstacle),
+      to_jolt_position(obstacle.position, 0.75F),
+      JPH::Quat::sIdentity(),
+      JPH::EMotionType::Static,
+      jolt_layers::kNonMoving
+    );
+    const JPH::BodyID body_id = body_interface.CreateAndAddBody(settings, JPH::EActivation::DontActivate);
+    (void)body_id;
+  }
+
+  for (const auto& body : bodies) {
+    JPH::BodyCreationSettings settings(
+      body_shape(body),
+      to_jolt_position(body.position, 0.6F),
+      yaw_rotation(body.heading_deg),
+      JPH::EMotionType::Dynamic,
+      jolt_layers::kMoving
+    );
+    settings.mFriction = 0.8F;
+    settings.mRestitution = 0.0F;
+    settings.mAllowSleeping = false;
+    settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+    settings.mMassPropertiesOverride.mMass = static_cast<float>(std::max(body.mass_kg, kMinCollisionMassKg));
+    const JPH::BodyID body_id = body_interface.CreateAndAddBody(settings, JPH::EActivation::Activate);
+    unit_body_ids.push_back(body_id);
+  }
+
+  physics.OptimizeBroadPhase();
+
+  std::vector<Event> events;
+  for (std::size_t i = 0; i < bodies.size(); i += 1) {
+    for (std::size_t j = i + 1; j < bodies.size(); j += 1) {
+      Vec2 normal{1.0, 0.0};
+      double penetration = 0.0;
+      if (!body_overlap(bodies[i], bodies[j], normal, penetration)) {
+        continue;
+      }
+      events.push_back(Event{
+        .tick = tick,
+        .unit_id = bodies[i].unit_id,
+        .code = "unit_collision",
+        .message = "Collided with unit " + std::to_string(bodies[j].unit_id.value) + ".",
+      });
+      events.push_back(Event{
+        .tick = tick,
+        .unit_id = bodies[j].unit_id,
+        .code = "unit_collision",
+        .message = "Collided with unit " + std::to_string(bodies[i].unit_id.value) + ".",
+      });
+    }
+  }
+
+  JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
+  JPH::JobSystemSingleThreaded job_system(2048);
+  for (int i = 0; i < 60; i += 1) {
+    physics.Update(1.0F / 60.0F, 1, &temp_allocator, &job_system);
+  }
+
+  for (std::size_t i = 0; i < bodies.size(); i += 1) {
+    const JPH::Vec3 position = body_interface.GetPosition(unit_body_ids[i]);
+    bodies[i].position = Vec2{position.GetX(), position.GetZ()};
+    resolve_obstacles(tick, obstacles, bounds, bodies[i], events);
+  }
+
+  return events;
+}
+#endif
+
 }  // namespace
 
 PhysicsSystem::PhysicsSystem(BattleBounds bounds, std::vector<StaticObstacle> obstacles)
     : bounds_(bounds), obstacles_(std::move(obstacles)) {}
 
+std::string PhysicsSystem::backend_name() const {
+#if ROBOLOCKS_USE_JOLT
+  return "jolt";
+#else
+  return "legacy_2d";
+#endif
+}
+
+bool PhysicsSystem::uses_3d_backend() const {
+#if ROBOLOCKS_USE_JOLT
+  return true;
+#else
+  return false;
+#endif
+}
+
 std::vector<Event> PhysicsSystem::resolve(Tick tick, std::vector<PhysicsBody>& bodies) const {
+#if ROBOLOCKS_USE_JOLT
+  return jolt_resolve(tick, bounds_, obstacles_, bodies);
+#else
   std::vector<Event> events;
 
   for (auto& body : bodies) {
@@ -313,6 +561,7 @@ std::vector<Event> PhysicsSystem::resolve(Tick tick, std::vector<PhysicsBody>& b
   }
 
   return events;
+#endif
 }
 
 }  // namespace robolocks

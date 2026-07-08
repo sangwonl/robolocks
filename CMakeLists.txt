@@ -44,6 +44,11 @@ if(NOT EMSCRIPTEN)
     nlohmann_json::nlohmann_json
   )
 
+  target_link_libraries(robolocks_core PUBLIC
+    Jolt
+  )
+  target_compile_definitions(robolocks_core PUBLIC ROBOLOCKS_USE_JOLT=1)
+
   add_executable(robolocks_cli
     engine/cli/main.cpp
   )

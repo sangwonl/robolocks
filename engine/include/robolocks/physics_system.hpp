@@ -3,6 +3,7 @@
 #include <robolocks/battle_config.hpp>
 #include <robolocks/snapshot.hpp>
 
+#include <string>
 #include <vector>
 
 namespace robolocks {
@@ -19,6 +20,8 @@ class PhysicsSystem {
  public:
   PhysicsSystem(BattleBounds bounds, std::vector<StaticObstacle> obstacles = {});
 
+  std::string backend_name() const;
+  bool uses_3d_backend() const;
   std::vector<Event> resolve(Tick tick, std::vector<PhysicsBody>& bodies) const;
 
  private:
