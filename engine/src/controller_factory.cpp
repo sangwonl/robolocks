@@ -1,6 +1,5 @@
 #include <robolocks/controller_factory.hpp>
 
-#include <robolocks/builtin_controllers.hpp>
 #include <robolocks/python_bot_controller.hpp>
 
 #include <memory>
@@ -13,14 +12,6 @@ std::vector<ControllerBinding> create_controllers(const std::vector<ControllerCo
   controllers.reserve(configs.size());
 
   for (const auto& config : configs) {
-    if (config.type == "builtin") {
-      if (config.id != "hold_line") {
-        throw std::runtime_error("Unsupported builtin controller id: " + config.id);
-      }
-      controllers.push_back(create_hold_line_controller(config.unit_id, config.hold_position));
-      continue;
-    }
-
     if (config.type == "python") {
       const auto& path = config.resolved_path.empty() ? config.path : config.resolved_path;
       if (path.empty()) {

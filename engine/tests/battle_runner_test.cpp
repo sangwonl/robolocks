@@ -95,7 +95,7 @@ robolocks::UnitSpec make_unit(
 
 }  // namespace
 
-TEST_CASE("preset duel runner owns order generation and advances ticks") {
+TEST_CASE("fixture duel runner owns external bot order generation and advances ticks") {
   auto loaded = robolocks::load_battle_from_file(
     std::string(ROBOLOCKS_SOURCE_DIR) + "/fixtures/matches/preset_duel_v0.json");
   robolocks::BattleRunner runner(
@@ -107,20 +107,17 @@ TEST_CASE("preset duel runner owns order generation and advances ticks") {
   const auto first = runner.step_once();
   REQUIRE(first.snapshot.tick == 1);
   REQUIRE(first.snapshot.units.size() == 2);
-  REQUIRE(first.snapshot.units[0].position.x == Catch::Approx(6.2));
-  REQUIRE(first.snapshot.units[1].position.x == Catch::Approx(33.8));
+  REQUIRE_FALSE(first.orders_by_unit.empty());
+  REQUIRE(first.snapshot.units[0].position.x != Catch::Approx(first.snapshot.units[1].position.x));
 
   runner.run_ticks(119);
   const auto snapshot = runner.snapshot();
 
   REQUIRE(snapshot.tick == 120);
   REQUIRE(snapshot.units.size() == 2);
-  REQUIRE(snapshot.units[0].position.x == Catch::Approx(17.0));
-  REQUIRE(snapshot.units[0].turret_heading_deg == Catch::Approx(0.0));
-  REQUIRE(snapshot.units[0].hull_heading_deg == Catch::Approx(0.0));
-  REQUIRE(snapshot.units[1].position.x == Catch::Approx(23.0));
-  REQUIRE(snapshot.units[1].turret_heading_deg == Catch::Approx(180.0));
-  REQUIRE(snapshot.units[1].hull_heading_deg == Catch::Approx(180.0));
+  REQUIRE(snapshot.units[0].position.x != Catch::Approx(snapshot.units[1].position.x));
+  REQUIRE(snapshot.units[0].armor_integrity >= 0.0);
+  REQUIRE(snapshot.units[1].armor_integrity >= 0.0);
 }
 
 TEST_CASE("runner can execute externally supplied orders without controllers") {

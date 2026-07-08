@@ -22,9 +22,8 @@
   "controllers": [
     {
       "unitId": 1,
-      "type": "builtin",
-      "id": "hold_line",
-      "hold": { "x": 17, "y": 12 }
+      "type": "python",
+      "path": "../../examples/bots/hold_line_blue.py"
     }
   ]
 }

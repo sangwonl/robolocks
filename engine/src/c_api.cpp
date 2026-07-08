@@ -2,7 +2,6 @@
 
 #include <robolocks/battle_loader.hpp>
 #include <robolocks/battle_runner.hpp>
-#include <robolocks/builtin_controllers.hpp>
 #include <robolocks/controller_protocol_json.hpp>
 #include <robolocks/json_callback_bot_controller.hpp>
 
@@ -127,48 +126,6 @@ const char* order_channel_name(robolocks::OrderKind kind) {
 
 namespace {
 
-const char* preset_duel_json() {
-  return R"json({
-  "battleId": "preset_duel_v0",
-  "seed": 1,
-  "tickRate": 30,
-  "tickLimit": 9000,
-  "obstacles": [
-    {"id": "north_cover", "position": {"x": 20, "y": 6}, "radiusMeters": 1.5, "blocksMovement": true, "blocksLineOfSight": true}
-  ],
-  "units": [
-    {
-      "unitId": 1, "name": "Blue",
-      "spawn": {"x": 6, "y": 12, "headingDeg": 0},
-      "modules": {
-        "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
-        "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
-        "weapon": {"id": "cannon_75mm_mk1", "damage": 25.0, "penetrationMillimeters": 120.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 620.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "aimToleranceDegrees": 5.0, "reloadTicks": 30},
-        "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
-        "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
-        "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
-      }
-    },
-    {
-      "unitId": 2, "name": "Red",
-      "spawn": {"x": 34, "y": 12, "headingDeg": 180},
-      "modules": {
-        "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
-        "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
-        "weapon": {"id": "cannon_75mm_mk1", "damage": 25.0, "penetrationMillimeters": 120.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 620.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "aimToleranceDegrees": 5.0, "reloadTicks": 30},
-        "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
-        "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
-        "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
-      }
-    }
-  ],
-  "controllers": [
-    {"unitId": 1, "type": "builtin", "id": "hold_line", "hold": {"x": 17, "y": 12}},
-    {"unitId": 2, "type": "builtin", "id": "hold_line", "hold": {"x": 23, "y": 12}}
-  ]
-})json";
-}
-
 std::string call_registered_json_bot(robolocks::UnitId bot_id, const std::string& observation_json) {
   if (g_json_bot_callback == nullptr) {
     throw std::runtime_error("JSON bot callback is not registered");
@@ -191,12 +148,7 @@ std::string call_registered_json_bot(robolocks::UnitId bot_id, const std::string
 robolocks::BattleRunner runner_from_loaded(robolocks::LoadedBattle& loaded) {
   std::vector<robolocks::ControllerBinding> controllers;
   for (auto& cfg : loaded.controllers) {
-    if (cfg.type == "builtin") {
-      if (cfg.id != "hold_line") {
-        throw std::runtime_error("Unknown builtin controller id: " + cfg.id);
-      }
-      controllers.push_back(robolocks::create_hold_line_controller(cfg.unit_id, cfg.hold_position));
-    } else if (cfg.type == "json_callback") {
+    if (cfg.type == "json_callback") {
       controllers.push_back(robolocks::ControllerBinding{
         cfg.unit_id,
         std::make_unique<robolocks::JsonCallbackBotController>(cfg.unit_id, call_registered_json_bot),
@@ -215,10 +167,6 @@ extern "C" {
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_from_json(const char* json_config) {
   auto loaded = robolocks::load_battle_from_json_string(json_config);
   return new RobolocksBattleRunner(runner_from_loaded(loaded));
-}
-
-RobolocksBattleRunnerHandle robolocks_battle_runner_create_preset_duel(void) {
-  return robolocks_battle_runner_create_from_json(preset_duel_json());
 }
 
 void robolocks_battle_runner_set_json_bot_callback(

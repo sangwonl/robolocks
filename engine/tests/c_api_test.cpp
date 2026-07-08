@@ -30,7 +30,42 @@ void test_json_bot_release_callback(const char* response_json, void*) {
 }  // namespace
 
 TEST_CASE("C API drives the battle runner and exposes snapshots") {
-  RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_preset_duel();
+  RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_from_json(R"json({
+    "battleId": "c_api_snapshot_test",
+    "seed": 1,
+    "tickRate": 30,
+    "tickLimit": 9000,
+    "obstacles": [
+      {"id": "north_cover", "position": {"x": 20, "y": 6}, "radiusMeters": 1.5, "blocksMovement": true, "blocksLineOfSight": true}
+    ],
+    "units": [
+      {
+        "unitId": 1, "name": "Blue",
+        "spawn": {"x": 6, "y": 12, "headingDeg": 0},
+        "modules": {
+          "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "cannon_75mm_mk1", "damage": 25.0, "penetrationMillimeters": 120.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 620.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "aimToleranceDegrees": 5.0, "reloadTicks": 30},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      },
+      {
+        "unitId": 2, "name": "Red",
+        "spawn": {"x": 34, "y": 12, "headingDeg": 180},
+        "modules": {
+          "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "cannon_75mm_mk1", "damage": 25.0, "penetrationMillimeters": 120.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 620.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "aimToleranceDegrees": 5.0, "reloadTicks": 30},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      }
+    ],
+    "controllers": []
+  })json");
   REQUIRE(runtime != nullptr);
 
   REQUIRE(robolocks_battle_runner_tick(runtime) == 0);
@@ -48,27 +83,27 @@ TEST_CASE("C API drives the battle runner and exposes snapshots") {
 
   REQUIRE(robolocks_battle_runner_tick(runtime) == 2);
   REQUIRE(robolocks_battle_runner_unit_id(runtime, 0) == 1);
-  REQUIRE(robolocks_battle_runner_unit_x(runtime, 0) == Catch::Approx(6.4));
+  REQUIRE(robolocks_battle_runner_unit_x(runtime, 0) == Catch::Approx(6.0));
   REQUIRE(robolocks_battle_runner_unit_y(runtime, 0) == Catch::Approx(12.0));
   REQUIRE(robolocks_battle_runner_unit_turret_heading(runtime, 0) == Catch::Approx(0.0));
   REQUIRE(robolocks_battle_runner_unit_hull_heading(runtime, 0) == Catch::Approx(0.0));
-  REQUIRE(robolocks_battle_runner_unit_weapon_cooldown(runtime, 0) == 30);
+  REQUIRE(robolocks_battle_runner_unit_weapon_cooldown(runtime, 0) == 0);
   REQUIRE(robolocks_battle_runner_unit_body_shape_type(runtime, 0) == 1);
   REQUIRE(robolocks_battle_runner_unit_body_radius(runtime, 0) == Catch::Approx(1.2));
   const auto unit_modules = nlohmann::json::parse(robolocks_battle_runner_unit_modules_json(runtime, 0));
   REQUIRE(unit_modules.at("mobility").at("id") == "tracked_chassis_mk1");
   REQUIRE(unit_modules.at("weapon").at("muzzleOffsetMeters").at("x") == Catch::Approx(3.6));
   REQUIRE(unit_modules.at("sensor").at("rangeMeters") == Catch::Approx(60.0));
-  REQUIRE(robolocks_battle_runner_unit_mobility_intent_active(runtime, 0) == 1);
-  REQUIRE(robolocks_battle_runner_unit_mobility_intent_target_x(runtime, 0) == Catch::Approx(17.0));
+  REQUIRE(robolocks_battle_runner_unit_mobility_intent_active(runtime, 0) == 0);
+  REQUIRE(robolocks_battle_runner_unit_mobility_intent_target_x(runtime, 0) == Catch::Approx(6.0));
   REQUIRE(robolocks_battle_runner_unit_mobility_intent_target_y(runtime, 0) == Catch::Approx(12.0));
-  REQUIRE(robolocks_battle_runner_unit_mobility_intent_remaining(runtime, 0) == Catch::Approx(10.6));
-  REQUIRE(robolocks_battle_runner_unit_mobility_intent_age(runtime, 0) == 0);
-  REQUIRE(robolocks_battle_runner_unit_turret_intent_active(runtime, 0) == 1);
-  REQUIRE(robolocks_battle_runner_unit_turret_intent_target_x(runtime, 0) == Catch::Approx(33.8));
+  REQUIRE(robolocks_battle_runner_unit_mobility_intent_remaining(runtime, 0) == Catch::Approx(0.0));
+  REQUIRE(robolocks_battle_runner_unit_mobility_intent_age(runtime, 0) == 2);
+  REQUIRE(robolocks_battle_runner_unit_turret_intent_active(runtime, 0) == 0);
+  REQUIRE(robolocks_battle_runner_unit_turret_intent_target_x(runtime, 0) == Catch::Approx(6.0));
   REQUIRE(robolocks_battle_runner_unit_turret_intent_target_y(runtime, 0) == Catch::Approx(12.0));
   REQUIRE(robolocks_battle_runner_unit_turret_intent_error(runtime, 0) == Catch::Approx(0.0));
-  REQUIRE(robolocks_battle_runner_unit_turret_intent_age(runtime, 0) == 0);
+  REQUIRE(robolocks_battle_runner_unit_turret_intent_age(runtime, 0) == 2);
   REQUIRE(robolocks_battle_runner_unit_hull_intent_active(runtime, 0) == 0);
   REQUIRE(robolocks_battle_runner_unit_hull_intent_target_x(runtime, 0) == Catch::Approx(6.0));
   REQUIRE(robolocks_battle_runner_unit_hull_intent_target_y(runtime, 0) == Catch::Approx(12.0));
@@ -76,45 +111,19 @@ TEST_CASE("C API drives the battle runner and exposes snapshots") {
   REQUIRE(robolocks_battle_runner_unit_hull_intent_age(runtime, 0) == 2);
   REQUIRE(robolocks_battle_runner_unit_weapon_intent_active(runtime, 0) == 0);
   REQUIRE(robolocks_battle_runner_unit_weapon_intent_min_hit_chance(runtime, 0) == Catch::Approx(0.0));
-  REQUIRE(robolocks_battle_runner_unit_weapon_intent_age(runtime, 0) == 0);
+  REQUIRE(robolocks_battle_runner_unit_weapon_intent_age(runtime, 0) == 2);
   REQUIRE(robolocks_battle_runner_unit_id(runtime, 1) == 2);
-  REQUIRE(robolocks_battle_runner_unit_x(runtime, 1) == Catch::Approx(33.6));
+  REQUIRE(robolocks_battle_runner_unit_x(runtime, 1) == Catch::Approx(34.0));
   REQUIRE(robolocks_battle_runner_unit_y(runtime, 1) == Catch::Approx(12.0));
-  REQUIRE(robolocks_battle_runner_event_count(runtime) == 4);
-  REQUIRE(std::string(robolocks_battle_runner_event_code(runtime, 0)) == "weapon_fired");
-  REQUIRE(std::string(robolocks_battle_runner_event_code(runtime, 1)) == "weapon_fired");
+  REQUIRE(robolocks_battle_runner_event_count(runtime) == 0);
   REQUIRE(robolocks_battle_runner_projectile_count(runtime) == 0);
-  REQUIRE(robolocks_battle_runner_action_count(runtime) == 8);
-  REQUIRE(robolocks_battle_runner_action_unit_id(runtime, 0) == 1);
-  REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 0)) == "scanArc");
-  REQUIRE(std::string(robolocks_battle_runner_action_channel(runtime, 0)) == "sensor");
-  REQUIRE(robolocks_battle_runner_action_has_scan_arc(runtime, 0) == 1);
-  REQUIRE(robolocks_battle_runner_action_direction(runtime, 0) == Catch::Approx(0.0));
-  REQUIRE(robolocks_battle_runner_action_width(runtime, 0) == Catch::Approx(360.0));
-  REQUIRE(robolocks_battle_runner_action_unit_id(runtime, 1) == 1);
-  REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 1)) == "moveTo");
-  REQUIRE(std::string(robolocks_battle_runner_action_channel(runtime, 1)) == "mobility");
-  REQUIRE(robolocks_battle_runner_action_has_position(runtime, 1) == 1);
-  REQUIRE(robolocks_battle_runner_action_position_x(runtime, 1) == Catch::Approx(17.0));
-  REQUIRE(robolocks_battle_runner_action_position_y(runtime, 1) == Catch::Approx(12.0));
-  REQUIRE(robolocks_battle_runner_action_has_target(runtime, 1) == 0);
-  REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 2)) == "aimAt");
-  REQUIRE(std::string(robolocks_battle_runner_action_channel(runtime, 2)) == "turret");
-  REQUIRE(robolocks_battle_runner_action_has_target(runtime, 2) == 1);
-  REQUIRE(robolocks_battle_runner_action_target_x(runtime, 2) == Catch::Approx(33.8));
-  REQUIRE(robolocks_battle_runner_action_target_y(runtime, 2) == Catch::Approx(12.0));
-  REQUIRE(robolocks_battle_runner_action_unit_id(runtime, 4) == 2);
-  REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 4)) == "scanArc");
-  REQUIRE(robolocks_battle_runner_action_unit_id(runtime, 5) == 2);
-  REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 5)) == "moveTo");
-  REQUIRE(robolocks_battle_runner_action_unit_id(runtime, 6) == 2);
-  REQUIRE(std::string(robolocks_battle_runner_action_type(runtime, 6)) == "aimAt");
+  REQUIRE(robolocks_battle_runner_action_count(runtime) == 0);
 
   robolocks_battle_runner_run(runtime, 118);
 
   REQUIRE(robolocks_battle_runner_tick(runtime) == 120);
-  REQUIRE(robolocks_battle_runner_unit_x(runtime, 0) == Catch::Approx(17.0));
-  REQUIRE(robolocks_battle_runner_unit_x(runtime, 1) == Catch::Approx(23.0));
+  REQUIRE(robolocks_battle_runner_unit_x(runtime, 0) == Catch::Approx(6.0));
+  REQUIRE(robolocks_battle_runner_unit_x(runtime, 1) == Catch::Approx(34.0));
   REQUIRE(robolocks_battle_runner_unit_turret_heading(runtime, 1) == Catch::Approx(180.0));
   REQUIRE(robolocks_battle_runner_unit_hull_heading(runtime, 1) == Catch::Approx(180.0));
 

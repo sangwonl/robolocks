@@ -75,16 +75,14 @@ TEST_CASE("battle loader reads preset duel fixture into battle config") {
 
   REQUIRE(loaded.controllers.size() == 2);
   REQUIRE(loaded.controllers[0].unit_id == robolocks::UnitId{1});
-  REQUIRE(loaded.controllers[0].type == "builtin");
-  REQUIRE(loaded.controllers[0].id == "hold_line");
-  REQUIRE(loaded.controllers[0].hold_position.x == Catch::Approx(17.0));
-  REQUIRE(loaded.controllers[0].hold_position.y == Catch::Approx(12.0));
+  REQUIRE(loaded.controllers[0].type == "python");
+  REQUIRE(loaded.controllers[0].path == "../../examples/bots/hold_line_blue.py");
+  REQUIRE(loaded.controllers[0].resolved_path.ends_with("examples/bots/hold_line_blue.py"));
 
   REQUIRE(loaded.controllers[1].unit_id == robolocks::UnitId{2});
-  REQUIRE(loaded.controllers[1].type == "builtin");
-  REQUIRE(loaded.controllers[1].id == "hold_line");
-  REQUIRE(loaded.controllers[1].hold_position.x == Catch::Approx(23.0));
-  REQUIRE(loaded.controllers[1].hold_position.y == Catch::Approx(12.0));
+  REQUIRE(loaded.controllers[1].type == "python");
+  REQUIRE(loaded.controllers[1].path == "../../examples/bots/hold_line_blue.py");
+  REQUIRE(loaded.controllers[1].resolved_path.ends_with("examples/bots/hold_line_blue.py"));
 }
 
 TEST_CASE("battle loader reads python controller paths") {

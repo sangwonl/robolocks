@@ -11,7 +11,6 @@ typedef void* RobolocksBattleRunnerHandle;
 typedef const char* (*RobolocksJsonBotCallback)(uint32_t bot_id, const char* observation_json, void* user_data);
 typedef void (*RobolocksJsonBotReleaseCallback)(const char* response_json, void* user_data);
 
-RobolocksBattleRunnerHandle robolocks_battle_runner_create_preset_duel(void);
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_from_json(const char* json_config);
 void robolocks_battle_runner_destroy(RobolocksBattleRunnerHandle handle);
 

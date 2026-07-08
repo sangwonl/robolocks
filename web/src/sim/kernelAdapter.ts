@@ -14,7 +14,6 @@ type WasmModule = {
   _free(pointer: number): void;
   addFunction(fn: (...args: number[]) => number | void, signature: string): number;
   removeFunction(pointer: number): void;
-  cwrap(name: "robolocks_battle_runner_create_preset_duel", returnType: "number", argTypes: []): () => number;
   cwrap(name: "robolocks_battle_runner_create_from_json", returnType: "number", argTypes: ["string"]): (jsonConfig: string) => number;
   cwrap(name: "robolocks_battle_runner_set_json_bot_callback", returnType: null, argTypes: ["number", "number", "number"]): (callback: number, releaseCallback: number, userData: number) => void;
   cwrap(name: "robolocks_battle_runner_destroy", returnType: null, argTypes: ["number"]): (handle: number) => void;
@@ -101,24 +100,24 @@ export type KernelBattleRunner = {
   destroy(): void;
 };
 
+const DEFAULT_LIVE_BATTLE_CONFIG_JSON = JSON.stringify({
+  battleId: "live_sandbox_v0",
+  seed: 1,
+  tickRate: 30,
+  tickLimit: 9000,
+  units: [
+    { unitId: 1, name: "Blue", spawn: { x: 6, y: 12, headingDeg: 0 }, modules: {} },
+    { unitId: 2, name: "Red", spawn: { x: 34, y: 12, headingDeg: 180 }, modules: {} },
+  ],
+  controllers: [],
+});
+
 export async function createPresetDuel(): Promise<KernelBattleRunner> {
-  return createWasmPresetDuel();
+  return createFromJson(DEFAULT_LIVE_BATTLE_CONFIG_JSON);
 }
 
 export async function createFromJson(jsonConfig: string): Promise<KernelBattleRunner> {
-  return createPresetDuelFromWasmFactory(async (wasmOptions) => {
-    const module = await loadWasmFactory()(wasmOptions);
-    const createRuntime = module.cwrap("robolocks_battle_runner_create_from_json", "number", ["string"]);
-    return {
-      ...module,
-      cwrap(name: string, returnType: string | null, argTypes: string[]) {
-        if (name === "robolocks_battle_runner_create_preset_duel") {
-          return () => createRuntime(jsonConfig);
-        }
-        return module.cwrap(name as never, returnType as never, argTypes as never);
-      },
-    } as WasmModule;
-  });
+  return createBattleFromJsonWithWasmFactory(jsonConfig);
 }
 
 export type JsonBotTick = (observation: unknown) => unknown;
@@ -134,18 +133,13 @@ export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
   let wasmModule: WasmModule | undefined;
   let setJsonBotCallback: ((callback: number, releaseCallback: number, userData: number) => void) | undefined;
 
-  const runner = await createPresetDuelFromWasmFactory(async (wasmOptions) => {
+  const runner = await createBattleFromJsonWithWasmFactory(options.battleConfigJson, async (wasmOptions) => {
     const module = await (options.factory ?? loadWasmFactory())(wasmOptions);
     wasmModule = module;
     setJsonBotCallback = module.cwrap(
       "robolocks_battle_runner_set_json_bot_callback",
       null,
       ["number", "number", "number"],
-    );
-    const createFromJsonRuntime = module.cwrap(
-      "robolocks_battle_runner_create_from_json",
-      "number",
-      ["string"],
     );
 
     callbackPointer = module.addFunction((botId: number, observationPointer: number): number => {
@@ -163,15 +157,7 @@ export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
     }, "vii");
     setJsonBotCallback(callbackPointer, releaseCallbackPointer, 0);
 
-    return {
-      ...module,
-      cwrap(name: string, returnType: string | null, argTypes: string[]) {
-        if (name === "robolocks_battle_runner_create_preset_duel") {
-          return () => createFromJsonRuntime(options.battleConfigJson);
-        }
-        return module.cwrap(name as never, returnType as never, argTypes as never);
-      },
-    } as WasmModule;
+    return module;
   });
 
   return {
@@ -199,13 +185,20 @@ export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
 }
 
 export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loadWasmFactory()): Promise<KernelBattleRunner> {
+  return createBattleFromJsonWithWasmFactory(DEFAULT_LIVE_BATTLE_CONFIG_JSON, factory);
+}
+
+export async function createBattleFromJsonWithWasmFactory(
+  jsonConfig: string,
+  factory: WasmFactory = loadWasmFactory(),
+): Promise<KernelBattleRunner> {
   const module = await factory({
     locateFile(path: string): string {
       return `/wasm/${path}`;
     },
   });
 
-  const createRuntime = module.cwrap("robolocks_battle_runner_create_preset_duel", "number", []);
+  const createRuntime = module.cwrap("robolocks_battle_runner_create_from_json", "number", ["string"]);
   const destroyRuntime = module.cwrap("robolocks_battle_runner_destroy", null, ["number"]);
   const stepRuntime = module.cwrap("robolocks_battle_runner_step", null, ["number"]);
   const tick = module.cwrap("robolocks_battle_runner_tick", "number", ["number"]);
@@ -279,7 +272,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
   const actionWidthDeg = module.cwrap("robolocks_battle_runner_action_width", "number", ["number", "number"]);
   const actionHasRange = module.cwrap("robolocks_battle_runner_action_has_range", "number", ["number", "number"]);
   const actionRange = module.cwrap("robolocks_battle_runner_action_range", "number", ["number", "number"]);
-  const handle = createRuntime();
+  const handle = createRuntime(jsonConfig);
 
   return {
     staticObstacles(): StaticObstacleFrame[] {
@@ -401,10 +394,6 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
       },
     };
   }
-}
-
-async function createWasmPresetDuel(): Promise<KernelBattleRunner> {
-  return createPresetDuelFromWasmFactory();
 }
 
 function readEvents(

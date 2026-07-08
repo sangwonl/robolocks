@@ -25,7 +25,6 @@ add_library(robolocks_core
   engine/src/battle_runner.cpp
   engine/src/controller_protocol_json.cpp
   engine/src/json_callback_bot_controller.cpp
-  engine/src/builtin_controllers.cpp
   engine/src/sensor_system.cpp
   engine/src/c_api.cpp
   engine/src/battle_loader.cpp
@@ -139,7 +138,6 @@ if(EMSCRIPTEN)
     _malloc
     _free
     _robolocks_engine_version
-    _robolocks_battle_runner_create_preset_duel
     _robolocks_battle_runner_create_from_json
     _robolocks_battle_runner_set_json_bot_callback
     _robolocks_battle_runner_destroy

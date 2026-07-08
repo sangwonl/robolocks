@@ -19,9 +19,13 @@ test("preset duel keeps both units visible at the end of the run", () => {
   assert.notDeepEqual(frame.units[0].position, frame.units[1].position);
 });
 
-test("wasm preset duel adapter reads unit intents from the C API", async () => {
+test("wasm JSON battle adapter reads unit intents from the C API", async () => {
+  let receivedConfig = "";
   const calls = new Map([
-    ["robolocks_battle_runner_create_preset_duel", () => 99],
+    ["robolocks_battle_runner_create_from_json", (jsonConfig) => {
+      receivedConfig = jsonConfig;
+      return 99;
+    }],
     ["robolocks_battle_runner_destroy", () => undefined],
     ["robolocks_battle_runner_step", () => undefined],
     ["robolocks_battle_runner_tick", () => 7],
@@ -87,6 +91,7 @@ test("wasm preset duel adapter reads unit intents from the C API", async () => {
   const frame = runner.snapshot();
   const obstacles = runner.staticObstacles();
 
+  assert.equal(JSON.parse(receivedConfig).battleId, "live_sandbox_v0");
   assert.equal(frame.tick, 7);
   assert.equal(obstacles[0].id, "north_cover");
   assert.deepEqual(obstacles[0].position, { x: 20, y: 6 });
