@@ -1,15 +1,21 @@
 import { createRoot, type Root } from "react-dom/client";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Pause, Play, RotateCcw, SkipBack, SkipForward } from "lucide-react";
 
 import type { BattleAction, BattleEvent, BattleFrame, UnitFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
 import { DEFAULT_RESEARCH_BOT_SOURCE, runResearchInBrowser, type BotLogEntry } from "../research/research.ts";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion.tsx";
+import { Button } from "../components/ui/button.tsx";
+import { Input } from "../components/ui/input.tsx";
+import { Label } from "../components/ui/label.tsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs.tsx";
 import { BattleSceneThreeView } from "./BattleSceneThreeView.tsx";
 
 const CodeEditor = lazy(() => import("./CodeEditor.tsx").then((module) => ({ default: module.CodeEditor })));
-const MIN_PANEL_WIDTH = 280;
-const MAX_PANEL_WIDTH = 680;
+const MIN_PANEL_WIDTH = 240;
+const MAX_PANEL_WIDTH = 560;
 
 export type RenderAppOptions = {
   defaultReplayUrl?: string | null;
@@ -39,8 +45,8 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const [researchBotSource, setResearchBotSource] = useState(DEFAULT_RESEARCH_BOT_SOURCE);
   const [researchTickCount, setResearchTickCount] = useState(180);
   const [botLogs, setBotLogs] = useState<BotLogEntry[]>([]);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(380);
-  const [rightPanelWidth, setRightPanelWidth] = useState(380);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(320);
+  const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const timerRef = useRef<number | null>(null);
 
   const fetchText = options.fetchText ?? fetchTextFromUrl;
@@ -184,67 +190,64 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
           <h1>Robolocks</h1>
           <span>{workbenchMode === "research" ? "Unit Research" : "Replay Workbench"}</span>
         </div>
-        <div className="mode-switch" role="tablist" aria-label="Workbench mode">
-          <button
-            type="button"
-            className={workbenchMode === "replay" ? "active" : ""}
-            onClick={() => setWorkbenchMode("replay")}
-          >
-            Replay
-          </button>
-          <button
-            type="button"
-            className={workbenchMode === "research" ? "active" : ""}
-            onClick={() => setWorkbenchMode("research")}
-          >
-            Research
-          </button>
-        </div>
-        {workbenchMode === "replay" ? (
-          <label className="file-control">
-            Replay JSON
-            <input
-              type="file"
-              accept="application/json,.json"
-              disabled={isLoading}
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                event.currentTarget.value = "";
-                if (file) {
-                  void loadReplayFile(file);
-                }
-              }}
-            />
-            <ReplaySummary replay={loadedReplay} frame={frame} replayIndex={replayIndex} />
-          </label>
-        ) : (
-          <div className="research-panel">
-            <div className="research-toolbar">
-              <label className="field-control field-control-inline">
-                <span>Ticks</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={900}
-                  value={researchTickCount}
-                  disabled={isLoading}
-                  onChange={(event) => setResearchTickCount(Number(event.currentTarget.value))}
-                />
-              </label>
-              <button type="button" disabled={isLoading} onClick={() => void runResearch()}>
-                Run
-              </button>
-            </div>
-            <Suspense fallback={<div className="code-editor-loading">Loading editor</div>}>
-              <CodeEditor
+        <Tabs
+          value={workbenchMode}
+          onValueChange={(value) => setWorkbenchMode(value as "replay" | "research")}
+          className="workbench-tabs"
+        >
+          <TabsList className="mode-switch" aria-label="Workbench mode">
+            <TabsTrigger value="replay">Replay</TabsTrigger>
+            <TabsTrigger value="research">Research</TabsTrigger>
+          </TabsList>
+          <TabsContent value="replay" className="tab-content">
+            <div className="file-control">
+              <Label htmlFor="replay-file">Replay JSON</Label>
+              <Input
+                id="replay-file"
+                type="file"
+                accept="application/json,.json"
                 disabled={isLoading}
-                onRun={() => void runResearch()}
-                onValueChange={setResearchBotSource}
-                value={researchBotSource}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) {
+                    void loadReplayFile(file);
+                  }
+                }}
               />
-            </Suspense>
-          </div>
-        )}
+              <ReplaySummary replay={loadedReplay} frame={frame} replayIndex={replayIndex} />
+            </div>
+          </TabsContent>
+          <TabsContent value="research" className="tab-content research-tab">
+            <div className="research-panel">
+              <div className="research-toolbar">
+                <div className="field-control field-control-inline">
+                  <Label htmlFor="research-ticks">Ticks</Label>
+                  <Input
+                    id="research-ticks"
+                    type="number"
+                    min={1}
+                    max={900}
+                    value={researchTickCount}
+                    disabled={isLoading}
+                    onChange={(event) => setResearchTickCount(Number(event.currentTarget.value))}
+                  />
+                </div>
+                <Button type="button" disabled={isLoading} onClick={() => void runResearch()}>
+                  Run
+                </Button>
+              </div>
+              <Suspense fallback={<div className="code-editor-loading">Loading editor</div>}>
+                <CodeEditor
+                  disabled={isLoading}
+                  onRun={() => void runResearch()}
+                  onValueChange={setResearchBotSource}
+                  value={researchBotSource}
+                />
+              </Suspense>
+            </div>
+          </TabsContent>
+        </Tabs>
         <div className="status">{statusText}</div>
       </aside>
       <PanelResizeHandle side="left" onResizeStart={(pointerX) => beginPanelResize("left", pointerX)} />
@@ -276,16 +279,20 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
           <h1>Bot State</h1>
           <span>{frame ? `tick ${frame.tick}` : "No Frame"}</span>
         </div>
-        <div className="state-panel-sections">
-          <details className="state-section state-section-units" open>
-            <summary>Units</summary>
-            <Inspector frame={frame} />
-          </details>
-          <details className="state-section state-section-console" open>
-            <summary>Console</summary>
-            <BotConsole logs={botLogs} currentTick={frame?.tick ?? 0} />
-          </details>
-        </div>
+        <Accordion type="multiple" defaultValue={["units"]} className="state-panel-sections">
+          <AccordionItem value="units" className="state-section state-section-units">
+            <AccordionTrigger className="state-section-trigger">Units</AccordionTrigger>
+            <AccordionContent className="state-section-content">
+              <Inspector frame={frame} />
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="console" className="state-section state-section-console">
+            <AccordionTrigger className="state-section-trigger">Console</AccordionTrigger>
+            <AccordionContent className="state-section-content">
+              <BotConsole logs={botLogs} currentTick={frame?.tick ?? 0} />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </aside>
     </section>
   );
@@ -305,18 +312,15 @@ function Inspector({ frame }: { frame: BattleFrame | null }) {
   }
   return (
     <div className="inspector">
-      <div className="debug-block">
-        <div className="debug-title">Units</div>
-        <div className="unit-stack">
-          {frame.units.map((unit) => (
-            <UnitCard
-              key={unit.unitId}
-              unit={unit}
-              actions={frame.actions.filter((action) => action.unitId === unit.unitId)}
-              events={frame.events.filter((event) => event.unitId === unit.unitId)}
-            />
-          ))}
-        </div>
+      <div className="unit-stack">
+        {frame.units.map((unit) => (
+          <UnitCard
+            key={unit.unitId}
+            unit={unit}
+            actions={frame.actions.filter((action) => action.unitId === unit.unitId)}
+            events={frame.events.filter((event) => event.unitId === unit.unitId)}
+          />
+        ))}
       </div>
     </div>
   );
@@ -416,10 +420,50 @@ function PlaybackControls({
   return (
     <div className="playback" aria-label="Replay playback controls">
       <div className="playback-buttons">
-        <button type="button" disabled={frameCount === 0 || currentIndex === 0} onClick={onReset}>Reset</button>
-        <button type="button" disabled={!canStepBackward} onClick={onPrev}>Prev</button>
-        <button type="button" disabled={!canPlay} onClick={onPlayPause}>{isPlaying ? "Pause" : "Play"}</button>
-        <button type="button" disabled={!canStepForward} onClick={onNext}>Next</button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          disabled={frameCount === 0 || currentIndex === 0}
+          aria-label="Reset replay"
+          title="Reset"
+          onClick={onReset}
+        >
+          <RotateCcw aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          disabled={!canStepBackward}
+          aria-label="Previous frame"
+          title="Previous frame"
+          onClick={onPrev}
+        >
+          <SkipBack aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="default"
+          size="icon"
+          disabled={!canPlay}
+          aria-label={isPlaying ? "Pause replay" : "Play replay"}
+          title={isPlaying ? "Pause" : "Play"}
+          onClick={onPlayPause}
+        >
+          {isPlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          disabled={!canStepForward}
+          aria-label="Next frame"
+          title="Next frame"
+          onClick={onNext}
+        >
+          <SkipForward aria-hidden="true" />
+        </Button>
       </div>
       <label className="playback-progress">
         <span>{frameCount > 0 ? `${currentIndex + 1}/${frameCount}` : "0/0"}</span>
@@ -438,26 +482,32 @@ function PlaybackControls({
 
 function UnitCard({ unit, actions, events }: { unit: UnitFrame; actions: BattleAction[]; events: BattleEvent[] }) {
   return (
-    <details className="unit-card" data-side={unit.name.toLowerCase()}>
-      <summary className="unit-card-head">
-        <strong>{unit.name}</strong>
-        <span>unit {unit.unitId}</span>
-      </summary>
-      <div className="unit-card-body">
-        <dl className="unit-stats">
-          <Stat label="Position" value={`${unit.position.x.toFixed(2)}, ${unit.position.y.toFixed(2)}`} />
-          <Stat label="Hull" value={`${unit.hullHeadingDegrees.toFixed(1)} deg`} />
-          <Stat label="Turret" value={`${unit.turretHeadingDegrees.toFixed(1)} deg`} />
-          <Stat label="Shape" value={shapeLabel(unit.bodyShape)} />
-          <Stat label="Armor" value={unit.armorIntegrity.toFixed(0)} />
-          <Stat label="Reload" value={`${unit.weaponCooldownTicks} ticks`} />
-        </dl>
-        <UnitSection title="Modules" items={moduleItems(unit)} />
-        <UnitSection title="Intents" items={intentItems(unit)} />
-        <UnitSection title="Actions" items={actionItems(actions)} />
-        <UnitSection title="Events" items={eventItems(events)} />
-      </div>
-    </details>
+    <Accordion type="single" collapsible className="unit-card" data-side={unit.name.toLowerCase()}>
+      <AccordionItem value="unit" className="unit-card-item">
+        <AccordionTrigger className="unit-card-head">
+          <span className="unit-card-title">
+            <strong>{unit.name}</strong>
+            <span>unit {unit.unitId}</span>
+          </span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="unit-card-body">
+            <dl className="unit-stats">
+              <Stat label="Position" value={`${unit.position.x.toFixed(2)}, ${unit.position.y.toFixed(2)}`} />
+              <Stat label="Hull" value={`${unit.hullHeadingDegrees.toFixed(1)} deg`} />
+              <Stat label="Turret" value={`${unit.turretHeadingDegrees.toFixed(1)} deg`} />
+              <Stat label="Shape" value={shapeLabel(unit.bodyShape)} />
+              <Stat label="Armor" value={unit.armorIntegrity.toFixed(0)} />
+              <Stat label="Reload" value={`${unit.weaponCooldownTicks} ticks`} />
+            </dl>
+            <UnitSection title="Modules" items={moduleItems(unit)} />
+            <UnitSection title="Intents" items={intentItems(unit)} />
+            <UnitSection title="Actions" items={actionItems(actions)} />
+            <UnitSection title="Events" items={eventItems(events)} />
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 }
 
