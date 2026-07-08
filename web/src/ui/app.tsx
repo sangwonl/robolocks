@@ -15,7 +15,7 @@ import { BattleSceneThreeView } from "./BattleSceneThreeView.tsx";
 
 const CodeEditor = lazy(() => import("./CodeEditor.tsx").then((module) => ({ default: module.CodeEditor })));
 const MIN_PANEL_WIDTH = 240;
-const MAX_PANEL_WIDTH = 560;
+const MAX_PANEL_WIDTH = 640;
 
 export type RenderAppOptions = {
   defaultReplayUrl?: string | null;
@@ -41,11 +41,11 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const [status, setStatus] = useState("Ready");
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [workbenchMode, setWorkbenchMode] = useState<"replay" | "research">("replay");
+  const [workbenchMode, setWorkbenchMode] = useState<"replay" | "research">("research");
   const [researchBotSource, setResearchBotSource] = useState(DEFAULT_RESEARCH_BOT_SOURCE);
   const [researchTickCount, setResearchTickCount] = useState(180);
   const [botLogs, setBotLogs] = useState<BotLogEntry[]>([]);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(320);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(MAX_PANEL_WIDTH);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const timerRef = useRef<number | null>(null);
 
@@ -196,8 +196,8 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
           className="workbench-tabs"
         >
           <TabsList className="mode-switch" aria-label="Workbench mode">
-            <TabsTrigger value="replay">Replay</TabsTrigger>
             <TabsTrigger value="research">Research</TabsTrigger>
+            <TabsTrigger value="replay">Replay</TabsTrigger>
           </TabsList>
           <TabsContent value="replay" className="tab-content">
             <div className="file-control">
@@ -612,8 +612,8 @@ function actionTarget(action: BattleAction): string {
   if (typeof action.minHitChance === "number") {
     return ` p>=${action.minHitChance.toFixed(2)}`;
   }
-  if (typeof action.centerDegrees === "number" && typeof action.widthDegrees === "number") {
-    return ` ${action.centerDegrees.toFixed(0)}deg/${action.widthDegrees.toFixed(0)}deg`;
+  if (typeof action.directionDegrees === "number" && typeof action.widthDegrees === "number") {
+    return ` ${action.directionDegrees.toFixed(0)}deg/${action.widthDegrees.toFixed(0)}deg`;
   }
   return "";
 }

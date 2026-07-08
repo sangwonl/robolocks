@@ -26,9 +26,9 @@ add_library(robolocks_core
   engine/src/controller_protocol_json.cpp
   engine/src/json_callback_bot_controller.cpp
   engine/src/builtin_controllers.cpp
-  engine/src/presets.cpp
   engine/src/sensor_system.cpp
   engine/src/c_api.cpp
+  engine/src/battle_loader.cpp
 )
 
 target_include_directories(robolocks_core
@@ -50,7 +50,6 @@ if(NOT EMSCRIPTEN)
   enable_testing()
 
   add_library(robolocks_native_io
-    engine/src/battle_loader.cpp
     engine/src/controller_factory.cpp
     engine/src/python_bot_controller.cpp
   )
@@ -108,7 +107,7 @@ if(NOT EMSCRIPTEN)
 
   add_test(
     NAME "cli runs preset duel through battle runner"
-    COMMAND robolocks_cli run --preset preset_duel_v0 --ticks 3
+    COMMAND robolocks_cli run --battle ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/matches/preset_duel_v0.json --ticks 3
   )
   add_test(
     NAME "cli runs fixture battle through battle runner"
@@ -122,6 +121,7 @@ if(NOT EMSCRIPTEN)
     NAME "cli streams preset duel frames as JSONL"
     COMMAND ${CMAKE_COMMAND}
       -DROBOLOCKS_CLI=$<TARGET_FILE:robolocks_cli>
+      -DROBOLOCKS_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/engine/tests/cli_stream_test.cmake
   )
   add_test(
@@ -141,46 +141,47 @@ if(EMSCRIPTEN)
     _robolocks_engine_version
     _robolocks_battle_runner_create_preset_duel
     _robolocks_battle_runner_create_research_duel_with_json_bot
+    _robolocks_battle_runner_create_from_json
     _robolocks_battle_runner_set_json_bot_callback
     _robolocks_battle_runner_destroy
     _robolocks_battle_runner_step
-    _robolocks_battle_runner_run_ticks
+    _robolocks_battle_runner_run
     _robolocks_battle_runner_tick
     _robolocks_battle_runner_unit_count
     _robolocks_battle_runner_unit_id
     _robolocks_battle_runner_unit_x
     _robolocks_battle_runner_unit_y
-    _robolocks_battle_runner_unit_hull_heading_deg
-    _robolocks_battle_runner_unit_turret_heading_deg
+    _robolocks_battle_runner_unit_hull_heading
+    _robolocks_battle_runner_unit_turret_heading
     _robolocks_battle_runner_unit_armor
-    _robolocks_battle_runner_unit_weapon_cooldown_ticks
+    _robolocks_battle_runner_unit_weapon_cooldown
     _robolocks_battle_runner_unit_body_shape_type
-    _robolocks_battle_runner_unit_body_radius_m
-    _robolocks_battle_runner_unit_body_length_m
-    _robolocks_battle_runner_unit_body_width_m
+    _robolocks_battle_runner_unit_body_radius
+    _robolocks_battle_runner_unit_body_length
+    _robolocks_battle_runner_unit_body_width
     _robolocks_battle_runner_unit_mobility_intent_active
     _robolocks_battle_runner_unit_mobility_intent_target_x
     _robolocks_battle_runner_unit_mobility_intent_target_y
-    _robolocks_battle_runner_unit_mobility_intent_remaining_m
-    _robolocks_battle_runner_unit_mobility_intent_age_ticks
+    _robolocks_battle_runner_unit_mobility_intent_remaining
+    _robolocks_battle_runner_unit_mobility_intent_age
     _robolocks_battle_runner_unit_turret_intent_active
     _robolocks_battle_runner_unit_turret_intent_target_x
     _robolocks_battle_runner_unit_turret_intent_target_y
-    _robolocks_battle_runner_unit_turret_intent_error_deg
-    _robolocks_battle_runner_unit_turret_intent_age_ticks
+    _robolocks_battle_runner_unit_turret_intent_error
+    _robolocks_battle_runner_unit_turret_intent_age
     _robolocks_battle_runner_unit_hull_intent_active
     _robolocks_battle_runner_unit_hull_intent_target_x
     _robolocks_battle_runner_unit_hull_intent_target_y
-    _robolocks_battle_runner_unit_hull_intent_error_deg
-    _robolocks_battle_runner_unit_hull_intent_age_ticks
+    _robolocks_battle_runner_unit_hull_intent_error
+    _robolocks_battle_runner_unit_hull_intent_age
     _robolocks_battle_runner_unit_weapon_intent_active
     _robolocks_battle_runner_unit_weapon_intent_min_hit_chance
-    _robolocks_battle_runner_unit_weapon_intent_age_ticks
+    _robolocks_battle_runner_unit_weapon_intent_age
     _robolocks_battle_runner_obstacle_count
     _robolocks_battle_runner_obstacle_id
     _robolocks_battle_runner_obstacle_x
     _robolocks_battle_runner_obstacle_y
-    _robolocks_battle_runner_obstacle_radius_m
+    _robolocks_battle_runner_obstacle_radius
     _robolocks_battle_runner_obstacle_blocks_movement
     _robolocks_battle_runner_obstacle_blocks_line_of_sight
     _robolocks_battle_runner_event_count
@@ -195,9 +196,9 @@ if(EMSCRIPTEN)
     _robolocks_battle_runner_projectile_previous_y
     _robolocks_battle_runner_projectile_x
     _robolocks_battle_runner_projectile_y
-    _robolocks_battle_runner_projectile_radius_m
-    _robolocks_battle_runner_projectile_previous_height_m
-    _robolocks_battle_runner_projectile_height_m
+    _robolocks_battle_runner_projectile_radius
+    _robolocks_battle_runner_projectile_previous_height
+    _robolocks_battle_runner_projectile_height
     _robolocks_battle_runner_action_count
     _robolocks_battle_runner_action_unit_id
     _robolocks_battle_runner_action_type
@@ -211,8 +212,10 @@ if(EMSCRIPTEN)
     _robolocks_battle_runner_action_has_min_hit_chance
     _robolocks_battle_runner_action_min_hit_chance
     _robolocks_battle_runner_action_has_scan_arc
-    _robolocks_battle_runner_action_center_deg
-    _robolocks_battle_runner_action_width_deg
+    _robolocks_battle_runner_action_direction
+    _robolocks_battle_runner_action_width
+    _robolocks_battle_runner_action_has_range
+    _robolocks_battle_runner_action_range
   )
   list(JOIN ROBOLOCKS_WASM_EXPORTED_FUNCTIONS "','" ROBOLOCKS_WASM_EXPORTED_FUNCTIONS_JOINED)
 

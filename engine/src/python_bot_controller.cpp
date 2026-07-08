@@ -93,6 +93,13 @@ OrderList PythonBotController::on_tick(const Observation& observation) {
   return orders_from_json(nlohmann::json::parse(response));
 }
 
+void PythonBotController::on_start(const UnitSpec& spec) {
+  write_line(nlohmann::json{
+    {"type", "start"},
+    {"spec", unit_spec_to_json(spec)},
+  }.dump());
+}
+
 void PythonBotController::start() {
 #ifdef _WIN32
   throw std::runtime_error("PythonBotController is not implemented on Windows yet");

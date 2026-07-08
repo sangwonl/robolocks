@@ -16,6 +16,7 @@ type WasmModule = {
   removeFunction(pointer: number): void;
   cwrap(name: "robolocks_battle_runner_create_preset_duel", returnType: "number", argTypes: []): () => number;
   cwrap(name: "robolocks_battle_runner_create_research_duel_with_json_bot", returnType: "number", argTypes: ["number"]): (botId: number) => number;
+  cwrap(name: "robolocks_battle_runner_create_from_json", returnType: "number", argTypes: ["string"]): (jsonConfig: string) => number;
   cwrap(name: "robolocks_battle_runner_set_json_bot_callback", returnType: null, argTypes: ["number", "number", "number"]): (callback: number, releaseCallback: number, userData: number) => void;
   cwrap(name: "robolocks_battle_runner_destroy", returnType: null, argTypes: ["number"]): (handle: number) => void;
   cwrap(name: "robolocks_battle_runner_step", returnType: null, argTypes: ["number"]): (handle: number) => void;
@@ -24,37 +25,37 @@ type WasmModule = {
   cwrap(name: "robolocks_battle_runner_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_hull_heading_deg", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_turret_heading_deg", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_hull_heading", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_turret_heading", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_armor", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_weapon_cooldown_ticks", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_weapon_cooldown", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_body_shape_type", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_body_radius_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_body_length_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_body_width_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_body_radius", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_body_length", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_body_width", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_mobility_intent_active", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_mobility_intent_target_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_mobility_intent_target_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_mobility_intent_remaining_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_mobility_intent_age_ticks", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_mobility_intent_remaining", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_mobility_intent_age", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_turret_intent_active", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_turret_intent_target_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_turret_intent_target_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_turret_intent_error_deg", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_turret_intent_age_ticks", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_turret_intent_error", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_turret_intent_age", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_hull_intent_active", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_hull_intent_target_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_hull_intent_target_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_hull_intent_error_deg", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_hull_intent_age_ticks", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_hull_intent_error", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_hull_intent_age", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_weapon_intent_active", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_unit_weapon_intent_min_hit_chance", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_unit_weapon_intent_age_ticks", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_unit_weapon_intent_age", returnType: "number", argTypes: ["number", "number"]): (handle: number, unitIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_obstacle_count", returnType: "number", argTypes: ["number"]): (handle: number) => number;
   cwrap(name: "robolocks_battle_runner_obstacle_id", returnType: "string", argTypes: ["number", "number"]): (handle: number, obstacleIndex: number) => string;
   cwrap(name: "robolocks_battle_runner_obstacle_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, obstacleIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_obstacle_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, obstacleIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_obstacle_radius_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, obstacleIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_obstacle_radius", returnType: "number", argTypes: ["number", "number"]): (handle: number, obstacleIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_obstacle_blocks_movement", returnType: "number", argTypes: ["number", "number"]): (handle: number, obstacleIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_obstacle_blocks_line_of_sight", returnType: "number", argTypes: ["number", "number"]): (handle: number, obstacleIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_event_count", returnType: "number", argTypes: ["number"]): (handle: number) => number;
@@ -69,9 +70,9 @@ type WasmModule = {
   cwrap(name: "robolocks_battle_runner_projectile_previous_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_projectile_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_projectile_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_projectile_radius_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_projectile_previous_height_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_projectile_height_m", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_projectile_radius", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_projectile_previous_height", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_projectile_height", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_count", returnType: "number", argTypes: ["number"]): (handle: number) => number;
   cwrap(name: "robolocks_battle_runner_action_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_type", returnType: "string", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => string;
@@ -85,8 +86,10 @@ type WasmModule = {
   cwrap(name: "robolocks_battle_runner_action_has_min_hit_chance", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_min_hit_chance", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_has_scan_arc", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_action_center_deg", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
-  cwrap(name: "robolocks_battle_runner_action_width_deg", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_action_center", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_action_width", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_action_has_range", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_action_range", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
 };
 
 type WasmFactory = (options: { locateFile(path: string): string }) => Promise<WasmModule>;
@@ -100,6 +103,22 @@ export type KernelBattleRunner = {
 
 export async function createPresetDuel(): Promise<KernelBattleRunner> {
   return createWasmPresetDuel();
+}
+
+export async function createFromJson(jsonConfig: string): Promise<KernelBattleRunner> {
+  return createPresetDuelFromWasmFactory(async (wasmOptions) => {
+    const module = await loadWasmFactory()(wasmOptions);
+    const createRuntime = module.cwrap("robolocks_battle_runner_create_from_json", "number", ["string"]);
+    return {
+      ...module,
+      cwrap(name: string, returnType: string | null, argTypes: string[]) {
+        if (name === "robolocks_battle_runner_create_preset_duel") {
+          return () => createRuntime(jsonConfig);
+        }
+        return module.cwrap(name as never, returnType as never, argTypes as never);
+      },
+    } as WasmModule;
+  });
 }
 
 export type JsonBotTick = (observation: unknown) => unknown;
@@ -193,37 +212,37 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
   const unitId = module.cwrap("robolocks_battle_runner_unit_id", "number", ["number", "number"]);
   const unitX = module.cwrap("robolocks_battle_runner_unit_x", "number", ["number", "number"]);
   const unitY = module.cwrap("robolocks_battle_runner_unit_y", "number", ["number", "number"]);
-  const hullHeading = module.cwrap("robolocks_battle_runner_unit_hull_heading_deg", "number", ["number", "number"]);
-  const turretHeading = module.cwrap("robolocks_battle_runner_unit_turret_heading_deg", "number", ["number", "number"]);
+  const hullHeading = module.cwrap("robolocks_battle_runner_unit_hull_heading", "number", ["number", "number"]);
+  const turretHeading = module.cwrap("robolocks_battle_runner_unit_turret_heading", "number", ["number", "number"]);
   const unitArmor = module.cwrap("robolocks_battle_runner_unit_armor", "number", ["number", "number"]);
-  const weaponCooldown = module.cwrap("robolocks_battle_runner_unit_weapon_cooldown_ticks", "number", ["number", "number"]);
+  const weaponCooldown = module.cwrap("robolocks_battle_runner_unit_weapon_cooldown", "number", ["number", "number"]);
   const bodyShapeType = module.cwrap("robolocks_battle_runner_unit_body_shape_type", "number", ["number", "number"]);
-  const bodyRadius = module.cwrap("robolocks_battle_runner_unit_body_radius_m", "number", ["number", "number"]);
-  const bodyLength = module.cwrap("robolocks_battle_runner_unit_body_length_m", "number", ["number", "number"]);
-  const bodyWidth = module.cwrap("robolocks_battle_runner_unit_body_width_m", "number", ["number", "number"]);
+  const bodyRadius = module.cwrap("robolocks_battle_runner_unit_body_radius", "number", ["number", "number"]);
+  const bodyLength = module.cwrap("robolocks_battle_runner_unit_body_length", "number", ["number", "number"]);
+  const bodyWidth = module.cwrap("robolocks_battle_runner_unit_body_width", "number", ["number", "number"]);
   const mobilityIntentActive = module.cwrap("robolocks_battle_runner_unit_mobility_intent_active", "number", ["number", "number"]);
   const mobilityIntentTargetX = module.cwrap("robolocks_battle_runner_unit_mobility_intent_target_x", "number", ["number", "number"]);
   const mobilityIntentTargetY = module.cwrap("robolocks_battle_runner_unit_mobility_intent_target_y", "number", ["number", "number"]);
-  const mobilityIntentRemaining = module.cwrap("robolocks_battle_runner_unit_mobility_intent_remaining_m", "number", ["number", "number"]);
-  const mobilityIntentAge = module.cwrap("robolocks_battle_runner_unit_mobility_intent_age_ticks", "number", ["number", "number"]);
+  const mobilityIntentRemaining = module.cwrap("robolocks_battle_runner_unit_mobility_intent_remaining", "number", ["number", "number"]);
+  const mobilityIntentAge = module.cwrap("robolocks_battle_runner_unit_mobility_intent_age", "number", ["number", "number"]);
   const turretIntentActive = module.cwrap("robolocks_battle_runner_unit_turret_intent_active", "number", ["number", "number"]);
   const turretIntentTargetX = module.cwrap("robolocks_battle_runner_unit_turret_intent_target_x", "number", ["number", "number"]);
   const turretIntentTargetY = module.cwrap("robolocks_battle_runner_unit_turret_intent_target_y", "number", ["number", "number"]);
-  const turretIntentError = module.cwrap("robolocks_battle_runner_unit_turret_intent_error_deg", "number", ["number", "number"]);
-  const turretIntentAge = module.cwrap("robolocks_battle_runner_unit_turret_intent_age_ticks", "number", ["number", "number"]);
+  const turretIntentError = module.cwrap("robolocks_battle_runner_unit_turret_intent_error", "number", ["number", "number"]);
+  const turretIntentAge = module.cwrap("robolocks_battle_runner_unit_turret_intent_age", "number", ["number", "number"]);
   const hullIntentActive = module.cwrap("robolocks_battle_runner_unit_hull_intent_active", "number", ["number", "number"]);
   const hullIntentTargetX = module.cwrap("robolocks_battle_runner_unit_hull_intent_target_x", "number", ["number", "number"]);
   const hullIntentTargetY = module.cwrap("robolocks_battle_runner_unit_hull_intent_target_y", "number", ["number", "number"]);
-  const hullIntentError = module.cwrap("robolocks_battle_runner_unit_hull_intent_error_deg", "number", ["number", "number"]);
-  const hullIntentAge = module.cwrap("robolocks_battle_runner_unit_hull_intent_age_ticks", "number", ["number", "number"]);
+  const hullIntentError = module.cwrap("robolocks_battle_runner_unit_hull_intent_error", "number", ["number", "number"]);
+  const hullIntentAge = module.cwrap("robolocks_battle_runner_unit_hull_intent_age", "number", ["number", "number"]);
   const weaponIntentActive = module.cwrap("robolocks_battle_runner_unit_weapon_intent_active", "number", ["number", "number"]);
   const weaponIntentMinHitChance = module.cwrap("robolocks_battle_runner_unit_weapon_intent_min_hit_chance", "number", ["number", "number"]);
-  const weaponIntentAge = module.cwrap("robolocks_battle_runner_unit_weapon_intent_age_ticks", "number", ["number", "number"]);
+  const weaponIntentAge = module.cwrap("robolocks_battle_runner_unit_weapon_intent_age", "number", ["number", "number"]);
   const obstacleCount = module.cwrap("robolocks_battle_runner_obstacle_count", "number", ["number"]);
   const obstacleId = module.cwrap("robolocks_battle_runner_obstacle_id", "string", ["number", "number"]);
   const obstacleX = module.cwrap("robolocks_battle_runner_obstacle_x", "number", ["number", "number"]);
   const obstacleY = module.cwrap("robolocks_battle_runner_obstacle_y", "number", ["number", "number"]);
-  const obstacleRadius = module.cwrap("robolocks_battle_runner_obstacle_radius_m", "number", ["number", "number"]);
+  const obstacleRadius = module.cwrap("robolocks_battle_runner_obstacle_radius", "number", ["number", "number"]);
   const obstacleBlocksMovement = module.cwrap("robolocks_battle_runner_obstacle_blocks_movement", "number", ["number", "number"]);
   const obstacleBlocksLineOfSight = module.cwrap("robolocks_battle_runner_obstacle_blocks_line_of_sight", "number", ["number", "number"]);
   const eventCount = module.cwrap("robolocks_battle_runner_event_count", "number", ["number"]);
@@ -238,9 +257,9 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
   const projectilePreviousY = module.cwrap("robolocks_battle_runner_projectile_previous_y", "number", ["number", "number"]);
   const projectileX = module.cwrap("robolocks_battle_runner_projectile_x", "number", ["number", "number"]);
   const projectileY = module.cwrap("robolocks_battle_runner_projectile_y", "number", ["number", "number"]);
-  const projectileRadius = module.cwrap("robolocks_battle_runner_projectile_radius_m", "number", ["number", "number"]);
-  const projectilePreviousHeight = module.cwrap("robolocks_battle_runner_projectile_previous_height_m", "number", ["number", "number"]);
-  const projectileHeight = module.cwrap("robolocks_battle_runner_projectile_height_m", "number", ["number", "number"]);
+  const projectileRadius = module.cwrap("robolocks_battle_runner_projectile_radius", "number", ["number", "number"]);
+  const projectilePreviousHeight = module.cwrap("robolocks_battle_runner_projectile_previous_height", "number", ["number", "number"]);
+  const projectileHeight = module.cwrap("robolocks_battle_runner_projectile_height", "number", ["number", "number"]);
   const actionCount = module.cwrap("robolocks_battle_runner_action_count", "number", ["number"]);
   const actionUnitId = module.cwrap("robolocks_battle_runner_action_unit_id", "number", ["number", "number"]);
   const actionType = module.cwrap("robolocks_battle_runner_action_type", "string", ["number", "number"]);
@@ -254,8 +273,10 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
   const actionHasMinHitChance = module.cwrap("robolocks_battle_runner_action_has_min_hit_chance", "number", ["number", "number"]);
   const actionMinHitChance = module.cwrap("robolocks_battle_runner_action_min_hit_chance", "number", ["number", "number"]);
   const actionHasScanArc = module.cwrap("robolocks_battle_runner_action_has_scan_arc", "number", ["number", "number"]);
-  const actionCenterDeg = module.cwrap("robolocks_battle_runner_action_center_deg", "number", ["number", "number"]);
-  const actionWidthDeg = module.cwrap("robolocks_battle_runner_action_width_deg", "number", ["number", "number"]);
+  const actionCenterDeg = module.cwrap("robolocks_battle_runner_action_center", "number", ["number", "number"]);
+  const actionWidthDeg = module.cwrap("robolocks_battle_runner_action_width", "number", ["number", "number"]);
+  const actionHasRange = module.cwrap("robolocks_battle_runner_action_has_range", "number", ["number", "number"]);
+  const actionRange = module.cwrap("robolocks_battle_runner_action_range", "number", ["number", "number"]);
   const handle = createRuntime();
 
   return {
@@ -336,6 +357,8 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
         actionHasScanArc,
         actionCenterDeg,
         actionWidthDeg,
+        actionHasRange,
+        actionRange,
       ),
     };
   }
@@ -462,6 +485,8 @@ function readActions(
   actionHasScanArc: (handle: number, actionIndex: number) => number,
   actionCenterDeg: (handle: number, actionIndex: number) => number,
   actionWidthDeg: (handle: number, actionIndex: number) => number,
+  actionHasRange: (handle: number, actionIndex: number) => number,
+  actionRange: (handle: number, actionIndex: number) => number,
 ): BattleAction[] {
   const actions: BattleAction[] = [];
   for (let i = 0; i < actionCount(handle); i += 1) {
@@ -480,8 +505,11 @@ function readActions(
       action.minHitChance = actionMinHitChance(handle, i);
     }
     if (actionHasScanArc(handle, i) !== 0) {
-      action.centerDegrees = actionCenterDeg(handle, i);
+      action.directionDegrees = actionCenterDeg(handle, i);
       action.widthDegrees = actionWidthDeg(handle, i);
+      if (actionHasRange(handle, i) !== 0) {
+        action.rangeMeters = actionRange(handle, i);
+      }
     }
     actions.push(action);
   }

@@ -13,6 +13,7 @@ class Order(Protocol):
 
 @dataclass(frozen=True)
 class MoveTo:
+    """Move unit to a target position. Position in meters."""
     position: VecLike
 
     def to_json(self) -> dict:
@@ -21,6 +22,7 @@ class MoveTo:
 
 @dataclass(frozen=True)
 class AimAt:
+    """Aim turret at a target position."""
     target: VecLike
 
     def to_json(self) -> dict:
@@ -29,6 +31,7 @@ class AimAt:
 
 @dataclass(frozen=True)
 class FaceArmorToward:
+    """Turn hull to face armor toward a target position."""
     target: VecLike
 
     def to_json(self) -> dict:
@@ -37,6 +40,7 @@ class FaceArmorToward:
 
 @dataclass(frozen=True)
 class FireIfSolution:
+    """Request weapon fire if a firing solution with the given minimum hit chance exists."""
     min_hit_chance: float
 
     def to_json(self) -> dict:
@@ -45,15 +49,23 @@ class FireIfSolution:
 
 @dataclass(frozen=True)
 class ScanArc:
-    center: float
-    width_deg: float
+    """Direct the sensor to scan an arc.
+
+    Units: direction (degrees), width (degrees), range (meters, 0 = sensor max)
+    """
+    direction: float
+    width: float
+    range: float = 0.0
 
     def to_json(self) -> dict:
-        return {
+        result = {
             "type": "scanArc",
-            "centerDegrees": float(self.center),
-            "widthDegrees": float(self.width_deg),
+            "directionDegrees": float(self.direction),
+            "widthDegrees": float(self.width),
         }
+        if self.range > 0.0:
+            result["rangeMeters"] = float(self.range)
+        return result
 
 
 OrderLike = Union[MoveTo, AimAt, FaceArmorToward, FireIfSolution, ScanArc, dict]

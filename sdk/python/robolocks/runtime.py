@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from .orders import OrderLike
+from .spec import UnitSpec
 from .state import BattleState
 
 OnTick = Callable[[BattleState], Iterable[OrderLike]]
@@ -17,11 +18,19 @@ def run_bot(
     on_start: LifecycleHook | None = None,
     on_end: LifecycleHook | None = None,
 ) -> None:
-    if on_start is not None:
-        on_start(None)
+    started = False
 
     for line in sys.stdin:
-        state = BattleState.from_json(json.loads(line))
+        payload = json.loads(line)
+        if payload.get("type") == "start":
+            if on_start is not None:
+                on_start(UnitSpec.from_json(payload["spec"]))
+            started = True
+            continue
+        if on_start is not None and not started:
+            on_start(None)
+            started = True
+        state = BattleState.from_json(payload)
         orders = list(on_tick(state))
         print(json.dumps({"orders": [_order_to_json(order) for order in orders]}), flush=True)
 

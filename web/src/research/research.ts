@@ -12,9 +12,13 @@ export const DEFAULT_RESEARCH_BOT_SOURCE = `from robolocks import (
     run_bot,
 )
 
+SENSOR_FOV_DEG = 160.0
+
 
 def on_start(spec) -> None:
-    pass
+    global SENSOR_FOV_DEG
+    if spec is not None:
+        SENSOR_FOV_DEG = spec.modules.sensor.fov
 
 
 def on_tick(state: BattleState) -> list[OrderLike]:
@@ -31,7 +35,7 @@ def on_tick(state: BattleState) -> list[OrderLike]:
 
     return [
         MoveTo(state.map.center),
-        ScanArc(center=own.hull_heading_deg, width_deg=160),
+        ScanArc(direction=own.hull_heading, width=SENSOR_FOV_DEG),
     ]
 
 
@@ -254,13 +258,15 @@ const PYTHON_SDK_FILES: Record<string, string> = {
   "robolocks/__init__.py": `from .geometry import Vec2, distance
 from .orders import AimAt, FaceArmorToward, FireIfSolution, MoveTo, Order, OrderLike, OrderList, ScanArc
 from .runtime import LifecycleHook, OnTick, run_bot
+from .spec import ArmorSpec, BodyShapeSpec, BodySpec, MobilitySpec, SensorSpec, TurretSpec, UnitModulesSpec, UnitSpec, Vec3, WeaponSpec
 from .state import BattleMap, BattleState, ContactSet, IntentState, UnitState, WeaponIntentState
 
 __all__ = [
     "AimAt", "BattleMap", "BattleState", "ContactSet", "FaceArmorToward",
     "FireIfSolution", "IntentState", "LifecycleHook", "MoveTo", "OnTick",
-    "Order", "OrderLike", "OrderList", "ScanArc", "UnitState", "Vec2",
-    "WeaponIntentState", "distance", "run_bot",
+    "Order", "OrderLike", "OrderList", "ScanArc", "ArmorSpec", "BodyShapeSpec", "BodySpec",
+    "MobilitySpec", "SensorSpec", "TurretSpec", "UnitModulesSpec", "UnitSpec",
+    "UnitState", "Vec2", "Vec3", "WeaponSpec", "WeaponIntentState", "distance", "run_bot",
 ]
 `,
   "robolocks/geometry.py": `from __future__ import annotations
@@ -351,15 +357,224 @@ class FireIfSolution:
 
 @dataclass(frozen=True)
 class ScanArc:
-    center: float
-    width_deg: float
+    direction: float
+    width: float
+    range: float = 0.0
 
     def to_json(self) -> dict:
-        return {"type": "scanArc", "centerDegrees": float(self.center), "widthDegrees": float(self.width_deg)}
+        result = {"type": "scanArc", "directionDegrees": float(self.direction), "widthDegrees": float(self.width)}
+        if self.range > 0.0:
+            result["rangeMeters"] = float(self.range)
+        return result
 
 
 OrderLike = Union[MoveTo, AimAt, FaceArmorToward, FireIfSolution, ScanArc, dict]
 OrderList = list[OrderLike]
+`,
+  "robolocks/spec.py": `from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Mapping
+
+from .geometry import Vec2
+
+
+@dataclass(frozen=True)
+class Vec3:
+    x: float
+    y: float
+    z: float
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "Vec3":
+        data = data or {}
+        return cls(
+            x=float(data.get("x", 0.0)),
+            y=float(data.get("y", 0.0)),
+            z=float(data.get("z", 0.0)),
+        )
+
+
+@dataclass(frozen=True)
+class MobilitySpec:
+    id: str
+    max_speed: float
+    max_hull_turn: float
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "MobilitySpec":
+        data = data or {}
+        return cls(
+            id=str(data.get("id", "")),
+            max_speed=float(data.get("maxSpeedMetersPerSecond", 0.0)),
+            max_hull_turn=float(data.get("maxHullTurnDegreesPerSecond", 0.0)),
+        )
+
+
+@dataclass(frozen=True)
+class TurretSpec:
+    id: str
+    heading: float
+    max_turn: float
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "TurretSpec":
+        data = data or {}
+        return cls(
+            id=str(data.get("id", "")),
+            heading=float(data.get("headingDegrees", 0.0)),
+            max_turn=float(data.get("maxTurnDegreesPerSecond", 0.0)),
+        )
+
+
+@dataclass(frozen=True)
+class WeaponSpec:
+    id: str
+    fire_mode: str
+    damage: float
+    penetration: float
+    range: float
+    muzzle_velocity: float
+    muzzle_offset: Vec3
+    launch_angle: float
+    gravity: float
+    blast_radius: float
+    projectile_radius: float
+    aim_tolerance: float
+    reload_ticks: int
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "WeaponSpec":
+        data = data or {}
+        return cls(
+            id=str(data.get("id", "")),
+            fire_mode=str(data.get("fireMode", "direct")),
+            damage=float(data.get("damage", 0.0)),
+            penetration=float(data.get("penetrationMillimeters", 0.0)),
+            range=float(data.get("rangeMeters", 0.0)),
+            muzzle_velocity=float(data.get("muzzleVelocityMetersPerSecond", 0.0)),
+            muzzle_offset=Vec3.from_json(data.get("muzzleOffsetMeters")),
+            launch_angle=float(data.get("launchAngleDegrees", 0.0)),
+            gravity=float(data.get("gravityMetersPerSecondSquared", 0.0)),
+            blast_radius=float(data.get("blastRadiusMeters", 0.0)),
+            projectile_radius=float(data.get("projectileRadiusMeters", 0.0)),
+            aim_tolerance=float(data.get("aimToleranceDegrees", 0.0)),
+            reload_ticks=int(data.get("reloadTicks", 0)),
+        )
+
+
+@dataclass(frozen=True)
+class ArmorSpec:
+    id: str
+    integrity: float
+    front: float
+    side: float
+    rear: float
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "ArmorSpec":
+        data = data or {}
+        return cls(
+            id=str(data.get("id", "")),
+            integrity=float(data.get("integrity", 0.0)),
+            front=float(data.get("frontMillimeters", 0.0)),
+            side=float(data.get("sideMillimeters", 0.0)),
+            rear=float(data.get("rearMillimeters", 0.0)),
+        )
+
+
+@dataclass(frozen=True)
+class BodyShapeSpec:
+    type: str
+    radius: float
+    length: float
+    width: float
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "BodyShapeSpec":
+        data = data or {}
+        return cls(
+            type=str(data.get("type", "circle")),
+            radius=float(data.get("radiusMeters", 0.0)),
+            length=float(data.get("lengthMeters", 0.0)),
+            width=float(data.get("widthMeters", 0.0)),
+        )
+
+
+@dataclass(frozen=True)
+class BodySpec:
+    id: str
+    mass: float
+    shape: BodyShapeSpec
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "BodySpec":
+        data = data or {}
+        return cls(
+            id=str(data.get("id", "")),
+            mass=float(data.get("massKilograms", 0.0)),
+            shape=BodyShapeSpec.from_json(data.get("shape")),
+        )
+
+
+@dataclass(frozen=True)
+class SensorSpec:
+    id: str
+    range: float
+    fov: float
+    refresh_ticks: int
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "SensorSpec":
+        data = data or {}
+        return cls(
+            id=str(data.get("id", "")),
+            range=float(data.get("rangeMeters", 0.0)),
+            fov=float(data.get("fovDegrees", 0.0)),
+            refresh_ticks=int(data.get("refreshTicks", 0)),
+        )
+
+
+@dataclass(frozen=True)
+class UnitModulesSpec:
+    mobility: MobilitySpec
+    turret: TurretSpec
+    weapon: WeaponSpec
+    armor: ArmorSpec
+    body: BodySpec
+    sensor: SensorSpec
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "UnitModulesSpec":
+        data = data or {}
+        return cls(
+            mobility=MobilitySpec.from_json(data.get("mobility")),
+            turret=TurretSpec.from_json(data.get("turret")),
+            weapon=WeaponSpec.from_json(data.get("weapon")),
+            armor=ArmorSpec.from_json(data.get("armor")),
+            body=BodySpec.from_json(data.get("body")),
+            sensor=SensorSpec.from_json(data.get("sensor")),
+        )
+
+
+@dataclass(frozen=True)
+class UnitSpec:
+    unit_id: int
+    name: str
+    position: Vec2
+    hull_heading: float
+    modules: UnitModulesSpec
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any]) -> "UnitSpec":
+        transform = data.get("transform", {})
+        return cls(
+            unit_id=int(data.get("unitId", 0)),
+            name=str(data.get("name", "")),
+            position=Vec2.from_json(transform.get("position", {"x": 0.0, "y": 0.0})),
+            hull_heading=float(transform.get("hullHeadingDegrees", 0.0)),
+            modules=UnitModulesSpec.from_json(data.get("modules")),
+        )
 `,
   "robolocks/state.py": `from __future__ import annotations
 
@@ -373,9 +588,9 @@ from .geometry import Vec2, VecLike, distance
 class IntentState:
     active: bool
     target: Vec2
-    remaining_m: float
-    error_deg: float
-    age_ticks: int
+    remaining: float
+    error: float
+    age: int
 
     @classmethod
     def from_json(cls, data: Mapping[str, Any] | None) -> "IntentState":
@@ -383,22 +598,22 @@ class IntentState:
         return cls(
             active=bool(data.get("active", False)),
             target=Vec2.from_json(data.get("target", {"x": 0.0, "y": 0.0})),
-            remaining_m=float(data.get("remainingMeters", 0.0)),
-            error_deg=float(data.get("errorDegrees", 0.0)),
-            age_ticks=int(data.get("ageTicks", 0)),
+            remaining=float(data.get("remainingMeters", 0.0)),
+            error=float(data.get("errorDegrees", 0.0)),
+            age=int(data.get("ageTicks", 0)),
         )
 
-    def should_reissue(self, target: VecLike, threshold_m: float = 5.0, min_age_ticks: int = 20) -> bool:
+    def should_reissue(self, target: VecLike, threshold_m: float = 5.0, min_age: int = 20) -> bool:
         if not self.active:
             return True
-        return self.age_ticks >= min_age_ticks and distance(self.target, target) > threshold_m
+        return self.age >= min_age and distance(self.target, target) > threshold_m
 
 
 @dataclass(frozen=True)
 class WeaponIntentState:
     active: bool
     min_hit_chance: float
-    age_ticks: int
+    age: int
 
     @classmethod
     def from_json(cls, data: Mapping[str, Any] | None) -> "WeaponIntentState":
@@ -406,7 +621,7 @@ class WeaponIntentState:
         return cls(
             active=bool(data.get("active", False)),
             min_hit_chance=float(data.get("minHitChance", 0.0)),
-            age_ticks=int(data.get("ageTicks", 0)),
+            age=int(data.get("ageTicks", 0)),
         )
 
 
@@ -433,10 +648,10 @@ class UnitState:
     unit_id: int
     name: str
     position: Vec2
-    hull_heading_deg: float
-    turret_heading_deg: float
+    hull_heading: float
+    turret_heading: float
     armor_integrity: float
-    weapon_cooldown_ticks: int
+    weapon_cooldown: int
     intent: UnitIntents
 
     @classmethod
@@ -445,16 +660,16 @@ class UnitState:
             unit_id=int(data["unitId"]),
             name=str(data.get("name", "")),
             position=Vec2.from_json(data["position"]),
-            hull_heading_deg=float(data["hullHeadingDegrees"]),
-            turret_heading_deg=float(data["turretHeadingDegrees"]),
+            hull_heading=float(data["hullHeadingDegrees"]),
+            turret_heading=float(data["turretHeadingDegrees"]),
             armor_integrity=float(data["armorIntegrity"]),
-            weapon_cooldown_ticks=int(data.get("weaponCooldownTicks", 0)),
+            weapon_cooldown=int(data.get("weaponCooldownTicks", 0)),
             intent=UnitIntents.from_json(data.get("intents")),
         )
 
     @property
     def can_fire(self) -> bool:
-        return self.weapon_cooldown_ticks == 0 and not self.intent.weapon.active
+        return self.weapon_cooldown == 0 and not self.intent.weapon.active
 
     def distance_to(self, other: "UnitState | VecLike") -> float:
         if isinstance(other, UnitState):
@@ -484,7 +699,7 @@ class ContactSet:
 class Obstacle:
     id: str
     position: Vec2
-    radius_m: float
+    radius: float
     blocks_movement: bool
     blocks_line_of_sight: bool
 
@@ -493,7 +708,7 @@ class Obstacle:
         return cls(
             id=str(data.get("id", "")),
             position=Vec2.from_json(data["position"]),
-            radius_m=float(data.get("radiusMeters", 1.0)),
+            radius=float(data.get("radiusMeters", 1.0)),
             blocks_movement=bool(data.get("blocksMovement", True)),
             blocks_line_of_sight=bool(data.get("blocksLineOfSight", True)),
         )
@@ -542,35 +757,50 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from .orders import OrderLike
+from .spec import UnitSpec
 from .state import BattleState
 
 OnTick = Callable[[BattleState], Iterable[OrderLike]]
 LifecycleHook = Callable[[Any], None]
 
 _registered_on_tick: OnTick | None = None
+_registered_on_start: LifecycleHook | None = None
 _registered_on_end: LifecycleHook | None = None
+_started = False
 
 
 def run_bot(on_tick: OnTick, on_start: LifecycleHook | None = None, on_end: LifecycleHook | None = None) -> None:
-    global _registered_on_tick, _registered_on_end
+    global _registered_on_tick, _registered_on_start, _registered_on_end, _started
     _registered_on_tick = on_tick
+    _registered_on_start = on_start
     _registered_on_end = on_end
-    if on_start is not None:
-        on_start(None)
+    _started = False
 
 
 def clear_registered_bot() -> None:
-    global _registered_on_tick, _registered_on_end
+    global _registered_on_tick, _registered_on_start, _registered_on_end, _started
     if _registered_on_end is not None:
         _registered_on_end(None)
     _registered_on_tick = None
+    _registered_on_start = None
     _registered_on_end = None
+    _started = False
 
 
 def call_registered_bot(observation_json: str) -> str:
+    global _started
     if _registered_on_tick is None:
         raise RuntimeError("bot did not call run_bot")
-    state = BattleState.from_json(json.loads(observation_json))
+    payload = json.loads(observation_json)
+    if payload.get("type") == "start":
+        if _registered_on_start is not None:
+            _registered_on_start(UnitSpec.from_json(payload["spec"]))
+        _started = True
+        return json.dumps({"orders": []})
+    if _registered_on_start is not None and not _started:
+        _registered_on_start(None)
+        _started = True
+    state = BattleState.from_json(payload)
     orders = list(_registered_on_tick(state))
     return json.dumps({"orders": [_order_to_json(order) for order in orders]})
 

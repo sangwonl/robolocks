@@ -1,5 +1,5 @@
 execute_process(
-  COMMAND "${ROBOLOCKS_CLI}" run --preset preset_duel_v0 --ticks 3 --stream-json
+  COMMAND "${ROBOLOCKS_CLI}" run --battle "${ROBOLOCKS_SOURCE_DIR}/fixtures/matches/preset_duel_v0.json" --ticks 3 --stream-json
   RESULT_VARIABLE result
   OUTPUT_VARIABLE output
   ERROR_VARIABLE error

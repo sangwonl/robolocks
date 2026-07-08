@@ -11,6 +11,7 @@ struct ResolvedUnitOrders {
   std::optional<MoveToOrder> move_to;
   std::optional<AimAtOrder> aim_at;
   std::optional<FireIfSolutionOrder> fire_if_solution;
+  std::optional<ScanArcOrder> scan_arc;
   std::optional<FaceArmorTowardOrder> face_armor_toward;
   std::vector<Event> events;
 };

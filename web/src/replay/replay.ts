@@ -64,7 +64,7 @@ type ReplayActionPayload = {
   position?: unknown;
   target?: unknown;
   minHitChance?: unknown;
-  centerDegrees?: unknown;
+  directionDegrees?: unknown;
   widthDegrees?: unknown;
 };
 
@@ -464,8 +464,8 @@ function parseAction(payload: unknown): BattleAction {
   if (typeof action.minHitChance === "number") {
     parsed.minHitChance = action.minHitChance;
   }
-  if (typeof action.centerDegrees === "number") {
-    parsed.centerDegrees = action.centerDegrees;
+  if (typeof action.directionDegrees === "number") {
+    parsed.directionDegrees = action.directionDegrees;
   }
   if (typeof action.widthDegrees === "number") {
     parsed.widthDegrees = action.widthDegrees;

@@ -13,6 +13,7 @@ class JsonCallbackBotController final : public BotController {
  public:
   JsonCallbackBotController(UnitId bot_id, JsonBotCallback callback);
 
+  void on_start(const UnitSpec& spec) override;
   OrderList on_tick(const Observation& observation) override;
 
  private:

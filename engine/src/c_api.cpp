@@ -1,5 +1,6 @@
 #include <robolocks/c_api.h>
 
+#include <robolocks/battle_loader.hpp>
 #include <robolocks/battle_runner.hpp>
 #include <robolocks/builtin_controllers.hpp>
 #include <robolocks/json_callback_bot_controller.hpp>
@@ -119,123 +120,94 @@ const char* order_channel_name(robolocks::OrderKind kind) {
   return "unknown";
 }
 
-robolocks::BattleConfig research_duel_config() {
-  robolocks::BattleConfig config;
-  config.battle_id = "research_duel_v0";
-  config.obstacles = {
-    robolocks::StaticObstacle{
-      .id = "research_cover",
-      .position = robolocks::Vec2{20.0, 6.0},
-      .radius_m = 1.5,
-      .blocks_movement = true,
-      .blocks_line_of_sight = true,
+}  // namespace
+
+extern "C" {
+
+namespace {
+
+const char* preset_duel_json() {
+  return R"json({
+  "battleId": "preset_duel_v0",
+  "seed": 1,
+  "tickRate": 30,
+  "tickLimit": 9000,
+  "obstacles": [
+    {"id": "north_cover", "position": {"x": 20, "y": 6}, "radiusMeters": 1.5, "blocksMovement": true, "blocksLineOfSight": true}
+  ],
+  "units": [
+    {
+      "unitId": 1, "name": "Blue",
+      "spawn": {"x": 6, "y": 12, "headingDeg": 0},
+      "modules": {
+        "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
+        "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+        "weapon": {"id": "cannon_75mm_mk1", "damage": 25.0, "penetrationMillimeters": 120.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 620.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "aimToleranceDegrees": 5.0, "reloadTicks": 30},
+        "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+        "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+        "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+      }
     },
-  };
-  config.units = {
-    robolocks::UnitSpec{
-      .unit_id = robolocks::UnitId{1},
-      .name = "Blue",
-      .transform = robolocks::TransformSpec{
-        .position = robolocks::Vec2{4.0, 5.0},
-        .hull_heading_deg = 35.0,
-      },
-      .mobility = robolocks::MobilitySpec{
-        .id = "tracked_chassis_mk1",
-        .max_speed_mps = 6.0,
-        .max_hull_turn_degps = 120.0,
-      },
-      .turret = robolocks::TurretSpec{
-        .id = "light_turret_mk1",
-        .heading_deg = 35.0,
-        .max_turn_degps = 180.0,
-      },
-      .weapon = robolocks::WeaponSpec{
-        .id = "slow_cannon_test",
-        .damage = 25.0,
-        .penetration_mm = 80.0,
-        .range_m = 80.0,
-        .muzzle_velocity_mps = 20.0,
-        .muzzle_offset_m = robolocks::Vec3{3.6, 0.0, 1.65},
-        .projectile_radius_m = 0.08,
-        .reload_ticks = 90,
-      },
-      .armor = robolocks::ArmorSpec{
-        .id = "rolled_armor_mk1",
-        .integrity = 100.0,
-        .front_mm = 100.0,
-        .side_mm = 70.0,
-        .rear_mm = 45.0,
-      },
-      .body = robolocks::BodySpec{
-        .id = "medium_hull_mk1",
-        .shape = robolocks::BodyShapeSpec{
-          .type = robolocks::BodyShapeType::Box,
-          .radius_m = 1.2,
-          .length_m = 5.6,
-          .width_m = 2.8,
-        },
-        .mass_kg = 30000.0,
-      },
-      .sensor = robolocks::SensorSpec{
-        .id = "visual_optic_mk1",
-        .range_m = 60.0,
-        .fov_deg = 120.0,
-        .refresh_ticks = 1,
-      },
+    {
+      "unitId": 2, "name": "Red",
+      "spawn": {"x": 34, "y": 12, "headingDeg": 180},
+      "modules": {
+        "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
+        "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+        "weapon": {"id": "cannon_75mm_mk1", "damage": 25.0, "penetrationMillimeters": 120.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 620.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "aimToleranceDegrees": 5.0, "reloadTicks": 30},
+        "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+        "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+        "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+      }
+    }
+  ],
+  "controllers": [
+    {"unitId": 1, "type": "builtin", "id": "hold_line", "hold": {"x": 17, "y": 12}},
+    {"unitId": 2, "type": "builtin", "id": "hold_line", "hold": {"x": 23, "y": 12}}
+  ]
+})json";
+}
+
+const char* research_duel_json() {
+  return R"json({
+  "battleId": "research_duel_v0",
+  "seed": 1,
+  "tickRate": 30,
+  "tickLimit": 9000,
+  "obstacles": [
+    {"id": "research_cover", "position": {"x": 20, "y": 6}, "radiusMeters": 1.5, "blocksMovement": true, "blocksLineOfSight": true}
+  ],
+  "units": [
+    {
+      "unitId": 1, "name": "Blue",
+      "spawn": {"x": 4, "y": 5, "headingDeg": 35},
+      "modules": {
+        "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
+        "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+        "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+        "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+        "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+        "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+      }
     },
-    robolocks::UnitSpec{
-      .unit_id = robolocks::UnitId{2},
-      .name = "Target",
-      .transform = robolocks::TransformSpec{
-        .position = robolocks::Vec2{34.0, 18.0},
-        .hull_heading_deg = 215.0,
-      },
-      .mobility = robolocks::MobilitySpec{
-        .id = "fixed_target_chassis",
-        .max_speed_mps = 0.0,
-        .max_hull_turn_degps = 60.0,
-      },
-      .turret = robolocks::TurretSpec{
-        .id = "light_turret_mk1",
-        .heading_deg = 215.0,
-        .max_turn_degps = 180.0,
-      },
-      .weapon = robolocks::WeaponSpec{
-        .id = "slow_cannon_test",
-        .damage = 25.0,
-        .penetration_mm = 80.0,
-        .range_m = 80.0,
-        .muzzle_velocity_mps = 20.0,
-        .muzzle_offset_m = robolocks::Vec3{3.6, 0.0, 1.65},
-        .projectile_radius_m = 0.08,
-        .reload_ticks = 90,
-      },
-      .armor = robolocks::ArmorSpec{
-        .id = "rolled_armor_mk1",
-        .integrity = 100.0,
-        .front_mm = 100.0,
-        .side_mm = 70.0,
-        .rear_mm = 45.0,
-      },
-      .body = robolocks::BodySpec{
-        .id = "medium_hull_mk1",
-        .shape = robolocks::BodyShapeSpec{
-          .type = robolocks::BodyShapeType::Box,
-          .radius_m = 1.2,
-          .length_m = 5.6,
-          .width_m = 2.8,
-        },
-        .mass_kg = 30000.0,
-      },
-      .sensor = robolocks::SensorSpec{
-        .id = "visual_optic_mk1",
-        .range_m = 60.0,
-        .fov_deg = 120.0,
-        .refresh_ticks = 1,
-      },
-    },
-  };
-  return config;
+    {
+      "unitId": 2, "name": "Target",
+      "spawn": {"x": 34, "y": 18, "headingDeg": 215},
+      "modules": {
+        "mobility": {"id": "fixed_target_chassis", "maxSpeedMetersPerSecond": 0.0, "maxHullTurnDegreesPerSecond": 60.0},
+        "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+        "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+        "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+        "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+        "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+      }
+    }
+  ],
+  "controllers": [
+    {"unitId": 1, "type": "json_callback"},
+    {"unitId": 2, "type": "builtin", "id": "hold_line", "hold": {"x": 34, "y": 18}}
+  ]
+})json";
 }
 
 std::string call_registered_json_bot(robolocks::UnitId bot_id, const std::string& observation_json) {
@@ -257,26 +229,45 @@ std::string call_registered_json_bot(robolocks::UnitId bot_id, const std::string
   return response_json;
 }
 
+robolocks::BattleRunner runner_from_loaded(robolocks::LoadedBattle& loaded) {
+  std::vector<robolocks::ControllerBinding> controllers;
+  for (auto& cfg : loaded.controllers) {
+    if (cfg.type == "builtin") {
+      if (cfg.id != "hold_line") {
+        throw std::runtime_error("Unknown builtin controller id: " + cfg.id);
+      }
+      controllers.push_back(robolocks::create_hold_line_controller(cfg.unit_id, cfg.hold_position));
+    } else if (cfg.type == "json_callback") {
+      controllers.push_back(robolocks::ControllerBinding{
+        cfg.unit_id,
+        std::make_unique<robolocks::JsonCallbackBotController>(cfg.unit_id, call_registered_json_bot),
+      });
+    } else {
+      throw std::runtime_error("Unsupported controller type: " + cfg.type);
+    }
+  }
+  return robolocks::BattleRunner(std::move(loaded.config), std::move(controllers));
+}
+
 }  // namespace
 
-extern "C" {
+RobolocksBattleRunnerHandle robolocks_battle_runner_create_from_json(const char* json_config) {
+  auto loaded = robolocks::load_battle_from_json_string(json_config);
+  return new RobolocksBattleRunner(runner_from_loaded(loaded));
+}
 
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_preset_duel(void) {
-  return new RobolocksBattleRunner(robolocks::BattleRunner::preset_duel());
+  return robolocks_battle_runner_create_from_json(preset_duel_json());
 }
 
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_research_duel_with_json_bot(uint32_t bot_id) {
-  auto config = research_duel_config();
-  std::vector<robolocks::ControllerBinding> controllers;
-  controllers.push_back(robolocks::ControllerBinding{
-    .unit_id = robolocks::UnitId{bot_id},
-    .controller = std::make_unique<robolocks::JsonCallbackBotController>(
-      robolocks::UnitId{bot_id},
-      call_registered_json_bot
-    ),
-  });
-  controllers.push_back(robolocks::create_hold_line_controller(robolocks::UnitId{2}, robolocks::Vec2{34.0, 18.0}));
-  return new RobolocksBattleRunner(robolocks::BattleRunner(std::move(config), std::move(controllers)));
+  auto loaded = robolocks::load_battle_from_json_string(research_duel_json());
+  for (auto& cfg : loaded.controllers) {
+    if (cfg.type == "json_callback") {
+      cfg.unit_id = robolocks::UnitId{bot_id};
+    }
+  }
+  return new RobolocksBattleRunner(runner_from_loaded(loaded));
 }
 
 void robolocks_battle_runner_set_json_bot_callback(
@@ -302,7 +293,7 @@ void robolocks_battle_runner_step(RobolocksBattleRunnerHandle handle) {
   runner->snapshot = runner->last_result.snapshot;
 }
 
-void robolocks_battle_runner_run_ticks(RobolocksBattleRunnerHandle handle, uint64_t tick_count) {
+void robolocks_battle_runner_run(RobolocksBattleRunnerHandle handle, uint64_t tick_count) {
   auto* runner = as_runner(handle);
   if (runner == nullptr) {
     return;
@@ -353,7 +344,7 @@ double robolocks_battle_runner_unit_y(RobolocksBattleRunnerHandle handle, size_t
   return unit->position.y;
 }
 
-double robolocks_battle_runner_unit_hull_heading_deg(RobolocksBattleRunnerHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_hull_heading(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -361,7 +352,7 @@ double robolocks_battle_runner_unit_hull_heading_deg(RobolocksBattleRunnerHandle
   return unit->hull_heading_deg;
 }
 
-double robolocks_battle_runner_unit_turret_heading_deg(RobolocksBattleRunnerHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_turret_heading(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -377,7 +368,7 @@ double robolocks_battle_runner_unit_armor(RobolocksBattleRunnerHandle handle, si
   return unit->armor_integrity;
 }
 
-uint64_t robolocks_battle_runner_unit_weapon_cooldown_ticks(
+uint64_t robolocks_battle_runner_unit_weapon_cooldown(
   RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
@@ -402,7 +393,7 @@ int robolocks_battle_runner_unit_body_shape_type(RobolocksBattleRunnerHandle han
   return 0;
 }
 
-double robolocks_battle_runner_unit_body_radius_m(RobolocksBattleRunnerHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_body_radius(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -410,7 +401,7 @@ double robolocks_battle_runner_unit_body_radius_m(RobolocksBattleRunnerHandle ha
   return unit->body_radius_m;
 }
 
-double robolocks_battle_runner_unit_body_length_m(RobolocksBattleRunnerHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_body_length(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -418,7 +409,7 @@ double robolocks_battle_runner_unit_body_length_m(RobolocksBattleRunnerHandle ha
   return unit->body_length_m;
 }
 
-double robolocks_battle_runner_unit_body_width_m(RobolocksBattleRunnerHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_body_width(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   if (unit == nullptr) {
     return 0.0;
@@ -441,7 +432,7 @@ double robolocks_battle_runner_unit_mobility_intent_target_y(RobolocksBattleRunn
   return unit == nullptr ? 0.0 : unit->mobility_intent_target.y;
 }
 
-double robolocks_battle_runner_unit_mobility_intent_remaining_m(
+double robolocks_battle_runner_unit_mobility_intent_remaining(
   RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
@@ -449,7 +440,7 @@ double robolocks_battle_runner_unit_mobility_intent_remaining_m(
   return unit == nullptr ? 0.0 : unit->mobility_intent_remaining_m;
 }
 
-uint64_t robolocks_battle_runner_unit_mobility_intent_age_ticks(
+uint64_t robolocks_battle_runner_unit_mobility_intent_age(
   RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
@@ -472,7 +463,7 @@ double robolocks_battle_runner_unit_turret_intent_target_y(RobolocksBattleRunner
   return unit == nullptr ? 0.0 : unit->turret_intent_target.y;
 }
 
-double robolocks_battle_runner_unit_turret_intent_error_deg(
+double robolocks_battle_runner_unit_turret_intent_error(
   RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
@@ -480,7 +471,7 @@ double robolocks_battle_runner_unit_turret_intent_error_deg(
   return unit == nullptr ? 0.0 : unit->turret_intent_error_deg;
 }
 
-uint64_t robolocks_battle_runner_unit_turret_intent_age_ticks(
+uint64_t robolocks_battle_runner_unit_turret_intent_age(
   RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
@@ -503,12 +494,12 @@ double robolocks_battle_runner_unit_hull_intent_target_y(RobolocksBattleRunnerHa
   return unit == nullptr ? 0.0 : unit->hull_intent_target.y;
 }
 
-double robolocks_battle_runner_unit_hull_intent_error_deg(RobolocksBattleRunnerHandle handle, size_t unit_index) {
+double robolocks_battle_runner_unit_hull_intent_error(RobolocksBattleRunnerHandle handle, size_t unit_index) {
   const auto* unit = unit_at(handle, unit_index);
   return unit == nullptr ? 0.0 : unit->hull_intent_error_deg;
 }
 
-uint64_t robolocks_battle_runner_unit_hull_intent_age_ticks(
+uint64_t robolocks_battle_runner_unit_hull_intent_age(
   RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
@@ -529,7 +520,7 @@ double robolocks_battle_runner_unit_weapon_intent_min_hit_chance(
   return unit == nullptr ? 0.0 : unit->weapon_intent_min_hit_chance;
 }
 
-uint64_t robolocks_battle_runner_unit_weapon_intent_age_ticks(
+uint64_t robolocks_battle_runner_unit_weapon_intent_age(
   RobolocksBattleRunnerHandle handle,
   size_t unit_index
 ) {
@@ -569,7 +560,7 @@ double robolocks_battle_runner_obstacle_y(RobolocksBattleRunnerHandle handle, si
   return obstacle->position.y;
 }
 
-double robolocks_battle_runner_obstacle_radius_m(RobolocksBattleRunnerHandle handle, size_t obstacle_index) {
+double robolocks_battle_runner_obstacle_radius(RobolocksBattleRunnerHandle handle, size_t obstacle_index) {
   const auto* obstacle = obstacle_at(handle, obstacle_index);
   if (obstacle == nullptr) {
     return 0.0;
@@ -692,7 +683,7 @@ double robolocks_battle_runner_projectile_y(RobolocksBattleRunnerHandle handle, 
   return projectile->position.y;
 }
 
-double robolocks_battle_runner_projectile_radius_m(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
+double robolocks_battle_runner_projectile_radius(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* projectile = projectile_at(handle, projectile_index);
   if (projectile == nullptr) {
     return 0.0;
@@ -700,7 +691,7 @@ double robolocks_battle_runner_projectile_radius_m(RobolocksBattleRunnerHandle h
   return projectile->radius_m;
 }
 
-double robolocks_battle_runner_projectile_previous_height_m(
+double robolocks_battle_runner_projectile_previous_height(
   RobolocksBattleRunnerHandle handle,
   size_t projectile_index
 ) {
@@ -711,7 +702,7 @@ double robolocks_battle_runner_projectile_previous_height_m(
   return projectile->previous_height_m;
 }
 
-double robolocks_battle_runner_projectile_height_m(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
+double robolocks_battle_runner_projectile_height(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* projectile = projectile_at(handle, projectile_index);
   if (projectile == nullptr) {
     return 0.0;
@@ -846,22 +837,40 @@ int robolocks_battle_runner_action_has_scan_arc(RobolocksBattleRunnerHandle hand
     : 0;
 }
 
-double robolocks_battle_runner_action_center_deg(RobolocksBattleRunnerHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_center(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;
   }
   const auto* payload = std::get_if<robolocks::ScanArcOrder>(&action.order->payload);
-  return payload == nullptr ? 0.0 : payload->center_deg;
+  return payload == nullptr ? 0.0 : payload->direction_deg;
 }
 
-double robolocks_battle_runner_action_width_deg(RobolocksBattleRunnerHandle handle, size_t action_index) {
+double robolocks_battle_runner_action_width(RobolocksBattleRunnerHandle handle, size_t action_index) {
   const auto action = action_at(handle, action_index);
   if (action.order == nullptr) {
     return 0.0;
   }
   const auto* payload = std::get_if<robolocks::ScanArcOrder>(&action.order->payload);
   return payload == nullptr ? 0.0 : payload->width_deg;
+}
+
+int robolocks_battle_runner_action_has_range(RobolocksBattleRunnerHandle handle, size_t action_index) {
+  const auto action = action_at(handle, action_index);
+  if (action.order == nullptr) {
+    return 0;
+  }
+  const auto* payload = std::get_if<robolocks::ScanArcOrder>(&action.order->payload);
+  return payload != nullptr && payload->range_m > 0.0 ? 1 : 0;
+}
+
+double robolocks_battle_runner_action_range(RobolocksBattleRunnerHandle handle, size_t action_index) {
+  const auto action = action_at(handle, action_index);
+  if (action.order == nullptr) {
+    return 0.0;
+  }
+  const auto* payload = std::get_if<robolocks::ScanArcOrder>(&action.order->payload);
+  return payload == nullptr ? 0.0 : payload->range_m;
 }
 
 }

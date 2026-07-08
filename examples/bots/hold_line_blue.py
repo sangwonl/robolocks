@@ -73,7 +73,7 @@ def route_around_obstacles(state: BattleState, target: Vec2) -> Vec2:
     for obstacle in state.map.obstacles:
         if not obstacle.blocks_movement:
             continue
-        clearance = obstacle.radius_m + 4.0
+        clearance = obstacle.radius + 4.0
         segment_distance = distance_point_to_segment(obstacle.position, own, target)
         if segment_distance >= clearance:
             continue
@@ -109,7 +109,7 @@ def should_update_mobility(intent, move_target):
     """Only re-issue MoveTo when the intent is old enough or the target drifted."""
     if not intent.active:
         return True
-    if intent.age_ticks >= MIN_MOBILITY_AGE_TICKS:
+    if intent.age >= MIN_MOBILITY_AGE_TICKS:
         return target_changed(intent.target, move_target, TARGET_CHANGE_THRESHOLD_M)
     return False
 
@@ -118,7 +118,7 @@ def should_update_turret(intent, target_pos):
     """Only re-issue AimAt when the turret intent is old enough or the target drifted."""
     if not intent.active:
         return True
-    if intent.age_ticks >= MIN_TURRET_AGE_TICKS:
+    if intent.age >= MIN_TURRET_AGE_TICKS:
         return distance(intent.target, target_pos) > 0.5
     return False
 
@@ -180,7 +180,7 @@ def on_tick(state: BattleState) -> list[OrderLike]:
     patrol_target = route_around_obstacles(state, waypoint_for_tick(PATROLS[state.self_id], state.tick, 55))
     if should_update_mobility(own_unit.intent.mobility, patrol_target):
         orders.append(MoveTo(patrol_target))
-    orders.append(ScanArc(center=own_unit.hull_heading_deg, width_deg=160))
+    orders.append(ScanArc(direction=own_unit.hull_heading, width=160))
     if not orders and not own_unit.intent.hull.active:
         orders.append(FaceArmorToward(state.map.center))
     return orders

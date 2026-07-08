@@ -139,8 +139,9 @@ export type BattleAction = {
   position?: Vec2;
   target?: Vec2;
   minHitChance?: number;
-  centerDegrees?: number;
+  directionDegrees?: number;
   widthDegrees?: number;
+  rangeMeters?: number;
 };
 
 export type ProjectileFrame = {

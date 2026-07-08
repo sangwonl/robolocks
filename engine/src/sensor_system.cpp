@@ -2,6 +2,7 @@
 
 #include <robolocks/math.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -26,13 +27,13 @@ bool is_in_range(const UnitSnapshot& self, const UnitSnapshot& contact, const Se
   return distance(self.position, contact.position) <= sensor.range_m;
 }
 
-bool is_in_fov(const UnitSnapshot& self, const UnitSnapshot& contact, const SensorSpec& sensor) {
-  if (sensor.fov_deg >= 360.0) {
+bool is_in_fov(const UnitSnapshot& self, const UnitSnapshot& contact, double direction_deg, double width_deg) {
+  if (width_deg >= 360.0) {
     return true;
   }
   const double target_heading = angle_to(self.position, contact.position);
-  const double delta = std::abs(shortest_angle_delta_deg(self.hull_heading_deg, target_heading));
-  return delta <= sensor.fov_deg * 0.5;
+  const double delta = std::abs(shortest_angle_delta_deg(direction_deg, target_heading));
+  return delta <= width_deg * 0.5;
 }
 
 bool segment_intersects_circle(Vec2 start, Vec2 end, Vec2 center, double radius) {
@@ -87,33 +88,58 @@ Observation SensorSystem::build_observation(const WorldSnapshot& snapshot, UnitI
   observation.self = *self;
 
   const SensorSpec sensor = sensor_for(self_id);
-  for (const auto& unit : snapshot.units) {
-    if (unit.unit_id == self_id) {
-      continue;
-    }
-    if (!is_in_range(*self, unit, sensor)) {
-      continue;
-    }
-    if (!is_in_fov(*self, unit, sensor)) {
-      continue;
-    }
-    bool blocked = false;
-    for (const auto& obstacle : obstacles_) {
-      if (!obstacle.blocks_line_of_sight) {
+  const ScanArcOrder* scan_arc = scan_arc_for(self_id);
+  if (scan_arc != nullptr) {
+    const double scan_direction_deg = scan_arc->direction_deg;
+    const double scan_width_deg = std::min(std::abs(scan_arc->width_deg), sensor.fov_deg);
+    const double effective_range_m = scan_arc->range_m > 0.0
+      ? std::min(scan_arc->range_m, sensor.range_m)
+      : sensor.range_m;
+    for (const auto& unit : snapshot.units) {
+      if (unit.unit_id == self_id) {
         continue;
       }
-      if (segment_intersects_circle(self->position, unit.position, obstacle.position, obstacle.radius_m)) {
-        blocked = true;
-        break;
+      if (distance(self->position, unit.position) > effective_range_m) {
+        continue;
       }
+      if (!is_in_fov(*self, unit, scan_direction_deg, scan_width_deg)) {
+        continue;
+      }
+      bool blocked = false;
+      for (const auto& obstacle : obstacles_) {
+        if (!obstacle.blocks_line_of_sight) {
+          continue;
+        }
+        if (segment_intersects_circle(self->position, unit.position, obstacle.position, obstacle.radius_m)) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) {
+        continue;
+      }
+      observation.contacts.push_back(contact_from_snapshot(unit));
     }
-    if (blocked) {
-      continue;
-    }
-    observation.contacts.push_back(contact_from_snapshot(unit));
+    std::sort(observation.contacts.begin(), observation.contacts.end(),
+      [&](const ContactObservation& a, const ContactObservation& b) {
+        return distance(self->position, a.position) < distance(self->position, b.position);
+      });
   }
 
   return observation;
+}
+
+void SensorSystem::set_scan_arc(UnitId unit_id, const ScanArcOrder& scan_arc) {
+  for (auto& active_scan_arc : scan_arcs_) {
+    if (active_scan_arc.unit_id == unit_id) {
+      active_scan_arc.scan_arc = scan_arc;
+      return;
+    }
+  }
+  scan_arcs_.push_back(UnitScanArcState{
+    .unit_id = unit_id,
+    .scan_arc = scan_arc,
+  });
 }
 
 SensorSpec SensorSystem::sensor_for(UnitId unit_id) const {
@@ -123,6 +149,15 @@ SensorSpec SensorSystem::sensor_for(UnitId unit_id) const {
     }
   }
   return SensorSpec{};
+}
+
+const ScanArcOrder* SensorSystem::scan_arc_for(UnitId unit_id) const {
+  for (const auto& scan_arc : scan_arcs_) {
+    if (scan_arc.unit_id == unit_id) {
+      return &scan_arc.scan_arc;
+    }
+  }
+  return nullptr;
 }
 
 std::vector<UnitSensorComponent> sensor_components_from_battle_config(const BattleConfig& config) {

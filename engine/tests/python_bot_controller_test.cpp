@@ -110,6 +110,72 @@ run_bot(on_tick)
   REQUIRE(orders[1].kind == robolocks::OrderKind::AimAt);
 }
 
+TEST_CASE("python bot controller passes unit spec to sdk on_start hook") {
+  const auto script_path = std::filesystem::temp_directory_path() / "robolocks_python_sdk_on_start_test.py";
+  {
+    std::ofstream script(script_path);
+    script << R"python(
+from robolocks import MoveTo, run_bot
+
+sensor_range = 0.0
+projectile_speed = 0.0
+body_length = 0.0
+
+def on_start(spec):
+    global sensor_range, projectile_speed, body_length
+    sensor_range = spec.modules.sensor.range
+    projectile_speed = spec.modules.weapon.muzzle_velocity
+    body_length = spec.modules.body.shape.length
+
+def on_tick(state):
+    offset = sensor_range / 10.0 + projectile_speed / 1000.0 + body_length / 10.0
+    return [MoveTo(state.own_unit.position.offset(x=offset))]
+
+run_bot(on_tick, on_start=on_start)
+)python";
+  }
+
+  robolocks::PythonBotController controller(script_path.string());
+  controller.on_start(robolocks::UnitSpec{
+    .unit_id = robolocks::UnitId{1},
+    .name = "Blue",
+    .weapon = robolocks::WeaponSpec{
+      .muzzle_velocity_mps = 800.0,
+    },
+    .body = robolocks::BodySpec{
+      .shape = robolocks::BodyShapeSpec{
+        .type = robolocks::BodyShapeType::Box,
+        .length_m = 6.0,
+      },
+    },
+    .sensor = robolocks::SensorSpec{
+      .id = "test_sensor",
+      .range_m = 42.0,
+      .fov_deg = 120.0,
+      .refresh_ticks = 1,
+    },
+  });
+
+  robolocks::Observation observation;
+  observation.tick = 1;
+  observation.self_id = robolocks::UnitId{1};
+  observation.self = robolocks::UnitSnapshot{
+    robolocks::UnitId{1},
+    robolocks::Vec2{3.0, 4.0},
+    0.0,
+    0.0,
+    100.0,
+  };
+
+  const auto orders = controller.on_tick(observation);
+
+  REQUIRE(orders.size() == 1);
+  REQUIRE(orders[0].kind == robolocks::OrderKind::MoveTo);
+  const auto& move_to = std::get<robolocks::MoveToOrder>(orders[0].payload);
+  REQUIRE(move_to.position.x == Catch::Approx(8.6));
+  REQUIRE(move_to.position.y == Catch::Approx(4.0));
+}
+
 TEST_CASE("python bot controller fails a tick when the bot misses its response deadline") {
   const auto script_path = std::filesystem::temp_directory_path() / "robolocks_python_bot_controller_sleep_test.py";
   {

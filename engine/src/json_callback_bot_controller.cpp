@@ -16,6 +16,14 @@ JsonCallbackBotController::JsonCallbackBotController(UnitId bot_id, JsonBotCallb
   }
 }
 
+void JsonCallbackBotController::on_start(const UnitSpec& spec) {
+  const auto start_json = nlohmann::json{
+    {"type", "start"},
+    {"spec", unit_spec_to_json(spec)},
+  }.dump();
+  callback_(bot_id_, start_json);
+}
+
 OrderList JsonCallbackBotController::on_tick(const Observation& observation) {
   const auto observation_json = observation_to_json(observation).dump();
   const auto orders_json = callback_(bot_id_, observation_json);

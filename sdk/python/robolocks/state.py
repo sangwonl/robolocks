@@ -8,11 +8,15 @@ from .geometry import Vec2, VecLike, distance
 
 @dataclass(frozen=True)
 class IntentState:
+    """Active intent state for a control channel.
+
+    Units: remaining (meters), error (degrees), age (simulation ticks)
+    """
     active: bool
     target: Vec2
-    remaining_m: float
-    error_deg: float
-    age_ticks: int
+    remaining: float
+    error: float
+    age: int
 
     @classmethod
     def from_json(cls, data: Mapping[str, Any] | None) -> "IntentState":
@@ -20,22 +24,26 @@ class IntentState:
         return cls(
             active=bool(data.get("active", False)),
             target=Vec2.from_json(data.get("target", {"x": 0.0, "y": 0.0})),
-            remaining_m=float(data.get("remainingMeters", 0.0)),
-            error_deg=float(data.get("errorDegrees", 0.0)),
-            age_ticks=int(data.get("ageTicks", 0)),
+            remaining=float(data.get("remainingMeters", 0.0)),
+            error=float(data.get("errorDegrees", 0.0)),
+            age=int(data.get("ageTicks", 0)),
         )
 
     def should_reissue(self, target: VecLike, threshold_m: float = 5.0, min_age_ticks: int = 20) -> bool:
         if not self.active:
             return True
-        return self.age_ticks >= min_age_ticks and distance(self.target, target) > threshold_m
+        return self.age >= min_age_ticks and distance(self.target, target) > threshold_m
 
 
 @dataclass(frozen=True)
 class WeaponIntentState:
+    """Weapon intent state.
+
+    Units: age (simulation ticks)
+    """
     active: bool
     min_hit_chance: float
-    age_ticks: int
+    age: int
 
     @classmethod
     def from_json(cls, data: Mapping[str, Any] | None) -> "WeaponIntentState":
@@ -43,7 +51,7 @@ class WeaponIntentState:
         return cls(
             active=bool(data.get("active", False)),
             min_hit_chance=float(data.get("minHitChance", 0.0)),
-            age_ticks=int(data.get("ageTicks", 0)),
+            age=int(data.get("ageTicks", 0)),
         )
 
 
@@ -67,13 +75,18 @@ class UnitIntents:
 
 @dataclass(frozen=True)
 class UnitState:
+    """Observed unit state.
+
+    Units: position (meters), hull_heading/turret_heading (degrees),
+           weapon_cooldown (simulation ticks)
+    """
     unit_id: int
     name: str
     position: Vec2
-    hull_heading_deg: float
-    turret_heading_deg: float
+    hull_heading: float
+    turret_heading: float
     armor_integrity: float
-    weapon_cooldown_ticks: int
+    weapon_cooldown: int
     intent: UnitIntents
 
     @classmethod
@@ -82,16 +95,16 @@ class UnitState:
             unit_id=int(data["unitId"]),
             name=str(data.get("name", "")),
             position=Vec2.from_json(data["position"]),
-            hull_heading_deg=float(data["hullHeadingDegrees"]),
-            turret_heading_deg=float(data["turretHeadingDegrees"]),
+            hull_heading=float(data["hullHeadingDegrees"]),
+            turret_heading=float(data["turretHeadingDegrees"]),
             armor_integrity=float(data["armorIntegrity"]),
-            weapon_cooldown_ticks=int(data.get("weaponCooldownTicks", 0)),
+            weapon_cooldown=int(data.get("weaponCooldownTicks", 0)),
             intent=UnitIntents.from_json(data.get("intents")),
         )
 
     @property
     def can_fire(self) -> bool:
-        return self.weapon_cooldown_ticks == 0 and not self.intent.weapon.active
+        return self.weapon_cooldown == 0 and not self.intent.weapon.active
 
     def distance_to(self, other: "UnitState | VecLike") -> float:
         if isinstance(other, UnitState):
@@ -101,6 +114,7 @@ class UnitState:
 
 @dataclass(frozen=True)
 class ContactSet:
+    """Contact list sorted by distance from self (closest first)."""
     units: tuple[UnitState, ...]
 
     @classmethod
@@ -119,9 +133,13 @@ class ContactSet:
 
 @dataclass(frozen=True)
 class Obstacle:
+    """Static obstacle.
+
+    Units: position (meters), radius (meters)
+    """
     id: str
     position: Vec2
-    radius_m: float
+    radius: float
     blocks_movement: bool
     blocks_line_of_sight: bool
 
@@ -130,7 +148,7 @@ class Obstacle:
         return cls(
             id=str(data.get("id", "")),
             position=Vec2.from_json(data["position"]),
-            radius_m=float(data.get("radiusMeters", 1.0)),
+            radius=float(data.get("radiusMeters", 1.0)),
             blocks_movement=bool(data.get("blocksMovement", True)),
             blocks_line_of_sight=bool(data.get("blocksLineOfSight", True)),
         )
@@ -152,6 +170,10 @@ class BattleMap:
 
 @dataclass(frozen=True)
 class BattleState:
+    """Full per-tick observation delivered to bot.
+
+    Units: see UnitState, ContactSet, BattleMap.
+    """
     tick: int
     self_id: int
     own_unit: UnitState

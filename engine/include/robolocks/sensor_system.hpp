@@ -2,6 +2,7 @@
 
 #include <robolocks/battle_config.hpp>
 #include <robolocks/observation.hpp>
+#include <robolocks/order.hpp>
 
 #include <vector>
 
@@ -19,12 +20,20 @@ class SensorSystem {
   SensorSystem(std::vector<UnitSensorComponent> sensors, std::vector<StaticObstacle> obstacles);
 
   Observation build_observation(const WorldSnapshot& snapshot, UnitId self_id) const;
+  void set_scan_arc(UnitId unit_id, const ScanArcOrder& scan_arc);
 
  private:
+  struct UnitScanArcState {
+    UnitId unit_id;
+    ScanArcOrder scan_arc;
+  };
+
   std::vector<UnitSensorComponent> sensors_;
   std::vector<StaticObstacle> obstacles_;
+  std::vector<UnitScanArcState> scan_arcs_;
 
   SensorSpec sensor_for(UnitId unit_id) const;
+  const ScanArcOrder* scan_arc_for(UnitId unit_id) const;
 };
 
 std::vector<UnitSensorComponent> sensor_components_from_battle_config(const BattleConfig& config);

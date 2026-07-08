@@ -47,6 +47,8 @@ TEST_CASE("sensor system filters contacts by module range and field of view") {
     },
   };
 
+  sensors.set_scan_arc(robolocks::UnitId{1}, robolocks::ScanArcOrder{.direction_deg = 0.0, .width_deg = 90.0});
+
   const auto observation = sensors.build_observation(snapshot, robolocks::UnitId{1});
 
   REQUIRE(observation.tick == 3);
@@ -72,6 +74,8 @@ TEST_CASE("sensor system uses all-around sensing when module fov is 360 degrees"
     robolocks::UnitSnapshot{robolocks::UnitId{1}, robolocks::Vec2{0.0, 0.0}, 0.0, 0.0, 100.0},
     robolocks::UnitSnapshot{robolocks::UnitId{2}, robolocks::Vec2{-8.0, 0.0}, 180.0, 180.0, 100.0},
   };
+
+  sensors.set_scan_arc(robolocks::UnitId{1}, robolocks::ScanArcOrder{.direction_deg = 0.0, .width_deg = 360.0});
 
   const auto observation = sensors.build_observation(snapshot, robolocks::UnitId{1});
 
@@ -107,6 +111,8 @@ TEST_CASE("sensor system blocks contacts behind line-of-sight obstacles") {
     robolocks::UnitSnapshot{robolocks::UnitId{1}, robolocks::Vec2{0.0, 0.0}, 0.0, 0.0, 100.0},
     robolocks::UnitSnapshot{robolocks::UnitId{2}, robolocks::Vec2{10.0, 0.0}, 180.0, 180.0, 100.0},
   };
+
+  sensors.set_scan_arc(robolocks::UnitId{1}, robolocks::ScanArcOrder{.direction_deg = 0.0, .width_deg = 360.0});
 
   const auto observation = sensors.build_observation(snapshot, robolocks::UnitId{1});
 

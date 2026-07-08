@@ -1,8 +1,8 @@
 #include <robolocks/battle_runner.hpp>
 
-#include <robolocks/builtin_controllers.hpp>
-#include <robolocks/presets.hpp>
+#include <robolocks/order_resolution.hpp>
 
+#include <algorithm>
 #include <utility>
 
 namespace robolocks {
@@ -11,24 +11,17 @@ BattleRunner::BattleRunner(BattleConfig config)
     : obstacles_(config.obstacles),
       simulation_(config),
       sensor_system_(sensor_components_from_battle_config(config), std::vector<StaticObstacle>(config.obstacles)),
-      snapshot_(simulation_.snapshot()) {}
+      snapshot_(simulation_.snapshot()) {
+  start_controllers(config);
+}
 
 BattleRunner::BattleRunner(BattleConfig config, std::vector<ControllerBinding> controllers)
     : obstacles_(config.obstacles),
       simulation_(config),
       sensor_system_(sensor_components_from_battle_config(config), std::vector<StaticObstacle>(config.obstacles)),
       snapshot_(simulation_.snapshot()),
-      controllers_(std::move(controllers)) {}
-
-BattleRunner BattleRunner::preset_duel() {
-  return preset_duel(preset_duel_config());
-}
-
-BattleRunner BattleRunner::preset_duel(BattleConfig config) {
-  std::vector<ControllerBinding> controllers;
-  controllers.push_back(create_hold_line_controller(UnitId{1}, Vec2{17.0, 12.0}));
-  controllers.push_back(create_hold_line_controller(UnitId{2}, Vec2{23.0, 12.0}));
-  return BattleRunner(std::move(config), std::move(controllers));
+      controllers_(std::move(controllers)) {
+  start_controllers(config);
 }
 
 WorldSnapshot BattleRunner::snapshot() const {
@@ -60,6 +53,7 @@ StepResult BattleRunner::step_once() {
 
 StepResult BattleRunner::step_once(const std::vector<UnitOrders>& orders_by_unit) {
   auto result = simulation_.step(orders_by_unit);
+  apply_scan_orders(orders_by_unit);
   snapshot_ = result.snapshot;
   return result;
 }
@@ -69,6 +63,29 @@ WorldSnapshot BattleRunner::run_ticks(Tick count) {
     step_once();
   }
   return snapshot_;
+}
+
+void BattleRunner::start_controllers(const BattleConfig& config) {
+  for (auto& binding : controllers_) {
+    if (binding.controller == nullptr) {
+      continue;
+    }
+    const auto unit = std::find_if(config.units.begin(), config.units.end(), [&binding](const UnitSpec& spec) {
+      return spec.unit_id == binding.unit_id;
+    });
+    if (unit != config.units.end()) {
+      binding.controller->on_start(*unit);
+    }
+  }
+}
+
+void BattleRunner::apply_scan_orders(const std::vector<UnitOrders>& orders_by_unit) {
+  for (const auto& unit_orders : orders_by_unit) {
+    const auto resolved = resolve_unit_orders(unit_orders.unit_id, snapshot_.tick + 1, orders_by_unit);
+    if (resolved.scan_arc.has_value()) {
+      sensor_system_.set_scan_arc(unit_orders.unit_id, *resolved.scan_arc);
+    }
+  }
 }
 
 }  // namespace robolocks

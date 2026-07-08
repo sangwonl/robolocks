@@ -43,6 +43,14 @@ class HoldLineController final : public BotController {
   OrderList on_tick(const Observation& observation) override {
     OrderList orders;
 
+    orders.push_back(Order{
+      .kind = OrderKind::ScanArc,
+      .payload = ScanArcOrder{
+        .direction_deg = observation.self.hull_heading_deg,
+        .width_deg = 360.0,
+      },
+    });
+
     const bool at_hold = length(Vec2{
       observation.self.position.x - hold_position_.x,
       observation.self.position.y - hold_position_.y,

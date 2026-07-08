@@ -106,11 +106,112 @@ nlohmann::json obstacle_to_json(const StaticObstacle& obstacle) {
   };
 }
 
+nlohmann::json vec3_to_json(Vec3 vec) {
+  return nlohmann::json{
+    {"x", vec.x},
+    {"y", vec.y},
+    {"z", vec.z},
+  };
+}
+
+std::string fire_mode_to_string(WeaponFireMode mode) {
+  switch (mode) {
+    case WeaponFireMode::Direct:
+      return "direct";
+    case WeaponFireMode::Ballistic:
+      return "ballistic";
+  }
+  return "direct";
+}
+
+nlohmann::json body_shape_spec_to_json(const BodyShapeSpec& shape) {
+  if (shape.type == BodyShapeType::Box) {
+    return nlohmann::json{
+      {"type", "box"},
+      {"radiusMeters", shape.radius_m},
+      {"lengthMeters", shape.length_m},
+      {"widthMeters", shape.width_m},
+    };
+  }
+  return nlohmann::json{
+    {"type", "circle"},
+    {"radiusMeters", shape.radius_m},
+  };
+}
+
+nlohmann::json mobility_spec_to_json(const MobilitySpec& mobility) {
+  return nlohmann::json{
+    {"id", mobility.id},
+    {"maxSpeedMetersPerSecond", mobility.max_speed_mps},
+    {"maxHullTurnDegreesPerSecond", mobility.max_hull_turn_degps},
+  };
+}
+
+nlohmann::json turret_spec_to_json(const TurretSpec& turret) {
+  return nlohmann::json{
+    {"id", turret.id},
+    {"headingDegrees", turret.heading_deg},
+    {"maxTurnDegreesPerSecond", turret.max_turn_degps},
+  };
+}
+
+nlohmann::json weapon_spec_to_json(const WeaponSpec& weapon) {
+  return nlohmann::json{
+    {"id", weapon.id},
+    {"fireMode", fire_mode_to_string(weapon.fire_mode)},
+    {"damage", weapon.damage},
+    {"penetrationMillimeters", weapon.penetration_mm},
+    {"rangeMeters", weapon.range_m},
+    {"muzzleVelocityMetersPerSecond", weapon.muzzle_velocity_mps},
+    {"muzzleOffsetMeters", vec3_to_json(weapon.muzzle_offset_m)},
+    {"launchAngleDegrees", weapon.launch_angle_deg},
+    {"gravityMetersPerSecondSquared", weapon.gravity_mps2},
+    {"blastRadiusMeters", weapon.blast_radius_m},
+    {"projectileRadiusMeters", weapon.projectile_radius_m},
+    {"aimToleranceDegrees", weapon.aim_tolerance_deg},
+    {"reloadTicks", weapon.reload_ticks},
+  };
+}
+
+nlohmann::json armor_spec_to_json(const ArmorSpec& armor) {
+  return nlohmann::json{
+    {"id", armor.id},
+    {"integrity", armor.integrity},
+    {"frontMillimeters", armor.front_mm},
+    {"sideMillimeters", armor.side_mm},
+    {"rearMillimeters", armor.rear_mm},
+  };
+}
+
+nlohmann::json body_spec_to_json(const BodySpec& body) {
+  return nlohmann::json{
+    {"id", body.id},
+    {"massKilograms", body.mass_kg},
+    {"shape", body_shape_spec_to_json(body.shape)},
+  };
+}
+
+nlohmann::json sensor_spec_to_json(const SensorSpec& sensor) {
+  return nlohmann::json{
+    {"id", sensor.id},
+    {"rangeMeters", sensor.range_m},
+    {"fovDegrees", sensor.fov_deg},
+    {"refreshTicks", sensor.refresh_ticks},
+  };
+}
+
 double required_number(const nlohmann::json& object, const char* key) {
   if (!object.contains(key) || !object.at(key).is_number()) {
     throw std::runtime_error(std::string("Expected numeric order field: ") + key);
   }
   return object.at(key).get<double>();
+}
+
+double optional_number(const nlohmann::json& object, const char* key, double fallback) {
+  if (!object.contains(key)) {
+    return fallback;
+  }
+  return required_number(object, key);
 }
 
 std::string required_string(const nlohmann::json& object, const char* key) {
@@ -161,8 +262,9 @@ Order order_from_json(const nlohmann::json& json) {
     return Order{
       .kind = OrderKind::ScanArc,
       .payload = ScanArcOrder{
-        .center_deg = required_number(json, "centerDegrees"),
+        .direction_deg = required_number(json, "directionDegrees"),
         .width_deg = required_number(json, "widthDegrees"),
+        .range_m = optional_number(json, "rangeMeters", 0.0),
       },
     };
   }
@@ -188,6 +290,25 @@ nlohmann::json observation_to_json(const Observation& observation) {
     {"contacts", std::move(contacts)},
     {"map", {
       {"obstacles", std::move(obstacles)},
+    }},
+  };
+}
+
+nlohmann::json unit_spec_to_json(const UnitSpec& spec) {
+  return nlohmann::json{
+    {"unitId", spec.unit_id.value},
+    {"name", spec.name},
+    {"transform", {
+      {"position", vec2_to_json(spec.transform.position)},
+      {"hullHeadingDegrees", spec.transform.hull_heading_deg},
+    }},
+    {"modules", {
+      {"mobility", mobility_spec_to_json(spec.mobility)},
+      {"turret", turret_spec_to_json(spec.turret)},
+      {"weapon", weapon_spec_to_json(spec.weapon)},
+      {"armor", armor_spec_to_json(spec.armor)},
+      {"body", body_spec_to_json(spec.body)},
+      {"sensor", sensor_spec_to_json(spec.sensor)},
     }},
   };
 }

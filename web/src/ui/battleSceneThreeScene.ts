@@ -29,6 +29,15 @@ export function buildBattleScene(input: BattleSceneInput): THREE.Scene {
     for (const unit of input.frame.units) {
       scene.add(createUnit(unit));
     }
+    for (const action of input.frame.actions) {
+      if (action.type !== "scanArc") {
+        continue;
+      }
+      const unit = input.frame.units.find((candidate) => candidate.unitId === action.unitId);
+      if (unit) {
+        scene.add(createScanArc(unit, action));
+      }
+    }
     for (const projectile of input.frame.projectiles) {
       const mesh = createProjectile(projectile);
       scene.add(mesh);
@@ -223,6 +232,54 @@ function createProjectile(projectile: BattleFrame["projectiles"][number]): THREE
     heightMeters: projectile.heightMeters,
   };
   return group;
+}
+
+function createScanArc(unit: UnitFrame, action: BattleFrame["actions"][number]): THREE.Mesh {
+  const sensorRange = Math.max(0, unit.modules.sensor.rangeMeters);
+  const actionRange = typeof action.rangeMeters === "number" && action.rangeMeters > 0 ? action.rangeMeters : sensorRange;
+  const rangeMeters = Math.min(actionRange, sensorRange);
+  const directionDegrees = action.directionDegrees ?? unit.hullHeadingDegrees;
+  const widthDegrees = Math.max(0, Math.min(action.widthDegrees ?? unit.modules.sensor.fovDegrees, unit.modules.sensor.fovDegrees));
+  const segmentCount = Math.max(8, Math.ceil(widthDegrees / 6));
+  const startDegrees = directionDegrees - widthDegrees / 2;
+  const vertices: number[] = [0, 0.04, 0];
+
+  for (let index = 0; index <= segmentCount; index += 1) {
+    const degrees = startDegrees + (widthDegrees * index) / segmentCount;
+    const radians = THREE.MathUtils.degToRad(degrees);
+    vertices.push(Math.cos(radians) * rangeMeters, 0.04, Math.sin(radians) * rangeMeters);
+  }
+
+  const indices: number[] = [];
+  for (let index = 1; index <= segmentCount; index += 1) {
+    indices.push(0, index, index + 1);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      color: unit.name.toLowerCase().includes("red") ? "#ff7a70" : "#77b7ff",
+      transparent: true,
+      opacity: 0.16,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  mesh.name = `unit-${unit.unitId}-scan-arc`;
+  mesh.position.copy(replayToWorld(unit.position, 0));
+  mesh.renderOrder = 1;
+  mesh.userData = {
+    unitId: unit.unitId,
+    rangeMeters,
+    directionDegrees,
+    widthDegrees,
+  };
+  return mesh;
 }
 
 function shapeMetrics(shape: BodyShapeFrame): { lengthMeters: number; widthMeters: number } {

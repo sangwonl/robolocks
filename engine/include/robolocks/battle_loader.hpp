@@ -22,6 +22,7 @@ struct LoadedBattle {
 };
 
 LoadedBattle load_battle_from_file(const std::string& path);
+LoadedBattle load_battle_from_json_string(const std::string& json);
 BattleConfig load_battle_config_from_file(const std::string& path);
 
 }  // namespace robolocks

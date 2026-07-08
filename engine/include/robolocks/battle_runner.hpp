@@ -18,9 +18,6 @@ class BattleRunner {
   explicit BattleRunner(BattleConfig config);
   BattleRunner(BattleConfig config, std::vector<ControllerBinding> controllers);
 
-  static BattleRunner preset_duel();
-  static BattleRunner preset_duel(BattleConfig config);
-
   WorldSnapshot snapshot() const;
   const std::vector<StaticObstacle>& obstacles() const;
   StepResult step_once();
@@ -33,6 +30,9 @@ class BattleRunner {
   SensorSystem sensor_system_;
   WorldSnapshot snapshot_;
   std::vector<ControllerBinding> controllers_;
+
+  void start_controllers(const BattleConfig& config);
+  void apply_scan_orders(const std::vector<UnitOrders>& orders_by_unit);
 };
 
 }  // namespace robolocks

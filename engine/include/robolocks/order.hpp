@@ -37,8 +37,9 @@ struct FireIfSolutionOrder {
 };
 
 struct ScanArcOrder {
-  double center_deg = 0.0;
+  double direction_deg = 0.0;
   double width_deg = 0.0;
+  double range_m = 0.0;
 };
 
 struct FaceArmorTowardOrder {

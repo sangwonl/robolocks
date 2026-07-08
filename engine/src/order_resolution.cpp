@@ -26,6 +26,7 @@ ResolvedUnitOrders resolve_unit_orders(
   bool duplicate_mobility = false;
   bool duplicate_turret = false;
   bool duplicate_weapon = false;
+  bool duplicate_sensor = false;
   bool duplicate_hull = false;
 
   for (const auto& unit_orders : orders_by_unit) {
@@ -82,6 +83,13 @@ ResolvedUnitOrders resolve_unit_orders(
           }
           break;
         case OrderChannel::Sensor:
+          if (resolved.scan_arc.has_value()) {
+            duplicate_sensor = true;
+            continue;
+          }
+          if (const auto* payload = std::get_if<ScanArcOrder>(&order.payload)) {
+            resolved.scan_arc = *payload;
+          }
           break;
       }
     }
@@ -122,6 +130,15 @@ ResolvedUnitOrders resolve_unit_orders(
       "Weapon channel rejected because multiple orders were returned."
     ));
     resolved.fire_if_solution.reset();
+  }
+  if (duplicate_sensor) {
+    resolved.events.push_back(diagnostic_event(
+      tick,
+      unit_id,
+      "duplicate_sensor_order",
+      "Sensor channel rejected because multiple orders were returned."
+    ));
+    resolved.scan_arc.reset();
   }
 
   return resolved;

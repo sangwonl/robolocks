@@ -415,16 +415,7 @@ const nlohmann::json& required_units_array(const nlohmann::json& data) {
 
 }  // namespace
 
-LoadedBattle load_battle_from_file(const std::string& path) {
-  std::ifstream input(path);
-  if (!input) {
-    throw std::runtime_error("Failed to open battle config: " + path);
-  }
-
-  nlohmann::json data;
-  input >> data;
-  const auto base_dir = std::filesystem::path(path).parent_path();
-
+LoadedBattle load_battle_from_json(const nlohmann::json& data, const std::filesystem::path& base_dir) {
   LoadedBattle loaded;
   loaded.config.battle_id = required_string(data, "battleId");
   loaded.config.seed = required_u32(data, "seed");
@@ -475,6 +466,21 @@ LoadedBattle load_battle_from_file(const std::string& path) {
   }
 
   return loaded;
+}
+
+LoadedBattle load_battle_from_file(const std::string& path) {
+  std::ifstream input(path);
+  if (!input) {
+    throw std::runtime_error("Failed to open battle config: " + path);
+  }
+
+  nlohmann::json data;
+  input >> data;
+  return load_battle_from_json(data, std::filesystem::path(path).parent_path());
+}
+
+LoadedBattle load_battle_from_json_string(const std::string& json) {
+  return load_battle_from_json(nlohmann::json::parse(json), {});
 }
 
 BattleConfig load_battle_config_from_file(const std::string& path) {

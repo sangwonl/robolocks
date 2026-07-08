@@ -1,7 +1,6 @@
 #include <robolocks/battle_loader.hpp>
 #include <robolocks/battle_runner.hpp>
 #include <robolocks/controller_factory.hpp>
-#include <robolocks/presets.hpp>
 #include <robolocks/snapshot.hpp>
 
 #include <charconv>
@@ -20,7 +19,6 @@
 namespace {
 
 struct CliOptions {
-  std::string_view preset = "preset_duel_v0";
   std::optional<std::string> battle_path;
   std::optional<std::string> replay_out_path;
   robolocks::Tick ticks = 120;
@@ -29,7 +27,7 @@ struct CliOptions {
 };
 
 void print_usage(std::ostream& out) {
-  out << "usage: robolocks run [--preset preset_duel_v0 | --battle path] [--ticks N] [--stream-json] [--replay-out path]\n";
+  out << "usage: robolocks run --battle path [--ticks N] [--stream-json] [--replay-out path]\n";
 }
 
 bool parse_tick_count(std::string_view text, robolocks::Tick& out) {
@@ -51,10 +49,6 @@ bool parse_options(int argc, char** argv, CliOptions& options) {
 
   for (int i = 2; i < argc; i += 1) {
     const std::string_view arg(argv[i]);
-    if (arg == "--preset" && i + 1 < argc) {
-      options.preset = argv[++i];
-      continue;
-    }
     if (arg == "--battle" && i + 1 < argc) {
       options.battle_path = argv[++i];
       continue;
@@ -76,7 +70,7 @@ bool parse_options(int argc, char** argv, CliOptions& options) {
     return false;
   }
 
-  return options.battle_path.has_value() || options.preset == "preset_duel_v0";
+  return options.battle_path.has_value();
 }
 
 void print_body_shape_json(const robolocks::UnitSnapshot& unit, std::ostream& out);
@@ -316,7 +310,7 @@ void print_order_payload_json(const robolocks::Order& order, std::ostream& out) 
     } else if constexpr (std::is_same_v<Payload, robolocks::FireIfSolutionOrder>) {
       out << "\"minHitChance\":" << payload.min_hit_chance;
     } else if constexpr (std::is_same_v<Payload, robolocks::ScanArcOrder>) {
-      out << "\"centerDegrees\":" << payload.center_deg << ",\"widthDegrees\":" << payload.width_deg;
+      out << "\"directionDegrees\":" << payload.direction_deg << ",\"widthDegrees\":" << payload.width_deg;
     }
   }, order.payload);
 }
@@ -476,12 +470,6 @@ int main(int argc, char** argv) {
 
   std::vector<robolocks::StaticObstacle> replay_obstacles;
   auto runtime = [&options, &replay_obstacles]() {
-    if (!options.battle_path.has_value()) {
-      auto config = robolocks::preset_duel_config();
-      replay_obstacles = config.obstacles;
-      return robolocks::BattleRunner::preset_duel(std::move(config));
-    }
-
     auto loaded = robolocks::load_battle_from_file(*options.battle_path);
     options.tick_rate = 1.0 / loaded.config.tick_dt_sec;
     replay_obstacles = loaded.config.obstacles;

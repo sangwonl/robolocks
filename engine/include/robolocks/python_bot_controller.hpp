@@ -14,6 +14,7 @@ class PythonBotController final : public BotController {
   PythonBotController(const PythonBotController&) = delete;
   PythonBotController& operator=(const PythonBotController&) = delete;
 
+  void on_start(const UnitSpec& spec) override;
   OrderList on_tick(const Observation& observation) override;
 
  private:

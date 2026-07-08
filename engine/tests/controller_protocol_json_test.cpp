@@ -99,7 +99,7 @@ TEST_CASE("controller protocol parses external bot order list") {
         {"type": "aimAt", "target": {"x": 22.0, "y": 12.0}},
         {"type": "faceArmorToward", "target": {"x": 24.0, "y": 12.0}},
         {"type": "fireIfSolution", "minHitChance": 0.65},
-        {"type": "scanArc", "centerDegrees": 45.0, "widthDegrees": 90.0}
+        {"type": "scanArc", "directionDegrees": 45.0, "widthDegrees": 90.0}
       ]
     }
   )json");
@@ -129,6 +129,6 @@ TEST_CASE("controller protocol parses external bot order list") {
 
   REQUIRE(orders[4].kind == robolocks::OrderKind::ScanArc);
   const auto& scan = std::get<robolocks::ScanArcOrder>(orders[4].payload);
-  REQUIRE(scan.center_deg == Catch::Approx(45.0));
+  REQUIRE(scan.direction_deg == Catch::Approx(45.0));
   REQUIRE(scan.width_deg == Catch::Approx(90.0));
 }

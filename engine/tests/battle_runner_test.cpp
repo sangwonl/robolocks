@@ -1,8 +1,10 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <robolocks/battle_loader.hpp>
 #include <robolocks/battle_runner.hpp>
 #include <robolocks/bot_controller.hpp>
+#include <robolocks/controller_factory.hpp>
 
 #include <memory>
 
@@ -11,15 +13,51 @@ namespace {
 class RecordingController final : public robolocks::BotController {
  public:
   robolocks::Observation last_observation;
+  robolocks::UnitSpec started_spec;
+  bool started = false;
+  std::optional<robolocks::ScanArcOrder> scan_arc;
+
+  void on_start(const robolocks::UnitSpec& spec) override {
+    started_spec = spec;
+    started = true;
+  }
 
   robolocks::OrderList on_tick(const robolocks::Observation& observation) override {
     last_observation = observation;
-    return {
+    robolocks::OrderList orders = {
       robolocks::Order{
         .kind = robolocks::OrderKind::MoveTo,
         .payload = robolocks::MoveToOrder{robolocks::Vec2{10.0, 0.0}},
       },
     };
+    if (scan_arc.has_value()) {
+      orders.push_back(robolocks::Order{
+        .kind = robolocks::OrderKind::ScanArc,
+        .payload = *scan_arc,
+      });
+    }
+    return orders;
+  }
+};
+
+class ScanController final : public robolocks::BotController {
+ public:
+  std::vector<robolocks::Observation> observations;
+
+  robolocks::OrderList on_tick(const robolocks::Observation& observation) override {
+    observations.push_back(observation);
+    if (observations.size() == 1) {
+      return {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::ScanArc,
+          .payload = robolocks::ScanArcOrder{
+            .direction_deg = 90.0,
+            .width_deg = 30.0,
+          },
+        },
+      };
+    }
+    return {};
   }
 };
 
@@ -58,7 +96,11 @@ robolocks::UnitSpec make_unit(
 }  // namespace
 
 TEST_CASE("preset duel runner owns order generation and advances ticks") {
-  auto runner = robolocks::BattleRunner::preset_duel();
+  auto loaded = robolocks::load_battle_from_file(
+    std::string(ROBOLOCKS_SOURCE_DIR) + "/fixtures/matches/preset_duel_v0.json");
+  robolocks::BattleRunner runner(
+    std::move(loaded.config),
+    robolocks::create_controllers(loaded.controllers));
 
   REQUIRE(runner.snapshot().tick == 0);
 
@@ -122,14 +164,16 @@ TEST_CASE("battle runner calls bot controllers with per-unit observations") {
   robolocks::BattleRunner runner(config, std::move(controllers));
   const auto result = runner.step_once();
 
+  REQUIRE(raw_controller->started);
+  REQUIRE(raw_controller->started_spec.unit_id == robolocks::UnitId{1});
+  REQUIRE(raw_controller->started_spec.name == "Blue");
+  REQUIRE(raw_controller->started_spec.sensor.range_m == Catch::Approx(1000.0));
   REQUIRE(result.snapshot.tick == 1);
   REQUIRE(result.snapshot.units[0].position.x == Catch::Approx(2.0));
   REQUIRE(raw_controller->last_observation.tick == 0);
   REQUIRE(raw_controller->last_observation.self_id == robolocks::UnitId{1});
   REQUIRE(raw_controller->last_observation.self.unit_id == robolocks::UnitId{1});
-  REQUIRE(raw_controller->last_observation.contacts.size() == 1);
-  REQUIRE(raw_controller->last_observation.contacts[0].unit_id == robolocks::UnitId{2});
-  REQUIRE(raw_controller->last_observation.contacts[0].position.x == Catch::Approx(5.0));
+  REQUIRE(raw_controller->last_observation.contacts.empty());
 }
 
 TEST_CASE("battle runner limits bot observations through unit sensor specs") {
@@ -154,6 +198,41 @@ TEST_CASE("battle runner limits bot observations through unit sensor specs") {
   };
 
   auto controller = std::make_unique<RecordingController>();
+  controller->scan_arc = robolocks::ScanArcOrder{.direction_deg = 0.0, .width_deg = 90.0};
+  auto* raw_controller = controller.get();
+
+  std::vector<robolocks::ControllerBinding> controllers;
+  controllers.push_back(robolocks::ControllerBinding{robolocks::UnitId{1}, std::move(controller)});
+
+  robolocks::BattleRunner runner(config, std::move(controllers));
+  runner.step_once();  // issues ScanArc, applied for next tick
+  runner.step_once();  // observation with ScanArc applied
+
+  REQUIRE(raw_controller->last_observation.contacts.empty());
+}
+
+TEST_CASE("battle runner applies scan arc orders to the next sensor observation") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.units = {
+    make_unit(
+      robolocks::UnitId{1},
+      "Blue",
+      robolocks::Vec2{0.0, 0.0},
+      0.0,
+      100.0,
+      0.0,
+      0.0,
+      robolocks::SensorSpec{
+        .range_m = 10.0,
+        .fov_deg = 20.0,
+        .refresh_ticks = 1,
+      }
+    ),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{0.0, 8.0}),
+  };
+
+  auto controller = std::make_unique<ScanController>();
   auto* raw_controller = controller.get();
 
   std::vector<robolocks::ControllerBinding> controllers;
@@ -161,6 +240,10 @@ TEST_CASE("battle runner limits bot observations through unit sensor specs") {
 
   robolocks::BattleRunner runner(config, std::move(controllers));
   runner.step_once();
+  runner.step_once();
 
-  REQUIRE(raw_controller->last_observation.contacts.empty());
+  REQUIRE(raw_controller->observations.size() == 2);
+  REQUIRE(raw_controller->observations[0].contacts.empty());
+  REQUIRE(raw_controller->observations[1].contacts.size() == 1);
+  REQUIRE(raw_controller->observations[1].contacts[0].unit_id == robolocks::UnitId{2});
 }
