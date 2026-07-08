@@ -25,15 +25,15 @@ nlohmann::json body_shape_to_json(
   if (type == BodyShapeType::Box) {
     return nlohmann::json{
       {"type", "box"},
-      {"radiusM", radius_m},
-      {"lengthM", length_m},
-      {"widthM", width_m},
+      {"radiusMeters", radius_m},
+      {"lengthMeters", length_m},
+      {"widthMeters", width_m},
     };
   }
 
   return nlohmann::json{
     {"type", "circle"},
-    {"radiusM", radius_m},
+    {"radiusMeters", radius_m},
   };
 }
 
@@ -41,8 +41,8 @@ nlohmann::json unit_snapshot_to_json(const UnitSnapshot& unit) {
   return nlohmann::json{
     {"unitId", unit.unit_id.value},
     {"position", vec2_to_json(unit.position)},
-    {"hullHeadingDeg", unit.hull_heading_deg},
-    {"turretHeadingDeg", unit.turret_heading_deg},
+    {"hullHeadingDegrees", unit.hull_heading_deg},
+    {"turretHeadingDegrees", unit.turret_heading_deg},
     {"armorIntegrity", unit.armor_integrity},
     {"weaponCooldownTicks", unit.weapon_cooldown_ticks},
     {"bodyShape", body_shape_to_json(
@@ -55,19 +55,19 @@ nlohmann::json unit_snapshot_to_json(const UnitSnapshot& unit) {
       {"mobility", {
         {"active", unit.mobility_intent_active},
         {"target", vec2_to_json(unit.mobility_intent_target)},
-        {"remainingM", unit.mobility_intent_remaining_m},
+        {"remainingMeters", unit.mobility_intent_remaining_m},
         {"ageTicks", unit.mobility_intent_age_ticks},
       }},
       {"turret", {
         {"active", unit.turret_intent_active},
         {"target", vec2_to_json(unit.turret_intent_target)},
-        {"errorDeg", unit.turret_intent_error_deg},
+        {"errorDegrees", unit.turret_intent_error_deg},
         {"ageTicks", unit.turret_intent_age_ticks},
       }},
       {"hull", {
         {"active", unit.hull_intent_active},
         {"target", vec2_to_json(unit.hull_intent_target)},
-        {"errorDeg", unit.hull_intent_error_deg},
+        {"errorDegrees", unit.hull_intent_error_deg},
         {"ageTicks", unit.hull_intent_age_ticks},
       }},
       {"weapon", {
@@ -83,8 +83,8 @@ nlohmann::json contact_to_json(const ContactObservation& contact) {
   return nlohmann::json{
     {"unitId", contact.unit_id.value},
     {"position", vec2_to_json(contact.position)},
-    {"hullHeadingDeg", contact.hull_heading_deg},
-    {"turretHeadingDeg", contact.turret_heading_deg},
+    {"hullHeadingDegrees", contact.hull_heading_deg},
+    {"turretHeadingDegrees", contact.turret_heading_deg},
     {"armorIntegrity", contact.armor_integrity},
     {"weaponCooldownTicks", contact.weapon_cooldown_ticks},
     {"bodyShape", body_shape_to_json(
@@ -100,7 +100,7 @@ nlohmann::json obstacle_to_json(const StaticObstacle& obstacle) {
   return nlohmann::json{
     {"id", obstacle.id},
     {"position", vec2_to_json(obstacle.position)},
-    {"radiusM", obstacle.radius_m},
+    {"radiusMeters", obstacle.radius_m},
     {"blocksMovement", obstacle.blocks_movement},
     {"blocksLineOfSight", obstacle.blocks_line_of_sight},
   };
@@ -161,8 +161,8 @@ Order order_from_json(const nlohmann::json& json) {
     return Order{
       .kind = OrderKind::ScanArc,
       .payload = ScanArcOrder{
-        .center_deg = required_number(json, "centerDeg"),
-        .width_deg = required_number(json, "widthDeg"),
+        .center_deg = required_number(json, "centerDegrees"),
+        .width_deg = required_number(json, "widthDegrees"),
       },
     };
   }

@@ -252,7 +252,7 @@ Each module contains:
 - `id`.
 - `name`.
 - `category`.
-- `massKg`.
+- `massKilograms`.
 - `pointCost`.
 - `compatibility`.
 - `requirements`.

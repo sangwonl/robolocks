@@ -45,7 +45,7 @@ Each frame is a snapshot after a simulation tick:
 
 Unit snapshots expose runtime state and composed module specs:
 
-- Identity and transform: `unitId`, `position`, `hullHeadingDeg`, `turretHeadingDeg`.
+- Identity and transform: `unitId`, `position`, `hullHeadingDegrees`, `turretHeadingDegrees`.
 - Health/control state: `armorIntegrity`, `weaponCooldownTicks`.
 - Shape: `bodyShape`.
 - Composed specs: `modules.mobility`, `modules.turret`, `modules.weapon`, `modules.armor`, `modules.body`, `modules.sensor`.

@@ -269,8 +269,8 @@ MobilitySpec optional_mobility_component(const nlohmann::json& unit, const Modul
     return mobility;
   }
   mobility.id = optional_string(*mobility_json, "id");
-  mobility.max_speed_mps = optional_number(*mobility_json, "maxSpeedMps", mobility.max_speed_mps);
-  mobility.max_hull_turn_degps = optional_number(*mobility_json, "maxHullTurnDegps", mobility.max_hull_turn_degps);
+  mobility.max_speed_mps = optional_number(*mobility_json, "maxSpeedMetersPerSecond", mobility.max_speed_mps);
+  mobility.max_hull_turn_degps = optional_number(*mobility_json, "maxHullTurnDegreesPerSecond", mobility.max_hull_turn_degps);
   return mobility;
 }
 
@@ -286,7 +286,7 @@ TurretSpec optional_turret_component(
     return turret;
   }
   turret.id = optional_string(*turret_json, "id");
-  turret.max_turn_degps = optional_number(*turret_json, "maxTurnDegps", turret.max_turn_degps);
+  turret.max_turn_degps = optional_number(*turret_json, "maxTurnDegreesPerSecond", turret.max_turn_degps);
   return turret;
 }
 
@@ -299,15 +299,15 @@ WeaponSpec optional_weapon_component(const nlohmann::json& unit, const ModuleCat
   weapon.id = optional_string(*weapon_json, "id");
   weapon.fire_mode = optional_weapon_fire_mode(*weapon_json, weapon.fire_mode);
   weapon.damage = optional_number(*weapon_json, "damage", weapon.damage);
-  weapon.penetration_mm = optional_number(*weapon_json, "penetrationMm", weapon.penetration_mm);
-  weapon.range_m = optional_number(*weapon_json, "rangeM", weapon.range_m);
-  weapon.muzzle_velocity_mps = optional_number(*weapon_json, "muzzleVelocityMps", weapon.muzzle_velocity_mps);
-  weapon.muzzle_offset_m = optional_vec3(*weapon_json, "muzzleOffsetM");
-  weapon.launch_angle_deg = optional_number(*weapon_json, "launchAngleDeg", weapon.launch_angle_deg);
-  weapon.gravity_mps2 = optional_number(*weapon_json, "gravityMps2", weapon.gravity_mps2);
-  weapon.blast_radius_m = optional_number(*weapon_json, "blastRadiusM", weapon.blast_radius_m);
-  weapon.projectile_radius_m = optional_number(*weapon_json, "projectileRadiusM", weapon.projectile_radius_m);
-  weapon.aim_tolerance_deg = optional_number(*weapon_json, "aimToleranceDeg", weapon.aim_tolerance_deg);
+  weapon.penetration_mm = optional_number(*weapon_json, "penetrationMillimeters", weapon.penetration_mm);
+  weapon.range_m = optional_number(*weapon_json, "rangeMeters", weapon.range_m);
+  weapon.muzzle_velocity_mps = optional_number(*weapon_json, "muzzleVelocityMetersPerSecond", weapon.muzzle_velocity_mps);
+  weapon.muzzle_offset_m = optional_vec3(*weapon_json, "muzzleOffsetMeters");
+  weapon.launch_angle_deg = optional_number(*weapon_json, "launchAngleDegrees", weapon.launch_angle_deg);
+  weapon.gravity_mps2 = optional_number(*weapon_json, "gravityMetersPerSecondSquared", weapon.gravity_mps2);
+  weapon.blast_radius_m = optional_number(*weapon_json, "blastRadiusMeters", weapon.blast_radius_m);
+  weapon.projectile_radius_m = optional_number(*weapon_json, "projectileRadiusMeters", weapon.projectile_radius_m);
+  weapon.aim_tolerance_deg = optional_number(*weapon_json, "aimToleranceDegrees", weapon.aim_tolerance_deg);
   weapon.reload_ticks = optional_u32(*weapon_json, "reloadTicks", weapon.reload_ticks);
   return weapon;
 }
@@ -320,9 +320,9 @@ ArmorSpec optional_armor_component(const nlohmann::json& unit, const ModuleCatal
   }
   armor.id = optional_string(*armor_json, "id");
   armor.integrity = optional_number(*armor_json, "integrity", armor.integrity);
-  armor.front_mm = optional_number(*armor_json, "frontMm", armor.front_mm);
-  armor.side_mm = optional_number(*armor_json, "sideMm", armor.side_mm);
-  armor.rear_mm = optional_number(*armor_json, "rearMm", armor.rear_mm);
+  armor.front_mm = optional_number(*armor_json, "frontMillimeters", armor.front_mm);
+  armor.side_mm = optional_number(*armor_json, "sideMillimeters", armor.side_mm);
+  armor.rear_mm = optional_number(*armor_json, "rearMillimeters", armor.rear_mm);
   return armor;
 }
 
@@ -335,7 +335,7 @@ BodyShapeSpec required_body_shape_component(const nlohmann::json& body_json) {
   const auto shape_type = required_string(shape_json, "type");
 
   BodyShapeSpec shape;
-  shape.radius_m = required_positive_number(shape_json, "radiusM");
+  shape.radius_m = required_positive_number(shape_json, "radiusMeters");
 
   if (shape_type == "circle") {
     shape.type = BodyShapeType::Circle;
@@ -344,8 +344,8 @@ BodyShapeSpec required_body_shape_component(const nlohmann::json& body_json) {
 
   if (shape_type == "box") {
     shape.type = BodyShapeType::Box;
-    shape.length_m = required_positive_number(shape_json, "lengthM");
-    shape.width_m = required_positive_number(shape_json, "widthM");
+    shape.length_m = required_positive_number(shape_json, "lengthMeters");
+    shape.width_m = required_positive_number(shape_json, "widthMeters");
     return shape;
   }
 
@@ -360,7 +360,7 @@ BodySpec optional_body_component(const nlohmann::json& unit, const ModuleCatalog
   }
   body.id = optional_string(*body_json, "id");
   body.shape = required_body_shape_component(*body_json);
-  body.mass_kg = optional_number(*body_json, "massKg", body.mass_kg);
+  body.mass_kg = optional_number(*body_json, "massKilograms", body.mass_kg);
   return body;
 }
 
@@ -371,8 +371,8 @@ SensorSpec optional_sensor_component(const nlohmann::json& unit, const ModuleCat
     return sensor;
   }
   sensor.id = optional_string(*sensor_json, "id");
-  sensor.range_m = optional_number(*sensor_json, "rangeM", sensor.range_m);
-  sensor.fov_deg = optional_number(*sensor_json, "fovDeg", sensor.fov_deg);
+  sensor.range_m = optional_number(*sensor_json, "rangeMeters", sensor.range_m);
+  sensor.fov_deg = optional_number(*sensor_json, "fovDegrees", sensor.fov_deg);
   sensor.refresh_ticks = optional_u32(*sensor_json, "refreshTicks", sensor.refresh_ticks);
   return sensor;
 }
@@ -393,7 +393,7 @@ std::vector<StaticObstacle> optional_obstacles(const nlohmann::json& data) {
     StaticObstacle parsed;
     parsed.id = required_string(obstacle, "id");
     parsed.position = required_vec2(obstacle, "position");
-    parsed.radius_m = optional_number(obstacle, "radiusM", parsed.radius_m);
+    parsed.radius_m = optional_number(obstacle, "radiusMeters", parsed.radius_m);
     parsed.blocks_movement = optional_bool(obstacle, "blocksMovement", parsed.blocks_movement);
     parsed.blocks_line_of_sight = optional_bool(
       obstacle,

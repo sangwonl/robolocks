@@ -261,8 +261,8 @@ function UnitCard({ unit, actions, events }: { unit: UnitFrame; actions: BattleA
       </div>
       <dl className="unit-stats">
         <Stat label="Position" value={`${unit.position.x.toFixed(2)}, ${unit.position.y.toFixed(2)}`} />
-        <Stat label="Hull" value={`${unit.hullHeadingDeg.toFixed(1)} deg`} />
-        <Stat label="Turret" value={`${unit.turretHeadingDeg.toFixed(1)} deg`} />
+        <Stat label="Hull" value={`${unit.hullHeadingDegrees.toFixed(1)} deg`} />
+        <Stat label="Turret" value={`${unit.turretHeadingDegrees.toFixed(1)} deg`} />
         <Stat label="Shape" value={shapeLabel(unit.bodyShape)} />
         <Stat label="Armor" value={unit.armorIntegrity.toFixed(0)} />
         <Stat label="Reload" value={`${unit.weaponCooldownTicks} ticks`} />
@@ -300,23 +300,23 @@ function UnitSection({ title, items }: { title: string; items: { label: string; 
 }
 
 function moduleItems(unit: UnitFrame): { label: string; value: string }[] {
-  const muzzle = unit.modules.weapon.muzzleOffsetM;
+  const muzzle = unit.modules.weapon.muzzleOffsetMeters;
   const muzzleLabel = `${muzzle.x.toFixed(1)},${muzzle.y.toFixed(1)},${muzzle.z.toFixed(1)}m`;
   return [
-    { label: "move", value: `${unit.modules.mobility.id} ${unit.modules.mobility.maxSpeedMps.toFixed(1)}m/s ${unit.modules.mobility.maxHullTurnDegps.toFixed(0)}deg/s` },
-    { label: "turret", value: `${unit.modules.turret.id} ${unit.modules.turret.maxTurnDegps.toFixed(0)}deg/s` },
-    { label: "weapon", value: `${unit.modules.weapon.id} ${unit.modules.weapon.fireMode} dmg=${unit.modules.weapon.damage.toFixed(0)} pen=${unit.modules.weapon.penetrationMm.toFixed(0)}mm v=${unit.modules.weapon.muzzleVelocityMps.toFixed(0)}m/s muzzle=${muzzleLabel} angle=${unit.modules.weapon.launchAngleDeg.toFixed(0)}deg blast=${unit.modules.weapon.blastRadiusM.toFixed(1)}m reload=${unit.modules.weapon.reloadTicks}` },
-    { label: "armor", value: `${unit.modules.armor.id} hp=${unit.modules.armor.integrity.toFixed(0)} ${unit.modules.armor.frontMm.toFixed(0)}/${unit.modules.armor.sideMm.toFixed(0)}/${unit.modules.armor.rearMm.toFixed(0)}mm` },
-    { label: "body", value: `${unit.modules.body.id} mass=${unit.modules.body.massKg.toFixed(0)}kg` },
-    { label: "sensor", value: `${unit.modules.sensor.id} ${unit.modules.sensor.rangeM.toFixed(0)}m/${unit.modules.sensor.fovDeg.toFixed(0)}deg` },
+    { label: "move", value: `${unit.modules.mobility.id} ${unit.modules.mobility.maxSpeedMetersPerSecond.toFixed(1)}m/s ${unit.modules.mobility.maxHullTurnDegreesPerSecond.toFixed(0)}deg/s` },
+    { label: "turret", value: `${unit.modules.turret.id} ${unit.modules.turret.maxTurnDegreesPerSecond.toFixed(0)}deg/s` },
+    { label: "weapon", value: `${unit.modules.weapon.id} ${unit.modules.weapon.fireMode} dmg=${unit.modules.weapon.damage.toFixed(0)} pen=${unit.modules.weapon.penetrationMillimeters.toFixed(0)}mm v=${unit.modules.weapon.muzzleVelocityMetersPerSecond.toFixed(0)}m/s muzzle=${muzzleLabel} angle=${unit.modules.weapon.launchAngleDegrees.toFixed(0)}deg blast=${unit.modules.weapon.blastRadiusMeters.toFixed(1)}m reload=${unit.modules.weapon.reloadTicks}` },
+    { label: "armor", value: `${unit.modules.armor.id} hp=${unit.modules.armor.integrity.toFixed(0)} ${unit.modules.armor.frontMillimeters.toFixed(0)}/${unit.modules.armor.sideMillimeters.toFixed(0)}/${unit.modules.armor.rearMillimeters.toFixed(0)}mm` },
+    { label: "body", value: `${unit.modules.body.id} mass=${unit.modules.body.massKilograms.toFixed(0)}kg` },
+    { label: "sensor", value: `${unit.modules.sensor.id} ${unit.modules.sensor.rangeMeters.toFixed(0)}m/${unit.modules.sensor.fovDegrees.toFixed(0)}deg` },
   ];
 }
 
 function intentItems(unit: UnitFrame): { label: string; value: string }[] {
   return [
-    { label: "move", value: unit.intents.mobility.active ? `move (${unit.intents.mobility.target.x.toFixed(1)}, ${unit.intents.mobility.target.y.toFixed(1)}) rem=${unit.intents.mobility.remainingM.toFixed(1)}m age=${unit.intents.mobility.ageTicks}` : "idle" },
-    { label: "turret", value: unit.intents.turret.active ? `aim (${unit.intents.turret.target.x.toFixed(1)}, ${unit.intents.turret.target.y.toFixed(1)}) err=${unit.intents.turret.errorDeg.toFixed(1)}deg age=${unit.intents.turret.ageTicks}` : "idle" },
-    { label: "hull", value: unit.intents.hull.active ? `face (${unit.intents.hull.target.x.toFixed(1)}, ${unit.intents.hull.target.y.toFixed(1)}) err=${unit.intents.hull.errorDeg.toFixed(1)}deg age=${unit.intents.hull.ageTicks}` : "idle" },
+    { label: "move", value: unit.intents.mobility.active ? `move (${unit.intents.mobility.target.x.toFixed(1)}, ${unit.intents.mobility.target.y.toFixed(1)}) rem=${unit.intents.mobility.remainingMeters.toFixed(1)}m age=${unit.intents.mobility.ageTicks}` : "idle" },
+    { label: "turret", value: unit.intents.turret.active ? `aim (${unit.intents.turret.target.x.toFixed(1)}, ${unit.intents.turret.target.y.toFixed(1)}) err=${unit.intents.turret.errorDegrees.toFixed(1)}deg age=${unit.intents.turret.ageTicks}` : "idle" },
+    { label: "hull", value: unit.intents.hull.active ? `face (${unit.intents.hull.target.x.toFixed(1)}, ${unit.intents.hull.target.y.toFixed(1)}) err=${unit.intents.hull.errorDegrees.toFixed(1)}deg age=${unit.intents.hull.ageTicks}` : "idle" },
     { label: "weapon", value: unit.intents.weapon.active ? `fire p>=${unit.intents.weapon.minHitChance.toFixed(2)} age=${unit.intents.weapon.ageTicks}` : "idle" },
   ];
 }
@@ -343,9 +343,9 @@ function eventItems(events: BattleEvent[]): { label: string; value: string }[] {
 
 function shapeLabel(shape: UnitFrame["bodyShape"]): string {
   if (shape.type === "box") {
-    return `box ${shape.lengthM.toFixed(1)}x${shape.widthM.toFixed(1)}m`;
+    return `box ${shape.lengthMeters.toFixed(1)}x${shape.widthMeters.toFixed(1)}m`;
   }
-  return `circle r=${shape.radiusM.toFixed(1)}m`;
+  return `circle r=${shape.radiusMeters.toFixed(1)}m`;
 }
 
 function eventPayloadSummary(event: BattleEvent): string {
@@ -360,8 +360,8 @@ function eventPayloadSummary(event: BattleEvent): string {
   if (payload.armorFacing) {
     parts.push(payload.armorFacing);
   }
-  if (payload.blastRadiusM > 0) {
-    parts.push(`d=${payload.impactDistanceM.toFixed(1)}/${payload.blastRadiusM.toFixed(1)}m`);
+  if (payload.blastRadiusMeters > 0) {
+    parts.push(`d=${payload.impactDistanceMeters.toFixed(1)}/${payload.blastRadiusMeters.toFixed(1)}m`);
   }
   return ` ${parts.join(" ")}`;
 }
@@ -376,8 +376,8 @@ function actionTarget(action: BattleAction): string {
   if (typeof action.minHitChance === "number") {
     return ` p>=${action.minHitChance.toFixed(2)}`;
   }
-  if (typeof action.centerDeg === "number" && typeof action.widthDeg === "number") {
-    return ` ${action.centerDeg.toFixed(0)}deg/${action.widthDeg.toFixed(0)}deg`;
+  if (typeof action.centerDegrees === "number" && typeof action.widthDegrees === "number") {
+    return ` ${action.centerDegrees.toFixed(0)}deg/${action.widthDegrees.toFixed(0)}deg`;
   }
   return "";
 }

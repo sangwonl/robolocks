@@ -12,21 +12,21 @@ export type Vec3 = {
 export type BodyShapeFrame =
   | {
       type: "box";
-      radiusM: number;
-      lengthM: number;
-      widthM: number;
+      radiusMeters: number;
+      lengthMeters: number;
+      widthMeters: number;
     }
   | {
       type: "circle";
-      radiusM: number;
+      radiusMeters: number;
     };
 
 export type UnitFrame = {
   unitId: number;
   name: string;
   position: Vec2;
-  hullHeadingDeg: number;
-  turretHeadingDeg: number;
+  hullHeadingDegrees: number;
+  turretHeadingDegrees: number;
   armorIntegrity: number;
   weaponCooldownTicks: number;
   bodyShape: BodyShapeFrame;
@@ -37,43 +37,43 @@ export type UnitFrame = {
 export type UnitModulesFrame = {
   mobility: {
     id: string;
-    maxSpeedMps: number;
-    maxHullTurnDegps: number;
+    maxSpeedMetersPerSecond: number;
+    maxHullTurnDegreesPerSecond: number;
   };
   turret: {
     id: string;
-    maxTurnDegps: number;
+    maxTurnDegreesPerSecond: number;
   };
   weapon: {
     id: string;
     fireMode: string;
     damage: number;
-    penetrationMm: number;
-    rangeM: number;
-    muzzleVelocityMps: number;
-    muzzleOffsetM: Vec3;
-    launchAngleDeg: number;
-    gravityMps2: number;
-    blastRadiusM: number;
-    projectileRadiusM: number;
-    aimToleranceDeg: number;
+    penetrationMillimeters: number;
+    rangeMeters: number;
+    muzzleVelocityMetersPerSecond: number;
+    muzzleOffsetMeters: Vec3;
+    launchAngleDegrees: number;
+    gravityMetersPerSecondSquared: number;
+    blastRadiusMeters: number;
+    projectileRadiusMeters: number;
+    aimToleranceDegrees: number;
     reloadTicks: number;
   };
   armor: {
     id: string;
     integrity: number;
-    frontMm: number;
-    sideMm: number;
-    rearMm: number;
+    frontMillimeters: number;
+    sideMillimeters: number;
+    rearMillimeters: number;
   };
   body: {
     id: string;
-    massKg: number;
+    massKilograms: number;
   };
   sensor: {
     id: string;
-    rangeM: number;
-    fovDeg: number;
+    rangeMeters: number;
+    fovDegrees: number;
     refreshTicks: number;
   };
 };
@@ -82,19 +82,19 @@ export type UnitIntentsFrame = {
   mobility: {
     active: boolean;
     target: Vec2;
-    remainingM: number;
+    remainingMeters: number;
     ageTicks: number;
   };
   turret: {
     active: boolean;
     target: Vec2;
-    errorDeg: number;
+    errorDegrees: number;
     ageTicks: number;
   };
   hull: {
     active: boolean;
     target: Vec2;
-    errorDeg: number;
+    errorDegrees: number;
     ageTicks: number;
   };
   weapon: {
@@ -107,7 +107,7 @@ export type UnitIntentsFrame = {
 export type StaticObstacleFrame = {
   id: string;
   position: Vec2;
-  radiusM: number;
+  radiusMeters: number;
   blocksMovement: boolean;
   blocksLineOfSight: boolean;
 };
@@ -126,10 +126,10 @@ export type BattleEventPayload = {
   armorFacing: string;
   damage: number;
   remainingArmor: number;
-  penetrationMm: number;
-  armorMm: number;
-  impactDistanceM: number;
-  blastRadiusM: number;
+  penetrationMillimeters: number;
+  armorMillimeters: number;
+  impactDistanceMeters: number;
+  blastRadiusMeters: number;
 };
 
 export type BattleAction = {
@@ -139,8 +139,8 @@ export type BattleAction = {
   position?: Vec2;
   target?: Vec2;
   minHitChance?: number;
-  centerDeg?: number;
-  widthDeg?: number;
+  centerDegrees?: number;
+  widthDegrees?: number;
 };
 
 export type ProjectileFrame = {
@@ -148,9 +148,9 @@ export type ProjectileFrame = {
   ownerUnitId: number;
   previousPosition: Vec2;
   position: Vec2;
-  radiusM: number;
-  previousHeightM: number;
-  heightM: number;
+  radiusMeters: number;
+  previousHeightMeters: number;
+  heightMeters: number;
 };
 
 export type BattleFrame = {

@@ -28,9 +28,9 @@
         "weapon": {
           "id": "slow_cannon_test",
           "fireMode": "ballistic",
-          "launchAngleDeg": 45,
-          "gravityMps2": 9.81,
-          "blastRadiusM": 2.5,
+          "launchAngleDegrees": 45,
+          "gravityMetersPerSecondSquared": 9.81,
+          "blastRadiusMeters": 2.5,
           "reloadTicks": 45
         },
         "armor": { "id": "rolled_armor_mk1" },

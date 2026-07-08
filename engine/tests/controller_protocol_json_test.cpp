@@ -53,21 +53,21 @@ TEST_CASE("controller protocol serializes observation for external bots") {
   REQUIRE(json.at("self").at("unitId") == 1);
   REQUIRE(json.at("self").at("position").at("x") == Catch::Approx(6.0));
   REQUIRE(json.at("self").at("position").at("y") == Catch::Approx(12.0));
-  REQUIRE(json.at("self").at("hullHeadingDeg") == Catch::Approx(15.0));
-  REQUIRE(json.at("self").at("turretHeadingDeg") == Catch::Approx(20.0));
+  REQUIRE(json.at("self").at("hullHeadingDegrees") == Catch::Approx(15.0));
+  REQUIRE(json.at("self").at("turretHeadingDegrees") == Catch::Approx(20.0));
   REQUIRE(json.at("self").at("armorIntegrity") == Catch::Approx(91.5));
   REQUIRE(json.at("self").at("weaponCooldownTicks") == 7);
   REQUIRE(json.at("self").at("bodyShape").at("type") == "box");
-  REQUIRE(json.at("self").at("bodyShape").at("radiusM") == Catch::Approx(1.0));
-  REQUIRE(json.at("self").at("bodyShape").at("lengthM") == Catch::Approx(5.6));
-  REQUIRE(json.at("self").at("bodyShape").at("widthM") == Catch::Approx(2.8));
+  REQUIRE(json.at("self").at("bodyShape").at("radiusMeters") == Catch::Approx(1.0));
+  REQUIRE(json.at("self").at("bodyShape").at("lengthMeters") == Catch::Approx(5.6));
+  REQUIRE(json.at("self").at("bodyShape").at("widthMeters") == Catch::Approx(2.8));
   REQUIRE(json.at("self").at("intents").at("mobility").at("active") == true);
   REQUIRE(json.at("self").at("intents").at("mobility").at("target").at("x") == Catch::Approx(20.0));
-  REQUIRE(json.at("self").at("intents").at("mobility").at("remainingM") == Catch::Approx(14.0));
+  REQUIRE(json.at("self").at("intents").at("mobility").at("remainingMeters") == Catch::Approx(14.0));
   REQUIRE(json.at("self").at("intents").at("mobility").at("ageTicks") == 2);
   REQUIRE(json.at("self").at("intents").at("turret").at("active") == true);
   REQUIRE(json.at("self").at("intents").at("turret").at("target").at("x") == Catch::Approx(34.0));
-  REQUIRE(json.at("self").at("intents").at("turret").at("errorDeg") == Catch::Approx(4.5));
+  REQUIRE(json.at("self").at("intents").at("turret").at("errorDegrees") == Catch::Approx(4.5));
   REQUIRE(json.at("self").at("intents").at("turret").at("ageTicks") == 1);
   REQUIRE(json.at("self").at("intents").at("weapon").at("active") == true);
   REQUIRE(json.at("self").at("intents").at("weapon").at("minHitChance") == Catch::Approx(0.6));
@@ -79,14 +79,14 @@ TEST_CASE("controller protocol serializes observation for external bots") {
   REQUIRE(json.at("contacts").at(0).at("position").at("y") == Catch::Approx(12.0));
   REQUIRE(json.at("contacts").at(0).at("weaponCooldownTicks") == 3);
   REQUIRE(json.at("contacts").at(0).at("bodyShape").at("type") == "box");
-  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("radiusM") == Catch::Approx(1.0));
-  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("lengthM") == Catch::Approx(5.6));
-  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("widthM") == Catch::Approx(2.8));
+  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("radiusMeters") == Catch::Approx(1.0));
+  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("lengthMeters") == Catch::Approx(5.6));
+  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("widthMeters") == Catch::Approx(2.8));
   REQUIRE(json.at("map").at("obstacles").size() == 1);
   REQUIRE(json.at("map").at("obstacles").at(0).at("id") == "north_cover");
   REQUIRE(json.at("map").at("obstacles").at(0).at("position").at("x") == Catch::Approx(20.0));
   REQUIRE(json.at("map").at("obstacles").at(0).at("position").at("y") == Catch::Approx(6.0));
-  REQUIRE(json.at("map").at("obstacles").at(0).at("radiusM") == Catch::Approx(1.5));
+  REQUIRE(json.at("map").at("obstacles").at(0).at("radiusMeters") == Catch::Approx(1.5));
   REQUIRE(json.at("map").at("obstacles").at(0).at("blocksMovement") == true);
   REQUIRE(json.at("map").at("obstacles").at(0).at("blocksLineOfSight") == true);
 }
@@ -99,7 +99,7 @@ TEST_CASE("controller protocol parses external bot order list") {
         {"type": "aimAt", "target": {"x": 22.0, "y": 12.0}},
         {"type": "faceArmorToward", "target": {"x": 24.0, "y": 12.0}},
         {"type": "fireIfSolution", "minHitChance": 0.65},
-        {"type": "scanArc", "centerDeg": 45.0, "widthDeg": 90.0}
+        {"type": "scanArc", "centerDegrees": 45.0, "widthDegrees": 90.0}
       ]
     }
   )json");

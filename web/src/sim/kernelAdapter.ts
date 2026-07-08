@@ -265,7 +265,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
         obstacles.push({
           id: obstacleId(handle, i),
           position: { x: obstacleX(handle, i), y: obstacleY(handle, i) },
-          radiusM: obstacleRadius(handle, i),
+          radiusMeters: obstacleRadius(handle, i),
           blocksMovement: obstacleBlocksMovement(handle, i) !== 0,
           blocksLineOfSight: obstacleBlocksLineOfSight(handle, i) !== 0,
         });
@@ -292,8 +292,8 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
         unitId: id,
         name: unitName(id),
         position: { x: unitX(runtimeHandle, i), y: unitY(runtimeHandle, i) },
-        hullHeadingDeg: hullHeading(runtimeHandle, i),
-        turretHeadingDeg: turretHeading(runtimeHandle, i),
+        hullHeadingDegrees: hullHeading(runtimeHandle, i),
+        turretHeadingDegrees: turretHeading(runtimeHandle, i),
         armorIntegrity: unitArmor(runtimeHandle, i),
         weaponCooldownTicks: weaponCooldown(runtimeHandle, i),
         bodyShape: readBodyShape(runtimeHandle, i, bodyShapeType, bodyRadius, bodyLength, bodyWidth),
@@ -348,7 +348,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
           x: mobilityIntentTargetX(runtimeHandle, unitIndex),
           y: mobilityIntentTargetY(runtimeHandle, unitIndex),
         },
-        remainingM: mobilityIntentRemaining(runtimeHandle, unitIndex),
+        remainingMeters: mobilityIntentRemaining(runtimeHandle, unitIndex),
         ageTicks: mobilityIntentAge(runtimeHandle, unitIndex),
       },
       turret: {
@@ -357,7 +357,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
           x: turretIntentTargetX(runtimeHandle, unitIndex),
           y: turretIntentTargetY(runtimeHandle, unitIndex),
         },
-        errorDeg: turretIntentError(runtimeHandle, unitIndex),
+        errorDegrees: turretIntentError(runtimeHandle, unitIndex),
         ageTicks: turretIntentAge(runtimeHandle, unitIndex),
       },
       hull: {
@@ -366,7 +366,7 @@ export async function createPresetDuelFromWasmFactory(factory: WasmFactory = loa
           x: hullIntentTargetX(runtimeHandle, unitIndex),
           y: hullIntentTargetY(runtimeHandle, unitIndex),
         },
-        errorDeg: hullIntentError(runtimeHandle, unitIndex),
+        errorDegrees: hullIntentError(runtimeHandle, unitIndex),
         ageTicks: hullIntentAge(runtimeHandle, unitIndex),
       },
       weapon: {
@@ -410,10 +410,10 @@ function defaultEventPayload(): BattleEvent["payload"] {
     armorFacing: "",
     damage: 0,
     remainingArmor: 0,
-    penetrationMm: 0,
-    armorMm: 0,
-    impactDistanceM: 0,
-    blastRadiusM: 0,
+    penetrationMillimeters: 0,
+    armorMillimeters: 0,
+    impactDistanceMeters: 0,
+    blastRadiusMeters: 0,
   };
 }
 
@@ -437,9 +437,9 @@ function readProjectiles(
       ownerUnitId: projectileOwnerUnitId(handle, i),
       previousPosition: { x: projectilePreviousX(handle, i), y: projectilePreviousY(handle, i) },
       position: { x: projectileX(handle, i), y: projectileY(handle, i) },
-      radiusM: projectileRadius(handle, i),
-      previousHeightM: projectilePreviousHeight(handle, i),
-      heightM: projectileHeight(handle, i),
+      radiusMeters: projectileRadius(handle, i),
+      previousHeightMeters: projectilePreviousHeight(handle, i),
+      heightMeters: projectileHeight(handle, i),
     });
   }
   return projectiles;
@@ -480,8 +480,8 @@ function readActions(
       action.minHitChance = actionMinHitChance(handle, i);
     }
     if (actionHasScanArc(handle, i) !== 0) {
-      action.centerDeg = actionCenterDeg(handle, i);
-      action.widthDeg = actionWidthDeg(handle, i);
+      action.centerDegrees = actionCenterDeg(handle, i);
+      action.widthDegrees = actionWidthDeg(handle, i);
     }
     actions.push(action);
   }
@@ -496,19 +496,19 @@ function readBodyShape(
   bodyLength: (handle: number, unitIndex: number) => number,
   bodyWidth: (handle: number, unitIndex: number) => number,
 ): BodyShapeFrame {
-  const radiusM = bodyRadius(handle, unitIndex);
+  const radiusMeters = bodyRadius(handle, unitIndex);
   if (bodyShapeType(handle, unitIndex) === 1) {
     return {
       type: "box",
-      radiusM,
-      lengthM: bodyLength(handle, unitIndex),
-      widthM: bodyWidth(handle, unitIndex),
+      radiusMeters,
+      lengthMeters: bodyLength(handle, unitIndex),
+      widthMeters: bodyWidth(handle, unitIndex),
     };
   }
 
   return {
     type: "circle",
-    radiusM,
+    radiusMeters,
   };
 }
 
@@ -529,29 +529,29 @@ function unitName(unitId: number): string {
 function defaultIntents(): UnitIntentsFrame {
   const zero = { x: 0, y: 0 };
   return {
-    mobility: { active: false, target: zero, remainingM: 0, ageTicks: 0 },
-    turret: { active: false, target: zero, errorDeg: 0, ageTicks: 0 },
-    hull: { active: false, target: zero, errorDeg: 0, ageTicks: 0 },
+    mobility: { active: false, target: zero, remainingMeters: 0, ageTicks: 0 },
+    turret: { active: false, target: zero, errorDegrees: 0, ageTicks: 0 },
+    hull: { active: false, target: zero, errorDegrees: 0, ageTicks: 0 },
     weapon: { active: false, minHitChance: 0, ageTicks: 0 },
   };
 }
 
 function defaultModules(): UnitModulesFrame {
   return {
-    mobility: { id: "tracked_chassis_mk1", maxSpeedMps: 6, maxHullTurnDegps: 120 },
-    turret: { id: "light_turret_mk1", maxTurnDegps: 180 },
-    weapon: { id: "cannon_75mm_mk1", fireMode: "direct", damage: 25, penetrationMm: 120, rangeM: 80, muzzleVelocityMps: 620, muzzleOffsetM: { x: 3.6, y: 0, z: 1.65 }, launchAngleDeg: 0, gravityMps2: 9.81, blastRadiusM: 0, projectileRadiusM: 0.08, aimToleranceDeg: 5, reloadTicks: 30 },
-    armor: { id: "rolled_armor_mk1", integrity: 100, frontMm: 100, sideMm: 70, rearMm: 45 },
-    body: { id: "medium_hull_mk1", massKg: 30000 },
-    sensor: { id: "visual_optic_mk1", rangeM: 60, fovDeg: 120, refreshTicks: 1 },
+    mobility: { id: "tracked_chassis_mk1", maxSpeedMetersPerSecond: 6, maxHullTurnDegreesPerSecond: 120 },
+    turret: { id: "light_turret_mk1", maxTurnDegreesPerSecond: 180 },
+    weapon: { id: "cannon_75mm_mk1", fireMode: "direct", damage: 25, penetrationMillimeters: 120, rangeMeters: 80, muzzleVelocityMetersPerSecond: 620, muzzleOffsetMeters: { x: 3.6, y: 0, z: 1.65 }, launchAngleDegrees: 0, gravityMetersPerSecondSquared: 9.81, blastRadiusMeters: 0, projectileRadiusMeters: 0.08, aimToleranceDegrees: 5, reloadTicks: 30 },
+    armor: { id: "rolled_armor_mk1", integrity: 100, frontMillimeters: 100, sideMillimeters: 70, rearMillimeters: 45 },
+    body: { id: "medium_hull_mk1", massKilograms: 30000 },
+    sensor: { id: "visual_optic_mk1", rangeMeters: 60, fovDegrees: 120, refreshTicks: 1 },
   };
 }
 
 export function createFallbackPresetDuel(): KernelBattleRunner {
   let tick = 0;
   const units: InternalUnit[] = [
-    { unitId: 1, name: "Blue", position: { x: 6, y: 12 }, hullHeadingDeg: 0, turretHeadingDeg: 0, armorIntegrity: 100, weaponCooldownTicks: 0, bodyShape: { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 }, modules: defaultModules(), intents: defaultIntents(), target: { x: 17, y: 12 }, speed: 0.2 },
-    { unitId: 2, name: "Red", position: { x: 34, y: 12 }, hullHeadingDeg: 0, turretHeadingDeg: 0, armorIntegrity: 100, weaponCooldownTicks: 0, bodyShape: { type: "box", radiusM: 1.2, lengthM: 5.6, widthM: 2.8 }, modules: defaultModules(), intents: defaultIntents(), target: { x: 23, y: 12 }, speed: 0.2 },
+    { unitId: 1, name: "Blue", position: { x: 6, y: 12 }, hullHeadingDegrees: 0, turretHeadingDegrees: 0, armorIntegrity: 100, weaponCooldownTicks: 0, bodyShape: { type: "box", radiusMeters: 1.2, lengthMeters: 5.6, widthMeters: 2.8 }, modules: defaultModules(), intents: defaultIntents(), target: { x: 17, y: 12 }, speed: 0.2 },
+    { unitId: 2, name: "Red", position: { x: 34, y: 12 }, hullHeadingDegrees: 0, turretHeadingDegrees: 0, armorIntegrity: 100, weaponCooldownTicks: 0, bodyShape: { type: "box", radiusMeters: 1.2, lengthMeters: 5.6, widthMeters: 2.8 }, modules: defaultModules(), intents: defaultIntents(), target: { x: 23, y: 12 }, speed: 0.2 },
   ];
 
   return {
@@ -565,8 +565,8 @@ export function createFallbackPresetDuel(): KernelBattleRunner {
           unitId: unit.unitId,
           name: unit.name,
           position: { ...unit.position },
-          hullHeadingDeg: unit.hullHeadingDeg,
-          turretHeadingDeg: unit.turretHeadingDeg,
+          hullHeadingDegrees: unit.hullHeadingDegrees,
+          turretHeadingDegrees: unit.turretHeadingDegrees,
           armorIntegrity: unit.armorIntegrity,
           weaponCooldownTicks: unit.weaponCooldownTicks,
           bodyShape: unit.bodyShape,
@@ -589,8 +589,8 @@ export function createFallbackPresetDuel(): KernelBattleRunner {
           unitId: unit.unitId,
           name: unit.name,
           position: { ...unit.position },
-          hullHeadingDeg: 0,
-          turretHeadingDeg: 0,
+          hullHeadingDegrees: 0,
+          turretHeadingDegrees: 0,
           armorIntegrity: unit.armorIntegrity,
           weaponCooldownTicks: unit.weaponCooldownTicks,
           bodyShape: unit.bodyShape,

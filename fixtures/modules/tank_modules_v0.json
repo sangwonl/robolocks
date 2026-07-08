@@ -3,19 +3,19 @@
   "mobility": [
     {
       "id": "tracked_chassis_mk1",
-      "maxSpeedMps": 6,
-      "maxHullTurnDegps": 120
+      "maxSpeedMetersPerSecond": 6,
+      "maxHullTurnDegreesPerSecond": 120
     },
     {
       "id": "slow_chassis_test",
-      "maxSpeedMps": 3,
-      "maxHullTurnDegps": 60
+      "maxSpeedMetersPerSecond": 3,
+      "maxHullTurnDegreesPerSecond": 60
     }
   ],
   "turret": [
     {
       "id": "light_turret_mk1",
-      "maxTurnDegps": 180
+      "maxTurnDegreesPerSecond": 180
     }
   ],
   "weapon": [
@@ -23,45 +23,45 @@
       "id": "cannon_75mm_mk1",
       "fireMode": "direct",
       "damage": 25,
-      "penetrationMm": 120,
-      "rangeM": 80,
-      "muzzleVelocityMps": 620,
-      "muzzleOffsetM": { "x": 3.6, "y": 0, "z": 1.65 },
-      "launchAngleDeg": 0,
-      "gravityMps2": 9.81,
-      "blastRadiusM": 0,
-      "projectileRadiusM": 0.08,
-      "aimToleranceDeg": 5,
+      "penetrationMillimeters": 120,
+      "rangeMeters": 80,
+      "muzzleVelocityMetersPerSecond": 620,
+      "muzzleOffsetMeters": { "x": 3.6, "y": 0, "z": 1.65 },
+      "launchAngleDegrees": 0,
+      "gravityMetersPerSecondSquared": 9.81,
+      "blastRadiusMeters": 0,
+      "projectileRadiusMeters": 0.08,
+      "aimToleranceDegrees": 5,
       "reloadTicks": 30
     },
     {
       "id": "slow_cannon_test",
       "fireMode": "direct",
       "damage": 25,
-      "penetrationMm": 80,
-      "rangeM": 80,
-      "muzzleVelocityMps": 20,
-      "muzzleOffsetM": { "x": 3.6, "y": 0, "z": 1.65 },
-      "launchAngleDeg": 0,
-      "gravityMps2": 9.81,
-      "blastRadiusM": 0,
-      "projectileRadiusM": 0.08,
-      "aimToleranceDeg": 5,
+      "penetrationMillimeters": 80,
+      "rangeMeters": 80,
+      "muzzleVelocityMetersPerSecond": 20,
+      "muzzleOffsetMeters": { "x": 3.6, "y": 0, "z": 1.65 },
+      "launchAngleDegrees": 0,
+      "gravityMetersPerSecondSquared": 9.81,
+      "blastRadiusMeters": 0,
+      "projectileRadiusMeters": 0.08,
+      "aimToleranceDegrees": 5,
       "reloadTicks": 90
     },
     {
       "id": "howitzer_105mm_test",
       "fireMode": "ballistic",
       "damage": 35,
-      "penetrationMm": 70,
-      "rangeM": 120,
-      "muzzleVelocityMps": 38,
-      "muzzleOffsetM": { "x": 2.9, "y": 0, "z": 1.9 },
-      "launchAngleDeg": 45,
-      "gravityMps2": 9.81,
-      "blastRadiusM": 2.5,
-      "projectileRadiusM": 0.12,
-      "aimToleranceDeg": 7,
+      "penetrationMillimeters": 70,
+      "rangeMeters": 120,
+      "muzzleVelocityMetersPerSecond": 38,
+      "muzzleOffsetMeters": { "x": 2.9, "y": 0, "z": 1.9 },
+      "launchAngleDegrees": 45,
+      "gravityMetersPerSecondSquared": 9.81,
+      "blastRadiusMeters": 2.5,
+      "projectileRadiusMeters": 0.12,
+      "aimToleranceDegrees": 7,
       "reloadTicks": 120
     }
   ],
@@ -69,9 +69,9 @@
     {
       "id": "rolled_armor_mk1",
       "integrity": 100,
-      "frontMm": 100,
-      "sideMm": 70,
-      "rearMm": 45
+      "frontMillimeters": 100,
+      "sideMillimeters": 70,
+      "rearMillimeters": 45
     }
   ],
   "body": [
@@ -79,18 +79,18 @@
       "id": "medium_hull_mk1",
       "shape": {
         "type": "box",
-        "radiusM": 1.2,
-        "lengthM": 5.6,
-        "widthM": 2.8
+        "radiusMeters": 1.2,
+        "lengthMeters": 5.6,
+        "widthMeters": 2.8
       },
-      "massKg": 30000
+      "massKilograms": 30000
     }
   ],
   "sensor": [
     {
       "id": "visual_optic_mk1",
-      "rangeM": 60,
-      "fovDeg": 120,
+      "rangeMeters": 60,
+      "fovDegrees": 120,
       "refreshTicks": 1
     }
   ]

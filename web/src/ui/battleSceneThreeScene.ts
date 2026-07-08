@@ -38,8 +38,8 @@ export function buildBattleScene(input: BattleSceneInput): THREE.Scene {
   return scene;
 }
 
-export function replayToWorld(position: { x: number; y: number }, heightM = 0): THREE.Vector3 {
-  return new THREE.Vector3(position.x, heightM, position.y);
+export function replayToWorld(position: { x: number; y: number }, heightMeters = 0): THREE.Vector3 {
+  return new THREE.Vector3(position.x, heightMeters, position.y);
 }
 
 function createGround(): THREE.Group {
@@ -83,7 +83,7 @@ function createLights(): THREE.Group {
 
 function createObstacle(obstacle: StaticObstacleFrame): THREE.Mesh {
   const mesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(obstacle.radiusM, obstacle.radiusM, 0.9, 32),
+    new THREE.CylinderGeometry(obstacle.radiusMeters, obstacle.radiusMeters, 0.9, 32),
     new THREE.MeshStandardMaterial({
       color: obstacle.blocksLineOfSight ? "#606b59" : "#485041",
       roughness: 0.86,
@@ -94,7 +94,7 @@ function createObstacle(obstacle: StaticObstacleFrame): THREE.Mesh {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.userData = {
-    radiusM: obstacle.radiusM,
+    radiusMeters: obstacle.radiusMeters,
     blocksMovement: obstacle.blocksMovement,
     blocksLineOfSight: obstacle.blocksLineOfSight,
   };
@@ -105,7 +105,7 @@ function createUnit(unit: UnitFrame): THREE.Group {
   const group = new THREE.Group();
   group.name = `unit-${unit.unitId}`;
   group.position.copy(replayToWorld(unit.position, 0));
-  group.rotation.y = -THREE.MathUtils.degToRad(unit.hullHeadingDeg);
+  group.rotation.y = -THREE.MathUtils.degToRad(unit.hullHeadingDegrees);
   group.userData = {
     unitId: unit.unitId,
     name: unit.name,
@@ -114,7 +114,7 @@ function createUnit(unit: UnitFrame): THREE.Group {
 
   const hull = createHull(unit);
   const turret = createTurret(unit);
-  turret.rotation.y = -THREE.MathUtils.degToRad(unit.turretHeadingDeg - unit.hullHeadingDeg);
+  turret.rotation.y = -THREE.MathUtils.degToRad(unit.turretHeadingDegrees - unit.hullHeadingDegrees);
 
   group.add(hull);
   group.add(turret);
@@ -129,7 +129,7 @@ function createHull(unit: UnitFrame): THREE.Mesh {
     metalness: 0.08,
   });
   const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(metrics.lengthM, HULL_HEIGHT_M, metrics.widthM),
+    new THREE.BoxGeometry(metrics.lengthMeters, HULL_HEIGHT_M, metrics.widthMeters),
     material,
   );
   mesh.name = `unit-${unit.unitId}-hull`;
@@ -137,9 +137,9 @@ function createHull(unit: UnitFrame): THREE.Mesh {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.userData = {
-    lengthM: metrics.lengthM,
-    widthM: metrics.widthM,
-    heightM: HULL_HEIGHT_M,
+    lengthMeters: metrics.lengthMeters,
+    widthMeters: metrics.widthMeters,
+    heightMeters: HULL_HEIGHT_M,
   };
   return mesh;
 }
@@ -149,8 +149,8 @@ function createTurret(unit: UnitFrame): THREE.Group {
   const group = new THREE.Group();
   group.name = `unit-${unit.unitId}-turret`;
 
-  const turretLength = metrics.lengthM * TURRET_LENGTH_RATIO;
-  const turretWidth = metrics.widthM * TURRET_WIDTH_RATIO;
+  const turretLength = metrics.lengthMeters * TURRET_LENGTH_RATIO;
+  const turretWidth = metrics.widthMeters * TURRET_WIDTH_RATIO;
   const turret = new THREE.Mesh(
     new THREE.BoxGeometry(turretLength, TURRET_HEIGHT_M, turretWidth),
     new THREE.MeshStandardMaterial({ color: "#d7dfc1", roughness: 0.72, metalness: 0.06 }),
@@ -161,7 +161,7 @@ function createTurret(unit: UnitFrame): THREE.Group {
   turret.castShadow = true;
   group.add(turret);
 
-  const muzzle = unit.modules.weapon.muzzleOffsetM;
+  const muzzle = unit.modules.weapon.muzzleOffsetMeters;
   const barrelBaseX = Math.min(muzzle.x - MIN_BARREL_LENGTH_M, turretLength * 0.35);
   const barrelLength = Math.max(MIN_BARREL_LENGTH_M, muzzle.x - barrelBaseX);
   const barrel = new THREE.Mesh(
@@ -173,7 +173,7 @@ function createTurret(unit: UnitFrame): THREE.Group {
   barrel.position.y = muzzle.z;
   barrel.position.z = muzzle.y;
   barrel.userData = {
-    muzzleOffsetM: muzzle,
+    muzzleOffsetMeters: muzzle,
     muzzleEndLocal: { x: muzzle.x, y: muzzle.z, z: muzzle.y },
   };
   group.add(barrel);
@@ -185,7 +185,7 @@ function createProjectile(projectile: BattleFrame["projectiles"][number]): THREE
   const group = new THREE.Group();
   group.name = `projectile-${projectile.projectileId}`;
 
-  const radius = Math.max(0.09, projectile.radiusM);
+  const radius = Math.max(0.09, projectile.radiusMeters);
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(radius, 16, 12),
     new THREE.MeshStandardMaterial({
@@ -196,13 +196,13 @@ function createProjectile(projectile: BattleFrame["projectiles"][number]): THREE
     }),
   );
   mesh.name = `projectile-${projectile.projectileId}-body`;
-  mesh.position.copy(replayToWorld(projectile.position, projectile.heightM));
+  mesh.position.copy(replayToWorld(projectile.position, projectile.heightMeters));
   mesh.castShadow = true;
   group.add(mesh);
 
   const trailGeometry = new THREE.BufferGeometry().setFromPoints([
-    replayToWorld(projectile.previousPosition, projectile.previousHeightM),
-    replayToWorld(projectile.position, projectile.heightM),
+    replayToWorld(projectile.previousPosition, projectile.previousHeightMeters),
+    replayToWorld(projectile.position, projectile.heightMeters),
   ]);
   const trail = new THREE.Line(
     trailGeometry,
@@ -218,18 +218,18 @@ function createProjectile(projectile: BattleFrame["projectiles"][number]): THREE
   mesh.userData = {
     projectileId: projectile.projectileId,
     ownerUnitId: projectile.ownerUnitId,
-    radiusM: projectile.radiusM,
-    previousHeightM: projectile.previousHeightM,
-    heightM: projectile.heightM,
+    radiusMeters: projectile.radiusMeters,
+    previousHeightMeters: projectile.previousHeightMeters,
+    heightMeters: projectile.heightMeters,
   };
   return group;
 }
 
-function shapeMetrics(shape: BodyShapeFrame): { lengthM: number; widthM: number } {
+function shapeMetrics(shape: BodyShapeFrame): { lengthMeters: number; widthMeters: number } {
   if (shape.type === "box") {
-    return { lengthM: shape.lengthM, widthM: shape.widthM };
+    return { lengthMeters: shape.lengthMeters, widthMeters: shape.widthMeters };
   }
-  return { lengthM: shape.radiusM * 2, widthM: shape.radiusM * 2 };
+  return { lengthMeters: shape.radiusMeters * 2, widthMeters: shape.radiusMeters * 2 };
 }
 
 function unitColor(unit: UnitFrame): THREE.ColorRepresentation {

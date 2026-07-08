@@ -97,8 +97,8 @@ void print_snapshot_json(const robolocks::WorldSnapshot& snapshot, std::ostream&
     out << "    {";
     out << "\"unitId\": " << unit.unit_id.value << ", ";
     out << "\"position\": {\"x\": " << unit.position.x << ", \"y\": " << unit.position.y << "}, ";
-    out << "\"hullHeadingDeg\": " << unit.hull_heading_deg << ", ";
-    out << "\"turretHeadingDeg\": " << unit.turret_heading_deg << ", ";
+    out << "\"hullHeadingDegrees\": " << unit.hull_heading_deg << ", ";
+    out << "\"turretHeadingDegrees\": " << unit.turret_heading_deg << ", ";
     out << "\"armorIntegrity\": " << unit.armor_integrity << ", ";
     out << "\"bodyShape\": ";
     print_body_shape_json(unit, out);
@@ -145,10 +145,10 @@ void print_event_payload_json_compact(const robolocks::EventPayload& payload, st
   out << "\"armorFacing\":\"" << payload.armor_facing << "\",";
   out << "\"damage\":" << payload.damage << ",";
   out << "\"remainingArmor\":" << payload.remaining_armor << ",";
-  out << "\"penetrationMm\":" << payload.penetration_mm << ",";
-  out << "\"armorMm\":" << payload.armor_mm << ",";
-  out << "\"impactDistanceM\":" << payload.impact_distance_m << ",";
-  out << "\"blastRadiusM\":" << payload.blast_radius_m;
+  out << "\"penetrationMillimeters\":" << payload.penetration_mm << ",";
+  out << "\"armorMillimeters\":" << payload.armor_mm << ",";
+  out << "\"impactDistanceMeters\":" << payload.impact_distance_m << ",";
+  out << "\"blastRadiusMeters\":" << payload.blast_radius_m;
   out << "}";
 }
 
@@ -206,12 +206,12 @@ void print_body_shape_json(const robolocks::UnitSnapshot& unit, std::ostream& ou
   out << "{";
   if (unit.body_shape_type == robolocks::BodyShapeType::Box) {
     out << "\"type\":\"box\",";
-    out << "\"radiusM\":" << unit.body_radius_m << ",";
-    out << "\"lengthM\":" << unit.body_length_m << ",";
-    out << "\"widthM\":" << unit.body_width_m;
+    out << "\"radiusMeters\":" << unit.body_radius_m << ",";
+    out << "\"lengthMeters\":" << unit.body_length_m << ",";
+    out << "\"widthMeters\":" << unit.body_width_m;
   } else {
     out << "\"type\":\"circle\",";
-    out << "\"radiusM\":" << unit.body_radius_m;
+    out << "\"radiusMeters\":" << unit.body_radius_m;
   }
   out << "}";
 }
@@ -224,47 +224,47 @@ void print_modules_json(const robolocks::UnitSnapshot& unit, std::ostream& out) 
   out << "{";
   out << "\"mobility\":{";
   out << "\"id\":\"" << unit.modules.mobility.id << "\",";
-  out << "\"maxSpeedMps\":" << unit.modules.mobility.max_speed_mps << ",";
-  out << "\"maxHullTurnDegps\":" << unit.modules.mobility.max_hull_turn_degps;
+  out << "\"maxSpeedMetersPerSecond\":" << unit.modules.mobility.max_speed_mps << ",";
+  out << "\"maxHullTurnDegreesPerSecond\":" << unit.modules.mobility.max_hull_turn_degps;
   out << "},";
   out << "\"turret\":{";
   out << "\"id\":\"" << unit.modules.turret.id << "\",";
-  out << "\"maxTurnDegps\":" << unit.modules.turret.max_turn_degps;
+  out << "\"maxTurnDegreesPerSecond\":" << unit.modules.turret.max_turn_degps;
   out << "},";
   out << "\"weapon\":{";
   out << "\"id\":\"" << unit.modules.weapon.id << "\",";
   out << "\"fireMode\":\"" << fire_mode_json(unit.modules.weapon.fire_mode) << "\",";
   out << "\"damage\":" << unit.modules.weapon.damage << ",";
-  out << "\"penetrationMm\":" << unit.modules.weapon.penetration_mm << ",";
-  out << "\"rangeM\":" << unit.modules.weapon.range_m << ",";
-  out << "\"muzzleVelocityMps\":" << unit.modules.weapon.muzzle_velocity_mps << ",";
-  out << "\"muzzleOffsetM\":";
+  out << "\"penetrationMillimeters\":" << unit.modules.weapon.penetration_mm << ",";
+  out << "\"rangeMeters\":" << unit.modules.weapon.range_m << ",";
+  out << "\"muzzleVelocityMetersPerSecond\":" << unit.modules.weapon.muzzle_velocity_mps << ",";
+  out << "\"muzzleOffsetMeters\":";
   print_vec3_json(unit.modules.weapon.muzzle_offset_m, out);
   out << ",";
-  out << "\"launchAngleDeg\":" << unit.modules.weapon.launch_angle_deg << ",";
-  out << "\"gravityMps2\":" << unit.modules.weapon.gravity_mps2 << ",";
-  out << "\"blastRadiusM\":" << unit.modules.weapon.blast_radius_m << ",";
-  out << "\"projectileRadiusM\":" << unit.modules.weapon.projectile_radius_m << ",";
-  out << "\"aimToleranceDeg\":" << unit.modules.weapon.aim_tolerance_deg << ",";
+  out << "\"launchAngleDegrees\":" << unit.modules.weapon.launch_angle_deg << ",";
+  out << "\"gravityMetersPerSecondSquared\":" << unit.modules.weapon.gravity_mps2 << ",";
+  out << "\"blastRadiusMeters\":" << unit.modules.weapon.blast_radius_m << ",";
+  out << "\"projectileRadiusMeters\":" << unit.modules.weapon.projectile_radius_m << ",";
+  out << "\"aimToleranceDegrees\":" << unit.modules.weapon.aim_tolerance_deg << ",";
   out << "\"reloadTicks\":" << unit.modules.weapon.reload_ticks;
   out << "},";
   out << "\"armor\":{";
   out << "\"id\":\"" << unit.modules.armor.id << "\",";
   out << "\"integrity\":" << unit.modules.armor.integrity << ",";
-  out << "\"frontMm\":" << unit.modules.armor.front_mm << ",";
-  out << "\"sideMm\":" << unit.modules.armor.side_mm << ",";
-  out << "\"rearMm\":" << unit.modules.armor.rear_mm;
+  out << "\"frontMillimeters\":" << unit.modules.armor.front_mm << ",";
+  out << "\"sideMillimeters\":" << unit.modules.armor.side_mm << ",";
+  out << "\"rearMillimeters\":" << unit.modules.armor.rear_mm;
   out << "},";
   out << "\"body\":{";
   out << "\"id\":\"" << unit.modules.body.id << "\",";
-  out << "\"massKg\":" << unit.modules.body.mass_kg << ",";
+  out << "\"massKilograms\":" << unit.modules.body.mass_kg << ",";
   out << "\"shape\":";
   print_body_shape_json(unit, out);
   out << "},";
   out << "\"sensor\":{";
   out << "\"id\":\"" << unit.modules.sensor.id << "\",";
-  out << "\"rangeM\":" << unit.modules.sensor.range_m << ",";
-  out << "\"fovDeg\":" << unit.modules.sensor.fov_deg << ",";
+  out << "\"rangeMeters\":" << unit.modules.sensor.range_m << ",";
+  out << "\"fovDegrees\":" << unit.modules.sensor.fov_deg << ",";
   out << "\"refreshTicks\":" << unit.modules.sensor.refresh_ticks;
   out << "}";
   out << "}";
@@ -276,21 +276,21 @@ void print_intents_json(const robolocks::UnitSnapshot& unit, std::ostream& out) 
   out << "\"active\":" << (unit.mobility_intent_active ? "true" : "false") << ",";
   out << "\"target\":";
   print_intent_target_json(unit.mobility_intent_target, out);
-  out << ",\"remainingM\":" << unit.mobility_intent_remaining_m << ",";
+  out << ",\"remainingMeters\":" << unit.mobility_intent_remaining_m << ",";
   out << "\"ageTicks\":" << unit.mobility_intent_age_ticks;
   out << "},";
   out << "\"turret\":{";
   out << "\"active\":" << (unit.turret_intent_active ? "true" : "false") << ",";
   out << "\"target\":";
   print_intent_target_json(unit.turret_intent_target, out);
-  out << ",\"errorDeg\":" << unit.turret_intent_error_deg << ",";
+  out << ",\"errorDegrees\":" << unit.turret_intent_error_deg << ",";
   out << "\"ageTicks\":" << unit.turret_intent_age_ticks;
   out << "},";
   out << "\"hull\":{";
   out << "\"active\":" << (unit.hull_intent_active ? "true" : "false") << ",";
   out << "\"target\":";
   print_intent_target_json(unit.hull_intent_target, out);
-  out << ",\"errorDeg\":" << unit.hull_intent_error_deg << ",";
+  out << ",\"errorDegrees\":" << unit.hull_intent_error_deg << ",";
   out << "\"ageTicks\":" << unit.hull_intent_age_ticks;
   out << "},";
   out << "\"weapon\":{";
@@ -316,7 +316,7 @@ void print_order_payload_json(const robolocks::Order& order, std::ostream& out) 
     } else if constexpr (std::is_same_v<Payload, robolocks::FireIfSolutionOrder>) {
       out << "\"minHitChance\":" << payload.min_hit_chance;
     } else if constexpr (std::is_same_v<Payload, robolocks::ScanArcOrder>) {
-      out << "\"centerDeg\":" << payload.center_deg << ",\"widthDeg\":" << payload.width_deg;
+      out << "\"centerDegrees\":" << payload.center_deg << ",\"widthDegrees\":" << payload.width_deg;
     }
   }, order.payload);
 }
@@ -352,9 +352,9 @@ void print_projectiles_json_compact(const std::vector<robolocks::ProjectileSnaps
     print_vec_json(projectile.previous_position, out);
     out << ",\"position\":";
     print_vec_json(projectile.position, out);
-    out << ",\"radiusM\":" << projectile.radius_m << ",";
-    out << "\"previousHeightM\":" << projectile.previous_height_m << ",";
-    out << "\"heightM\":" << projectile.height_m;
+    out << ",\"radiusMeters\":" << projectile.radius_m << ",";
+    out << "\"previousHeightMeters\":" << projectile.previous_height_m << ",";
+    out << "\"heightMeters\":" << projectile.height_m;
     out << "}";
     if (i + 1 < projectiles.size()) {
       out << ",";
@@ -376,8 +376,8 @@ void print_snapshot_json_compact(
     out << "{";
     out << "\"unitId\":" << unit.unit_id.value << ",";
     out << "\"position\":{\"x\":" << unit.position.x << ",\"y\":" << unit.position.y << "},";
-    out << "\"hullHeadingDeg\":" << unit.hull_heading_deg << ",";
-    out << "\"turretHeadingDeg\":" << unit.turret_heading_deg << ",";
+    out << "\"hullHeadingDegrees\":" << unit.hull_heading_deg << ",";
+    out << "\"turretHeadingDegrees\":" << unit.turret_heading_deg << ",";
     out << "\"armorIntegrity\":" << unit.armor_integrity << ",";
     out << "\"weaponCooldownTicks\":" << unit.weapon_cooldown_ticks << ",";
     out << "\"bodyShape\":";
@@ -407,7 +407,7 @@ void print_obstacles_json_compact(const std::vector<robolocks::StaticObstacle>& 
     out << "{";
     out << "\"id\":\"" << obstacle.id << "\",";
     out << "\"position\":{\"x\":" << obstacle.position.x << ",\"y\":" << obstacle.position.y << "},";
-    out << "\"radiusM\":" << obstacle.radius_m << ",";
+    out << "\"radiusMeters\":" << obstacle.radius_m << ",";
     out << "\"blocksMovement\":" << (obstacle.blocks_movement ? "true" : "false") << ",";
     out << "\"blocksLineOfSight\":" << (obstacle.blocks_line_of_sight ? "true" : "false");
     out << "}";

@@ -14,9 +14,9 @@
       "name": "Blue",
       "spawn": { "x": 4, "y": 12, "headingDeg": 0 },
       "modules": {
-        "mobility": { "id": "tracked_chassis_mk1", "maxSpeedMps": 0 },
+        "mobility": { "id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 0 },
         "turret": { "id": "light_turret_mk1" },
-        "weapon": { "id": "howitzer_105mm_test", "muzzleVelocityMps": 17, "rangeM": 40 },
+        "weapon": { "id": "howitzer_105mm_test", "muzzleVelocityMetersPerSecond": 17, "rangeMeters": 40 },
         "armor": { "id": "rolled_armor_mk1" },
         "body": { "id": "medium_hull_mk1" },
         "sensor": { "id": "visual_optic_mk1" }
@@ -27,7 +27,7 @@
       "name": "Red",
       "spawn": { "x": 33, "y": 12, "headingDeg": 180 },
       "modules": {
-        "mobility": { "id": "slow_chassis_test", "maxSpeedMps": 0 },
+        "mobility": { "id": "slow_chassis_test", "maxSpeedMetersPerSecond": 0 },
         "turret": { "id": "light_turret_mk1" },
         "weapon": { "id": "slow_cannon_test" },
         "armor": { "id": "rolled_armor_mk1" },

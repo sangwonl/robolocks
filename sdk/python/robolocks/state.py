@@ -20,8 +20,8 @@ class IntentState:
         return cls(
             active=bool(data.get("active", False)),
             target=Vec2.from_json(data.get("target", {"x": 0.0, "y": 0.0})),
-            remaining_m=float(data.get("remainingM", 0.0)),
-            error_deg=float(data.get("errorDeg", 0.0)),
+            remaining_m=float(data.get("remainingMeters", 0.0)),
+            error_deg=float(data.get("errorDegrees", 0.0)),
             age_ticks=int(data.get("ageTicks", 0)),
         )
 
@@ -82,8 +82,8 @@ class UnitState:
             unit_id=int(data["unitId"]),
             name=str(data.get("name", "")),
             position=Vec2.from_json(data["position"]),
-            hull_heading_deg=float(data["hullHeadingDeg"]),
-            turret_heading_deg=float(data["turretHeadingDeg"]),
+            hull_heading_deg=float(data["hullHeadingDegrees"]),
+            turret_heading_deg=float(data["turretHeadingDegrees"]),
             armor_integrity=float(data["armorIntegrity"]),
             weapon_cooldown_ticks=int(data.get("weaponCooldownTicks", 0)),
             intent=UnitIntents.from_json(data.get("intents")),
@@ -130,7 +130,7 @@ class Obstacle:
         return cls(
             id=str(data.get("id", "")),
             position=Vec2.from_json(data["position"]),
-            radius_m=float(data.get("radiusM", 1.0)),
+            radius_m=float(data.get("radiusMeters", 1.0)),
             blocks_movement=bool(data.get("blocksMovement", True)),
             blocks_line_of_sight=bool(data.get("blocksLineOfSight", True)),
         )

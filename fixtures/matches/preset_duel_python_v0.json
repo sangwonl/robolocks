@@ -8,7 +8,7 @@
     {
       "id": "north_cover",
       "position": { "x": 20, "y": 6 },
-      "radiusM": 1.5,
+      "radiusMeters": 1.5,
       "blocksMovement": true,
       "blocksLineOfSight": true
     }

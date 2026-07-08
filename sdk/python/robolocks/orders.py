@@ -51,8 +51,8 @@ class ScanArc:
     def to_json(self) -> dict:
         return {
             "type": "scanArc",
-            "centerDeg": float(self.center),
-            "widthDeg": float(self.width_deg),
+            "centerDegrees": float(self.center),
+            "widthDegrees": float(self.width_deg),
         }
 
 

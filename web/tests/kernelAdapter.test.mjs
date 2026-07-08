@@ -85,11 +85,11 @@ test("wasm preset duel adapter reads unit intents from the C API", async () => {
   assert.equal(frame.units[0].weaponCooldownTicks, 18);
   assert.equal(frame.units[0].intents.mobility.active, true);
   assert.deepEqual(frame.units[0].intents.mobility.target, { x: 17, y: 12 });
-  assert.equal(frame.units[0].intents.mobility.remainingM, 10.8);
+  assert.equal(frame.units[0].intents.mobility.remainingMeters, 10.8);
   assert.equal(frame.units[0].intents.mobility.ageTicks, 3);
-  assert.equal(frame.units[0].intents.turret.errorDeg, 1.25);
+  assert.equal(frame.units[0].intents.turret.errorDegrees, 1.25);
   assert.equal(frame.units[0].intents.turret.ageTicks, 4);
-  assert.equal(frame.units[0].intents.hull.errorDeg, 2.5);
+  assert.equal(frame.units[0].intents.hull.errorDegrees, 2.5);
   assert.equal(frame.units[0].intents.hull.ageTicks, 5);
   assert.equal(frame.units[0].intents.weapon.active, true);
   assert.equal(frame.units[0].intents.weapon.minHitChance, 0.6);

@@ -36,7 +36,7 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
             {
               id: "research_cover",
               position: { x: 20, y: 6 },
-              radiusM: 1.5,
+              radiusMeters: 1.5,
               blocksMovement: true,
               blocksLineOfSight: true,
             },

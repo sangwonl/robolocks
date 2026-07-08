@@ -25,8 +25,8 @@ type ReplayFramePayload = {
 type ReplayUnitPayload = {
   unitId?: unknown;
   position?: unknown;
-  hullHeadingDeg?: unknown;
-  turretHeadingDeg?: unknown;
+  hullHeadingDegrees?: unknown;
+  turretHeadingDegrees?: unknown;
   armorIntegrity?: unknown;
   weaponCooldownTicks?: unknown;
   bodyShape?: unknown;
@@ -36,15 +36,15 @@ type ReplayUnitPayload = {
 
 type ReplayBodyShapePayload = {
   type?: unknown;
-  radiusM?: unknown;
-  lengthM?: unknown;
-  widthM?: unknown;
+  radiusMeters?: unknown;
+  lengthMeters?: unknown;
+  widthMeters?: unknown;
 };
 
 type ReplayObstaclePayload = {
   id?: unknown;
   position?: unknown;
-  radiusM?: unknown;
+  radiusMeters?: unknown;
   blocksMovement?: unknown;
   blocksLineOfSight?: unknown;
 };
@@ -64,8 +64,8 @@ type ReplayActionPayload = {
   position?: unknown;
   target?: unknown;
   minHitChance?: unknown;
-  centerDeg?: unknown;
-  widthDeg?: unknown;
+  centerDegrees?: unknown;
+  widthDegrees?: unknown;
 };
 
 type ReplayProjectilePayload = {
@@ -73,16 +73,16 @@ type ReplayProjectilePayload = {
   ownerUnitId?: unknown;
   previousPosition?: unknown;
   position?: unknown;
-  radiusM?: unknown;
-  previousHeightM?: unknown;
-  heightM?: unknown;
+  radiusMeters?: unknown;
+  previousHeightMeters?: unknown;
+  heightMeters?: unknown;
 };
 
 type ReplayIntentPayload = {
   active?: unknown;
   target?: unknown;
-  remainingM?: unknown;
-  errorDeg?: unknown;
+  remainingMeters?: unknown;
+  errorDegrees?: unknown;
   minHitChance?: unknown;
   ageTicks?: unknown;
 };
@@ -135,7 +135,7 @@ function parseProjectile(payload: unknown): ProjectileFrame {
     projectile === null ||
     typeof projectile.projectileId !== "number" ||
     typeof projectile.ownerUnitId !== "number" ||
-    typeof projectile.radiusM !== "number"
+    typeof projectile.radiusMeters !== "number"
   ) {
     throw new Error("Invalid replay projectile");
   }
@@ -145,11 +145,11 @@ function parseProjectile(payload: unknown): ProjectileFrame {
     ownerUnitId: projectile.ownerUnitId,
     previousPosition: parseVec(projectile.previousPosition, "Invalid replay projectile previous position"),
     position: parseVec(projectile.position, "Invalid replay projectile position"),
-    radiusM: projectile.radiusM,
-    previousHeightM: typeof projectile.previousHeightM === "number"
-      ? projectile.previousHeightM
-      : typeof projectile.heightM === "number" ? projectile.heightM : 0,
-    heightM: typeof projectile.heightM === "number" ? projectile.heightM : 0,
+    radiusMeters: projectile.radiusMeters,
+    previousHeightMeters: typeof projectile.previousHeightMeters === "number"
+      ? projectile.previousHeightMeters
+      : typeof projectile.heightMeters === "number" ? projectile.heightMeters : 0,
+    heightMeters: typeof projectile.heightMeters === "number" ? projectile.heightMeters : 0,
   };
 }
 
@@ -162,8 +162,8 @@ function parseUnit(payload: unknown): UnitFrame {
     position === null ||
     typeof position.x !== "number" ||
     typeof position.y !== "number" ||
-    typeof unit.hullHeadingDeg !== "number" ||
-    typeof unit.turretHeadingDeg !== "number" ||
+    typeof unit.hullHeadingDegrees !== "number" ||
+    typeof unit.turretHeadingDegrees !== "number" ||
     typeof unit.armorIntegrity !== "number"
   ) {
     throw new Error("Invalid replay unit");
@@ -173,8 +173,8 @@ function parseUnit(payload: unknown): UnitFrame {
     unitId: unit.unitId,
     name: unitName(unit.unitId),
     position: { x: position.x, y: position.y },
-    hullHeadingDeg: unit.hullHeadingDeg,
-    turretHeadingDeg: unit.turretHeadingDeg,
+    hullHeadingDegrees: unit.hullHeadingDegrees,
+    turretHeadingDegrees: unit.turretHeadingDegrees,
     armorIntegrity: unit.armorIntegrity,
     weaponCooldownTicks: typeof unit.weaponCooldownTicks === "number" ? unit.weaponCooldownTicks : 0,
     bodyShape: parseBodyShape(unit.bodyShape),
@@ -191,43 +191,43 @@ function parseModules(payload: unknown): UnitModulesFrame {
   return {
     mobility: {
       id: stringField(modules.mobility, "id"),
-      maxSpeedMps: numberField(modules.mobility, "maxSpeedMps"),
-      maxHullTurnDegps: numberField(modules.mobility, "maxHullTurnDegps"),
+      maxSpeedMetersPerSecond: numberField(modules.mobility, "maxSpeedMetersPerSecond"),
+      maxHullTurnDegreesPerSecond: numberField(modules.mobility, "maxHullTurnDegreesPerSecond"),
     },
     turret: {
       id: stringField(modules.turret, "id"),
-      maxTurnDegps: numberField(modules.turret, "maxTurnDegps"),
+      maxTurnDegreesPerSecond: numberField(modules.turret, "maxTurnDegreesPerSecond"),
     },
     weapon: {
       id: stringField(modules.weapon, "id"),
       fireMode: stringField(modules.weapon, "fireMode"),
       damage: numberField(modules.weapon, "damage"),
-      penetrationMm: numberField(modules.weapon, "penetrationMm"),
-      rangeM: numberField(modules.weapon, "rangeM"),
-      muzzleVelocityMps: numberField(modules.weapon, "muzzleVelocityMps"),
-      muzzleOffsetM: vec3Field(modules.weapon, "muzzleOffsetM"),
-      launchAngleDeg: numberField(modules.weapon, "launchAngleDeg"),
-      gravityMps2: numberField(modules.weapon, "gravityMps2"),
-      blastRadiusM: numberField(modules.weapon, "blastRadiusM"),
-      projectileRadiusM: numberField(modules.weapon, "projectileRadiusM"),
-      aimToleranceDeg: numberField(modules.weapon, "aimToleranceDeg"),
+      penetrationMillimeters: numberField(modules.weapon, "penetrationMillimeters"),
+      rangeMeters: numberField(modules.weapon, "rangeMeters"),
+      muzzleVelocityMetersPerSecond: numberField(modules.weapon, "muzzleVelocityMetersPerSecond"),
+      muzzleOffsetMeters: vec3Field(modules.weapon, "muzzleOffsetMeters"),
+      launchAngleDegrees: numberField(modules.weapon, "launchAngleDegrees"),
+      gravityMetersPerSecondSquared: numberField(modules.weapon, "gravityMetersPerSecondSquared"),
+      blastRadiusMeters: numberField(modules.weapon, "blastRadiusMeters"),
+      projectileRadiusMeters: numberField(modules.weapon, "projectileRadiusMeters"),
+      aimToleranceDegrees: numberField(modules.weapon, "aimToleranceDegrees"),
       reloadTicks: numberField(modules.weapon, "reloadTicks"),
     },
     armor: {
       id: stringField(modules.armor, "id"),
       integrity: numberField(modules.armor, "integrity"),
-      frontMm: numberField(modules.armor, "frontMm"),
-      sideMm: numberField(modules.armor, "sideMm"),
-      rearMm: numberField(modules.armor, "rearMm"),
+      frontMillimeters: numberField(modules.armor, "frontMillimeters"),
+      sideMillimeters: numberField(modules.armor, "sideMillimeters"),
+      rearMillimeters: numberField(modules.armor, "rearMillimeters"),
     },
     body: {
       id: stringField(modules.body, "id"),
-      massKg: numberField(modules.body, "massKg"),
+      massKilograms: numberField(modules.body, "massKilograms"),
     },
     sensor: {
       id: stringField(modules.sensor, "id"),
-      rangeM: numberField(modules.sensor, "rangeM"),
-      fovDeg: numberField(modules.sensor, "fovDeg"),
+      rangeMeters: numberField(modules.sensor, "rangeMeters"),
+      fovDegrees: numberField(modules.sensor, "fovDegrees"),
       refreshTicks: numberField(modules.sensor, "refreshTicks"),
     },
   };
@@ -265,12 +265,12 @@ function vec3Field(payload: unknown, key: string): { x: number; y: number; z: nu
 
 function defaultModules(): UnitModulesFrame {
   return {
-    mobility: { id: "", maxSpeedMps: 0, maxHullTurnDegps: 0 },
-    turret: { id: "", maxTurnDegps: 0 },
-    weapon: { id: "", fireMode: "direct", damage: 0, penetrationMm: 0, rangeM: 0, muzzleVelocityMps: 0, muzzleOffsetM: { x: 0, y: 0, z: 0 }, launchAngleDeg: 0, gravityMps2: 9.81, blastRadiusM: 0, projectileRadiusM: 0, aimToleranceDeg: 0, reloadTicks: 0 },
-    armor: { id: "", integrity: 0, frontMm: 0, sideMm: 0, rearMm: 0 },
-    body: { id: "", massKg: 0 },
-    sensor: { id: "", rangeM: 0, fovDeg: 0, refreshTicks: 0 },
+    mobility: { id: "", maxSpeedMetersPerSecond: 0, maxHullTurnDegreesPerSecond: 0 },
+    turret: { id: "", maxTurnDegreesPerSecond: 0 },
+    weapon: { id: "", fireMode: "direct", damage: 0, penetrationMillimeters: 0, rangeMeters: 0, muzzleVelocityMetersPerSecond: 0, muzzleOffsetMeters: { x: 0, y: 0, z: 0 }, launchAngleDegrees: 0, gravityMetersPerSecondSquared: 9.81, blastRadiusMeters: 0, projectileRadiusMeters: 0, aimToleranceDegrees: 0, reloadTicks: 0 },
+    armor: { id: "", integrity: 0, frontMillimeters: 0, sideMillimeters: 0, rearMillimeters: 0 },
+    body: { id: "", massKilograms: 0 },
+    sensor: { id: "", rangeMeters: 0, fovDegrees: 0, refreshTicks: 0 },
   };
 }
 
@@ -295,7 +295,7 @@ function parseMobilityIntent(payload: unknown): UnitIntentsFrame["mobility"] {
   return {
     active: intent.active,
     target: parseOptionalVec(intent.target),
-    remainingM: typeof intent.remainingM === "number" ? intent.remainingM : 0,
+    remainingMeters: typeof intent.remainingMeters === "number" ? intent.remainingMeters : 0,
     ageTicks: typeof intent.ageTicks === "number" ? intent.ageTicks : 0,
   };
 }
@@ -308,7 +308,7 @@ function parseAngularIntent(payload: unknown): UnitIntentsFrame["turret"] {
   return {
     active: intent.active,
     target: parseOptionalVec(intent.target),
-    errorDeg: typeof intent.errorDeg === "number" ? intent.errorDeg : 0,
+    errorDegrees: typeof intent.errorDegrees === "number" ? intent.errorDegrees : 0,
     ageTicks: typeof intent.ageTicks === "number" ? intent.ageTicks : 0,
   };
 }
@@ -328,9 +328,9 @@ function parseWeaponIntent(payload: unknown): UnitIntentsFrame["weapon"] {
 function defaultIntents(): UnitIntentsFrame {
   const zero = { x: 0, y: 0 };
   return {
-    mobility: { active: false, target: zero, remainingM: 0, ageTicks: 0 },
-    turret: { active: false, target: zero, errorDeg: 0, ageTicks: 0 },
-    hull: { active: false, target: zero, errorDeg: 0, ageTicks: 0 },
+    mobility: { active: false, target: zero, remainingMeters: 0, ageTicks: 0 },
+    turret: { active: false, target: zero, errorDegrees: 0, ageTicks: 0 },
+    hull: { active: false, target: zero, errorDegrees: 0, ageTicks: 0 },
     weapon: { active: false, minHitChance: 0, ageTicks: 0 },
   };
 }
@@ -341,23 +341,23 @@ function parseBodyShape(payload: unknown): BodyShapeFrame {
     typeof shape !== "object" ||
     shape === null ||
     typeof shape.type !== "string" ||
-    typeof shape.radiusM !== "number"
+    typeof shape.radiusMeters !== "number"
   ) {
     throw new Error("Invalid replay body shape");
   }
   if (shape.type === "circle") {
-    return { type: "circle", radiusM: shape.radiusM };
+    return { type: "circle", radiusMeters: shape.radiusMeters };
   }
   if (
     shape.type === "box" &&
-    typeof shape.lengthM === "number" &&
-    typeof shape.widthM === "number"
+    typeof shape.lengthMeters === "number" &&
+    typeof shape.widthMeters === "number"
   ) {
     return {
       type: "box",
-      radiusM: shape.radiusM,
-      lengthM: shape.lengthM,
-      widthM: shape.widthM,
+      radiusMeters: shape.radiusMeters,
+      lengthMeters: shape.lengthMeters,
+      widthMeters: shape.widthMeters,
     };
   }
   throw new Error("Invalid replay body shape");
@@ -372,7 +372,7 @@ function parseObstacle(payload: unknown): StaticObstacleFrame {
     position === null ||
     typeof position.x !== "number" ||
     typeof position.y !== "number" ||
-    typeof obstacle.radiusM !== "number" ||
+    typeof obstacle.radiusMeters !== "number" ||
     typeof obstacle.blocksMovement !== "boolean" ||
     typeof obstacle.blocksLineOfSight !== "boolean"
   ) {
@@ -382,7 +382,7 @@ function parseObstacle(payload: unknown): StaticObstacleFrame {
   return {
     id: obstacle.id,
     position: { x: position.x, y: position.y },
-    radiusM: obstacle.radiusM,
+    radiusMeters: obstacle.radiusMeters,
     blocksMovement: obstacle.blocksMovement,
     blocksLineOfSight: obstacle.blocksLineOfSight,
   };
@@ -419,10 +419,10 @@ function parseEventPayload(payload: unknown): BattleEvent["payload"] {
     armorFacing: stringField(eventPayload, "armorFacing"),
     damage: numberField(eventPayload, "damage"),
     remainingArmor: numberField(eventPayload, "remainingArmor"),
-    penetrationMm: numberField(eventPayload, "penetrationMm"),
-    armorMm: numberField(eventPayload, "armorMm"),
-    impactDistanceM: numberField(eventPayload, "impactDistanceM"),
-    blastRadiusM: numberField(eventPayload, "blastRadiusM"),
+    penetrationMillimeters: numberField(eventPayload, "penetrationMillimeters"),
+    armorMillimeters: numberField(eventPayload, "armorMillimeters"),
+    impactDistanceMeters: numberField(eventPayload, "impactDistanceMeters"),
+    blastRadiusMeters: numberField(eventPayload, "blastRadiusMeters"),
   };
 }
 
@@ -433,10 +433,10 @@ function defaultEventPayload(): BattleEvent["payload"] {
     armorFacing: "",
     damage: 0,
     remainingArmor: 0,
-    penetrationMm: 0,
-    armorMm: 0,
-    impactDistanceM: 0,
-    blastRadiusM: 0,
+    penetrationMillimeters: 0,
+    armorMillimeters: 0,
+    impactDistanceMeters: 0,
+    blastRadiusMeters: 0,
   };
 }
 
@@ -464,11 +464,11 @@ function parseAction(payload: unknown): BattleAction {
   if (typeof action.minHitChance === "number") {
     parsed.minHitChance = action.minHitChance;
   }
-  if (typeof action.centerDeg === "number") {
-    parsed.centerDeg = action.centerDeg;
+  if (typeof action.centerDegrees === "number") {
+    parsed.centerDegrees = action.centerDegrees;
   }
-  if (typeof action.widthDeg === "number") {
-    parsed.widthDeg = action.widthDeg;
+  if (typeof action.widthDegrees === "number") {
+    parsed.widthDegrees = action.widthDegrees;
   }
   return parsed;
 }
