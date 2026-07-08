@@ -169,47 +169,6 @@ const char* preset_duel_json() {
 })json";
 }
 
-const char* research_duel_json() {
-  return R"json({
-  "battleId": "research_duel_v0",
-  "seed": 1,
-  "tickRate": 30,
-  "tickLimit": 9000,
-  "obstacles": [
-    {"id": "research_cover", "position": {"x": 20, "y": 6}, "radiusMeters": 1.5, "blocksMovement": true, "blocksLineOfSight": true}
-  ],
-  "units": [
-    {
-      "unitId": 1, "name": "Blue",
-      "spawn": {"x": 4, "y": 5, "headingDeg": 35},
-      "modules": {
-        "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
-        "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
-        "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
-        "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
-        "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
-        "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
-      }
-    },
-    {
-      "unitId": 2, "name": "Target",
-      "spawn": {"x": 34, "y": 18, "headingDeg": 215},
-      "modules": {
-        "mobility": {"id": "fixed_target_chassis", "maxSpeedMetersPerSecond": 0.0, "maxHullTurnDegreesPerSecond": 60.0},
-        "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
-        "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
-        "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
-        "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
-        "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
-      }
-    }
-  ],
-  "controllers": [
-    {"unitId": 1, "type": "json_callback"}
-  ]
-})json";
-}
-
 std::string call_registered_json_bot(robolocks::UnitId bot_id, const std::string& observation_json) {
   if (g_json_bot_callback == nullptr) {
     throw std::runtime_error("JSON bot callback is not registered");
@@ -260,16 +219,6 @@ RobolocksBattleRunnerHandle robolocks_battle_runner_create_from_json(const char*
 
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_preset_duel(void) {
   return robolocks_battle_runner_create_from_json(preset_duel_json());
-}
-
-RobolocksBattleRunnerHandle robolocks_battle_runner_create_research_duel_with_json_bot(uint32_t bot_id) {
-  auto loaded = robolocks::load_battle_from_json_string(research_duel_json());
-  for (auto& cfg : loaded.controllers) {
-    if (cfg.type == "json_callback") {
-      cfg.unit_id = robolocks::UnitId{bot_id};
-    }
-  }
-  return new RobolocksBattleRunner(runner_from_loaded(loaded));
 }
 
 void robolocks_battle_runner_set_json_bot_callback(

@@ -140,7 +140,6 @@ if(EMSCRIPTEN)
     _free
     _robolocks_engine_version
     _robolocks_battle_runner_create_preset_duel
-    _robolocks_battle_runner_create_research_duel_with_json_bot
     _robolocks_battle_runner_create_from_json
     _robolocks_battle_runner_set_json_bot_callback
     _robolocks_battle_runner_destroy

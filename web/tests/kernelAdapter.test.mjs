@@ -119,13 +119,15 @@ test("wasm research duel adapter lets the battle runner call a JSON bot callback
     [333, JSON.stringify({ type: "start", spec: { unitId: 1 } })],
     [444, JSON.stringify({ selfId: 1, tick: 9, contacts: [] })],
   ]);
+  let receivedConfig = "";
   const allocations = [];
   const calls = new Map([
     ["robolocks_battle_runner_set_json_bot_callback", (callbackPointer, releaseCallbackPointer) => {
       registeredCallback = callbackPointer;
       registeredReleaseCallback = releaseCallbackPointer;
     }],
-    ["robolocks_battle_runner_create_research_duel_with_json_bot", () => {
+    ["robolocks_battle_runner_create_from_json", (jsonConfig) => {
+      receivedConfig = jsonConfig;
       const responsePointer = registeredCallback(1, 333, 0);
       registeredReleaseCallback(responsePointer, 0);
       return 77;
@@ -178,6 +180,11 @@ test("wasm research duel adapter lets the battle runner call a JSON bot callback
   const received = [];
   const runner = await createResearchDuelWithJsonBotFromWasmFactory({
     botId: 1,
+    battleConfigJson: JSON.stringify({
+      battleId: "callback_research",
+      units: [{ unitId: 1, name: "Blue", modules: {}, spawn: { x: 0, y: 0, headingDeg: 0 } }],
+      controllers: [{ unitId: 1, type: "json_callback" }],
+    }),
     onTick(observation) {
       received.push(observation);
       return {
@@ -197,6 +204,7 @@ test("wasm research duel adapter lets the battle runner call a JSON bot callback
   assert.equal(received[0].spec.unitId, 1);
   assert.equal(received[1].selfId, 1);
   assert.equal(received[1].tick, 9);
+  assert.equal(JSON.parse(receivedConfig).battleId, "callback_research");
   assert.equal(allocations.length, 2);
   assert.equal(releasedPointer, allocations[1]);
   assert.equal(stringsByPointer.has(releasedPointer), false);

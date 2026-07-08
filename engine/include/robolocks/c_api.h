@@ -12,7 +12,6 @@ typedef const char* (*RobolocksJsonBotCallback)(uint32_t bot_id, const char* obs
 typedef void (*RobolocksJsonBotReleaseCallback)(const char* response_json, void* user_data);
 
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_preset_duel(void);
-RobolocksBattleRunnerHandle robolocks_battle_runner_create_research_duel_with_json_bot(uint32_t bot_id);
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_from_json(const char* json_config);
 void robolocks_battle_runner_destroy(RobolocksBattleRunnerHandle handle);
 

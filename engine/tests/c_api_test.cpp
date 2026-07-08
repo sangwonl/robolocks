@@ -121,7 +121,7 @@ TEST_CASE("C API drives the battle runner and exposes snapshots") {
   robolocks_battle_runner_destroy(runtime);
 }
 
-TEST_CASE("C API research runner calls a registered JSON bot callback during step") {
+TEST_CASE("C API JSON config runner calls a registered JSON bot callback during step") {
   g_called_bot_id = 0;
   g_received_observation = {};
   g_release_call_count = 0;
@@ -138,7 +138,43 @@ TEST_CASE("C API research runner calls a registered JSON bot callback during ste
     &g_callback_response
   );
 
-  RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_research_duel_with_json_bot(1);
+  RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_from_json(R"json({
+    "battleId": "json_callback_test",
+    "seed": 1,
+    "tickRate": 30,
+    "tickLimit": 120,
+    "units": [
+      {
+        "unitId": 1,
+        "name": "Blue",
+        "spawn": {"x": 4, "y": 5, "headingDeg": 35},
+        "modules": {
+          "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      },
+      {
+        "unitId": 2,
+        "name": "Target",
+        "spawn": {"x": 34, "y": 18, "headingDeg": 215},
+        "modules": {
+          "mobility": {"id": "fixed_target_chassis", "maxSpeedMetersPerSecond": 0.0, "maxHullTurnDegreesPerSecond": 60.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      }
+    ],
+    "controllers": [
+      {"unitId": 1, "type": "json_callback"}
+    ]
+  })json");
   REQUIRE(runtime != nullptr);
   REQUIRE(g_called_bot_id == 1);
   REQUIRE(g_received_observation.at("type") == "start");

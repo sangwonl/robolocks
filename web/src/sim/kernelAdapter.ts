@@ -15,7 +15,6 @@ type WasmModule = {
   addFunction(fn: (...args: number[]) => number | void, signature: string): number;
   removeFunction(pointer: number): void;
   cwrap(name: "robolocks_battle_runner_create_preset_duel", returnType: "number", argTypes: []): () => number;
-  cwrap(name: "robolocks_battle_runner_create_research_duel_with_json_bot", returnType: "number", argTypes: ["number"]): (botId: number) => number;
   cwrap(name: "robolocks_battle_runner_create_from_json", returnType: "number", argTypes: ["string"]): (jsonConfig: string) => number;
   cwrap(name: "robolocks_battle_runner_set_json_bot_callback", returnType: null, argTypes: ["number", "number", "number"]): (callback: number, releaseCallback: number, userData: number) => void;
   cwrap(name: "robolocks_battle_runner_destroy", returnType: null, argTypes: ["number"]): (handle: number) => void;
@@ -126,7 +125,7 @@ export type JsonBotTick = (observation: unknown) => unknown;
 
 export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
   botId: number;
-  battleConfigJson?: string;
+  battleConfigJson: string;
   onTick: JsonBotTick;
   factory?: WasmFactory;
 }): Promise<KernelBattleRunner> {
@@ -142,11 +141,6 @@ export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
       "robolocks_battle_runner_set_json_bot_callback",
       null,
       ["number", "number", "number"],
-    );
-    const createResearchDuel = module.cwrap(
-      "robolocks_battle_runner_create_research_duel_with_json_bot",
-      "number",
-      ["number"],
     );
     const createFromJsonRuntime = module.cwrap(
       "robolocks_battle_runner_create_from_json",
@@ -173,9 +167,7 @@ export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
       ...module,
       cwrap(name: string, returnType: string | null, argTypes: string[]) {
         if (name === "robolocks_battle_runner_create_preset_duel") {
-          return () => options.battleConfigJson
-            ? createFromJsonRuntime(options.battleConfigJson)
-            : createResearchDuel(options.botId);
+          return () => createFromJsonRuntime(options.battleConfigJson);
         }
         return module.cwrap(name as never, returnType as never, argTypes as never);
       },
