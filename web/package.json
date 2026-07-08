@@ -16,6 +16,8 @@
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.185.0",
     "@vitejs/plugin-basic-ssl": "^1.1.0",
+    "monaco-editor": "^0.55.1",
+    "monaco-vim": "^0.4.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "three": "^0.185.1",

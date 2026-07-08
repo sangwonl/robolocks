@@ -49,8 +49,21 @@ export type ResearchRunOptions = {
   createRunner?: ResearchRunnerFactory;
 };
 
+export type BotLogEntry = {
+  tick: number;
+  unitId: number;
+  stream: "stdout" | "stderr";
+  message: string;
+};
+
+export type ResearchRunResult = {
+  replay: BattleReplay;
+  logs: BotLogEntry[];
+};
+
 export type BrowserBotRuntime = {
   onTick: JsonBotTick;
+  drainLogs?(): Omit<BotLogEntry, "tick" | "unitId">[];
   destroy?(): void;
 };
 
@@ -61,7 +74,7 @@ export type ResearchRunnerFactory = (options: {
   onTick: JsonBotTick;
 }) => Promise<KernelBattleRunner>;
 
-export async function runResearchInBrowser(options: ResearchRunOptions): Promise<BattleReplay> {
+export async function runResearchInBrowser(options: ResearchRunOptions): Promise<ResearchRunResult> {
   const tickCount = normalizeTickCount(options.tickCount);
   const botRuntime = await (options.createBotRuntime ?? createPyodideBotRuntime)(options.botSource);
   const createRunner = options.createRunner ?? ((runnerOptions) => createResearchDuelWithJsonBotFromWasmFactory(runnerOptions));
@@ -72,15 +85,23 @@ export async function runResearchInBrowser(options: ResearchRunOptions): Promise
 
   try {
     const frames = [runner.snapshot()];
+    const logs: BotLogEntry[] = [];
     for (let i = 0; i < tickCount; i += 1) {
-      frames.push(runner.step());
+      const frame = runner.step();
+      frames.push(frame);
+      for (const log of botRuntime.drainLogs?.() ?? []) {
+        logs.push({ ...log, tick: frame.tick, unitId: 1 });
+      }
     }
 
     return {
-      type: "robolocks.replay.v1",
-      tickRate: 30,
-      obstacles: runner.staticObstacles(),
-      frames,
+      replay: {
+        type: "robolocks.replay.v1",
+        tickRate: 30,
+        obstacles: runner.staticObstacles(),
+        frames,
+      },
+      logs,
     };
   } finally {
     runner.destroy();
@@ -102,6 +123,22 @@ async function createPyodideBotRuntime(botSource: string): Promise<BrowserBotRun
 import sys
 if "/robolocks_sdk" not in sys.path:
     sys.path.insert(0, "/robolocks_sdk")
+class __RobolocksLogStream:
+    def __init__(self, stream):
+        self.stream = stream
+        self.buffer = ""
+    def write(self, text):
+        self.buffer += str(text)
+    def flush(self):
+        pass
+    def drain(self):
+        text = self.buffer
+        self.buffer = ""
+        return text
+__robolocks_stdout = __RobolocksLogStream("stdout")
+__robolocks_stderr = __RobolocksLogStream("stderr")
+sys.stdout = __robolocks_stdout
+sys.stderr = __robolocks_stderr
 `);
   pyodide.globals.set("__robolocks_bot_source", botSource);
   pyodide.runPython(`
@@ -115,13 +152,37 @@ from robolocks.runtime import call_registered_bot as __robolocks_call_registered
       pyodide.globals.set("__robolocks_observation_json", JSON.stringify(observation));
       return JSON.parse(String(pyodide.runPython("__robolocks_call_registered_bot(__robolocks_observation_json)")));
     },
+    drainLogs(): Omit<BotLogEntry, "tick" | "unitId">[] {
+      const payload = String(pyodide.runPython(`
+import json
+json.dumps({
+    "stdout": __robolocks_stdout.drain(),
+    "stderr": __robolocks_stderr.drain(),
+})
+`));
+      const drained = JSON.parse(payload) as { stdout?: string; stderr?: string };
+      return [
+        ...splitLogLines(drained.stdout ?? "").map((message) => ({ stream: "stdout" as const, message })),
+        ...splitLogLines(drained.stderr ?? "").map((message) => ({ stream: "stderr" as const, message })),
+      ];
+    },
     destroy(): void {
       pyodide.runPython(`
 from robolocks.runtime import clear_registered_bot
 clear_registered_bot()
+import sys
+sys.stdout = sys.__stdout__
+sys.stderr = sys.__stderr__
 `);
     },
   };
+}
+
+function splitLogLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0);
 }
 
 type PyodideRuntime = {

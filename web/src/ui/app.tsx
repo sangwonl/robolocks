@@ -1,11 +1,15 @@
 import { createRoot, type Root } from "react-dom/client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import type { BattleAction, BattleEvent, BattleFrame, UnitFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
-import { DEFAULT_RESEARCH_BOT_SOURCE, runResearchInBrowser } from "../research/research.ts";
+import { DEFAULT_RESEARCH_BOT_SOURCE, runResearchInBrowser, type BotLogEntry } from "../research/research.ts";
 import { BattleSceneThreeView } from "./BattleSceneThreeView.tsx";
+
+const CodeEditor = lazy(() => import("./CodeEditor.tsx").then((module) => ({ default: module.CodeEditor })));
+const MIN_PANEL_WIDTH = 280;
+const MAX_PANEL_WIDTH = 680;
 
 export type RenderAppOptions = {
   defaultReplayUrl?: string | null;
@@ -34,6 +38,9 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const [workbenchMode, setWorkbenchMode] = useState<"replay" | "research">("replay");
   const [researchBotSource, setResearchBotSource] = useState(DEFAULT_RESEARCH_BOT_SOURCE);
   const [researchTickCount, setResearchTickCount] = useState(180);
+  const [botLogs, setBotLogs] = useState<BotLogEntry[]>([]);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(380);
+  const [rightPanelWidth, setRightPanelWidth] = useState(380);
   const timerRef = useRef<number | null>(null);
 
   const fetchText = options.fetchText ?? fetchTextFromUrl;
@@ -44,6 +51,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const canStepBackward = Boolean(loadedReplay && replayIndex > 0);
   const canStepForward = Boolean(loadedReplay && replayIndex < loadedReplay.frames.length - 1);
   const canPlay = Boolean(loadedReplay && loadedReplay.frames.length > 1);
+  const frameCount = loadedReplay?.frames.length ?? 0;
 
   const statusText = useMemo(() => {
     if (!loadedReplay || !frame) {
@@ -112,6 +120,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     setIsLoading(true);
     setStatus("Loading replay");
     try {
+      setBotLogs([]);
       applyReplayText(await file.text(), false);
     } catch (error: unknown) {
       setLoadedReplay(null);
@@ -127,12 +136,13 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     setIsLoading(true);
     setStatus("Running research");
     try {
-      const replay = await runResearchInBrowser({
+      const result = await runResearchInBrowser({
         botSource: researchBotSource,
         tickCount: researchTickCount,
       });
-      applyReplay(replay, true);
-      setStatus(`Research run loaded - ${replay.frames.length} frames`);
+      setBotLogs(result.logs);
+      applyReplay(result.replay, true);
+      setStatus(`Research run loaded - ${result.replay.frames.length} frames`);
     } catch (error: unknown) {
       setStatus(`Research run failed: ${errorMessage(error)}`);
     } finally {
@@ -140,9 +150,36 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     }
   }
 
+  function beginPanelResize(panel: "left" | "right", pointerStartX: number): void {
+    const startWidth = panel === "left" ? leftPanelWidth : rightPanelWidth;
+    const applyWidth = panel === "left" ? setLeftPanelWidth : setRightPanelWidth;
+
+    function handlePointerMove(event: PointerEvent): void {
+      const delta = event.clientX - pointerStartX;
+      const nextWidth = panel === "left" ? startWidth + delta : startWidth - delta;
+      applyWidth(clamp(nextWidth, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH));
+    }
+
+    function handlePointerUp(): void {
+      document.body.classList.remove("is-resizing-panel");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    document.body.classList.add("is-resizing-panel");
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+  }
+
   return (
-    <section className="workbench">
-      <aside className="panel">
+    <section
+      className="workbench"
+      style={{
+        "--left-panel-width": `${leftPanelWidth}px`,
+        "--right-panel-width": `${rightPanelWidth}px`,
+      } as CSSProperties}
+    >
+      <aside className="panel panel-left">
         <div className="panel-title">
           <h1>Robolocks</h1>
           <span>{workbenchMode === "research" ? "Unit Research" : "Replay Workbench"}</span>
@@ -178,45 +215,78 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
                 }
               }}
             />
+            <ReplaySummary replay={loadedReplay} frame={frame} replayIndex={replayIndex} />
           </label>
         ) : (
           <div className="research-panel">
-            <label className="field-control">
-              Ticks
-              <input
-                type="number"
-                min={1}
-                max={900}
-                value={researchTickCount}
+            <div className="research-toolbar">
+              <label className="field-control field-control-inline">
+                <span>Ticks</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={900}
+                  value={researchTickCount}
+                  disabled={isLoading}
+                  onChange={(event) => setResearchTickCount(Number(event.currentTarget.value))}
+                />
+              </label>
+              <button type="button" disabled={isLoading} onClick={() => void runResearch()}>
+                Run
+              </button>
+            </div>
+            <Suspense fallback={<div className="code-editor-loading">Loading editor</div>}>
+              <CodeEditor
                 disabled={isLoading}
-                onChange={(event) => setResearchTickCount(Number(event.currentTarget.value))}
-              />
-            </label>
-            <label className="code-control">
-              Bot code
-              <textarea
-                spellCheck={false}
+                onRun={() => void runResearch()}
+                onValueChange={setResearchBotSource}
                 value={researchBotSource}
-                disabled={isLoading}
-                onChange={(event) => setResearchBotSource(event.currentTarget.value)}
               />
-            </label>
-            <button type="button" disabled={isLoading} onClick={() => void runResearch()}>
-              Run Research
-            </button>
+            </Suspense>
           </div>
         )}
-        <div className="transport">
-          <button disabled={!canStepBackward} onClick={() => setReplayIndex((value) => Math.max(0, value - 1))}>Prev</button>
-          <button disabled={!canPlay} onClick={() => setIsPlaying((value) => !value)}>{isPlaying ? "Pause" : "Play"}</button>
-          <button disabled={!canStepForward} onClick={() => setReplayIndex((value) => Math.min((loadedReplay?.frames.length ?? 1) - 1, value + 1))}>Next</button>
-        </div>
         <div className="status">{statusText}</div>
-        <Inspector frame={frame} />
       </aside>
+      <PanelResizeHandle side="left" onResizeStart={(pointerX) => beginPanelResize("left", pointerX)} />
       <section className="battle-scene">
         <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? []} />
+        <PlaybackControls
+          canPlay={canPlay}
+          canStepBackward={canStepBackward}
+          canStepForward={canStepForward}
+          currentIndex={replayIndex}
+          frameCount={frameCount}
+          isPlaying={isPlaying}
+          onNext={() => setReplayIndex((value) => Math.min(frameCount - 1, value + 1))}
+          onPlayPause={() => setIsPlaying((value) => !value)}
+          onPrev={() => setReplayIndex((value) => Math.max(0, value - 1))}
+          onReset={() => {
+            setIsPlaying(false);
+            setReplayIndex(0);
+          }}
+          onSeek={(index) => {
+            setIsPlaying(false);
+            setReplayIndex(index);
+          }}
+        />
       </section>
+      <PanelResizeHandle side="right" onResizeStart={(pointerX) => beginPanelResize("right", pointerX)} />
+      <aside className="panel panel-right">
+        <div className="panel-title">
+          <h1>Bot State</h1>
+          <span>{frame ? `tick ${frame.tick}` : "No Frame"}</span>
+        </div>
+        <div className="state-panel-sections">
+          <details className="state-section state-section-units" open>
+            <summary>Units</summary>
+            <Inspector frame={frame} />
+          </details>
+          <details className="state-section state-section-console" open>
+            <summary>Console</summary>
+            <BotConsole logs={botLogs} currentTick={frame?.tick ?? 0} />
+          </details>
+        </div>
+      </aside>
     </section>
   );
 }
@@ -252,26 +322,142 @@ function Inspector({ frame }: { frame: BattleFrame | null }) {
   );
 }
 
+function BotConsole({ currentTick, logs }: { currentTick: number; logs: BotLogEntry[] }) {
+  const visibleLogs = logs.filter((entry) => entry.tick <= currentTick).slice(-80);
+  return (
+    <div className="console-panel">
+      {visibleLogs.length === 0 ? (
+        <div className="console-empty">No bot logs.</div>
+      ) : (
+        <ol className="console-log">
+          {visibleLogs.map((entry, index) => (
+            <li key={`${entry.tick}-${entry.unitId}-${index}`} data-stream={entry.stream}>
+              <span className="console-meta">t{entry.tick} u{entry.unitId}</span>
+              <span className="console-message">{entry.message}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function ReplaySummary({
+  replay,
+  frame,
+  replayIndex,
+}: {
+  replay: BattleReplay | null;
+  frame: BattleFrame | null;
+  replayIndex: number;
+}) {
+  if (!replay) {
+    return <div className="summary summary-empty">No replay loaded.</div>;
+  }
+  return (
+    <dl className="summary">
+      <Stat label="Frames" value={String(replay.frames.length)} />
+      <Stat label="Tick Rate" value={`${replay.tickRate} Hz`} />
+      <Stat label="Units" value={String(frame?.units.length ?? 0)} />
+      <Stat label="Obstacles" value={String(replay.obstacles.length)} />
+      <Stat label="Current" value={`${replayIndex + 1}/${replay.frames.length}`} />
+      <Stat label="Tick" value={String(frame?.tick ?? 0)} />
+    </dl>
+  );
+}
+
+function PanelResizeHandle({
+  onResizeStart,
+  side,
+}: {
+  onResizeStart: (pointerX: number) => void;
+  side: "left" | "right";
+}) {
+  return (
+    <div
+      className={`panel-resize-handle panel-resize-handle-${side}`}
+      role="separator"
+      aria-label={`${side} panel resize handle`}
+      aria-orientation="vertical"
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onResizeStart(event.clientX);
+      }}
+    />
+  );
+}
+
+function PlaybackControls({
+  canPlay,
+  canStepBackward,
+  canStepForward,
+  currentIndex,
+  frameCount,
+  isPlaying,
+  onNext,
+  onPlayPause,
+  onPrev,
+  onReset,
+  onSeek,
+}: {
+  canPlay: boolean;
+  canStepBackward: boolean;
+  canStepForward: boolean;
+  currentIndex: number;
+  frameCount: number;
+  isPlaying: boolean;
+  onNext: () => void;
+  onPlayPause: () => void;
+  onPrev: () => void;
+  onReset: () => void;
+  onSeek: (index: number) => void;
+}) {
+  const maxIndex = Math.max(0, frameCount - 1);
+  return (
+    <div className="playback" aria-label="Replay playback controls">
+      <div className="playback-buttons">
+        <button type="button" disabled={frameCount === 0 || currentIndex === 0} onClick={onReset}>Reset</button>
+        <button type="button" disabled={!canStepBackward} onClick={onPrev}>Prev</button>
+        <button type="button" disabled={!canPlay} onClick={onPlayPause}>{isPlaying ? "Pause" : "Play"}</button>
+        <button type="button" disabled={!canStepForward} onClick={onNext}>Next</button>
+      </div>
+      <label className="playback-progress">
+        <span>{frameCount > 0 ? `${currentIndex + 1}/${frameCount}` : "0/0"}</span>
+        <input
+          type="range"
+          min={0}
+          max={maxIndex}
+          value={Math.min(currentIndex, maxIndex)}
+          disabled={frameCount <= 1}
+          onChange={(event) => onSeek(Number(event.currentTarget.value))}
+        />
+      </label>
+    </div>
+  );
+}
+
 function UnitCard({ unit, actions, events }: { unit: UnitFrame; actions: BattleAction[]; events: BattleEvent[] }) {
   return (
-    <section className="unit-card" data-side={unit.name.toLowerCase()}>
-      <div className="unit-card-head">
+    <details className="unit-card" data-side={unit.name.toLowerCase()}>
+      <summary className="unit-card-head">
         <strong>{unit.name}</strong>
         <span>unit {unit.unitId}</span>
+      </summary>
+      <div className="unit-card-body">
+        <dl className="unit-stats">
+          <Stat label="Position" value={`${unit.position.x.toFixed(2)}, ${unit.position.y.toFixed(2)}`} />
+          <Stat label="Hull" value={`${unit.hullHeadingDegrees.toFixed(1)} deg`} />
+          <Stat label="Turret" value={`${unit.turretHeadingDegrees.toFixed(1)} deg`} />
+          <Stat label="Shape" value={shapeLabel(unit.bodyShape)} />
+          <Stat label="Armor" value={unit.armorIntegrity.toFixed(0)} />
+          <Stat label="Reload" value={`${unit.weaponCooldownTicks} ticks`} />
+        </dl>
+        <UnitSection title="Modules" items={moduleItems(unit)} />
+        <UnitSection title="Intents" items={intentItems(unit)} />
+        <UnitSection title="Actions" items={actionItems(actions)} />
+        <UnitSection title="Events" items={eventItems(events)} />
       </div>
-      <dl className="unit-stats">
-        <Stat label="Position" value={`${unit.position.x.toFixed(2)}, ${unit.position.y.toFixed(2)}`} />
-        <Stat label="Hull" value={`${unit.hullHeadingDegrees.toFixed(1)} deg`} />
-        <Stat label="Turret" value={`${unit.turretHeadingDegrees.toFixed(1)} deg`} />
-        <Stat label="Shape" value={shapeLabel(unit.bodyShape)} />
-        <Stat label="Armor" value={unit.armorIntegrity.toFixed(0)} />
-        <Stat label="Reload" value={`${unit.weaponCooldownTicks} ticks`} />
-      </dl>
-      <UnitSection title="Modules" items={moduleItems(unit)} />
-      <UnitSection title="Intents" items={intentItems(unit)} />
-      <UnitSection title="Actions" items={actionItems(actions)} />
-      <UnitSection title="Events" items={eventItems(events)} />
-    </section>
+    </details>
   );
 }
 
@@ -384,4 +570,8 @@ function actionTarget(action: BattleAction): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

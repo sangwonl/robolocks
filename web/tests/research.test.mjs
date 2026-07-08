@@ -9,7 +9,7 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
   let destroyedRuntime = false;
   let destroyedRunner = false;
 
-  const replay = await runResearchInBrowser({
+  const result = await runResearchInBrowser({
     botSource: DEFAULT_RESEARCH_BOT_SOURCE,
     tickCount: 2,
     createBotRuntime: async (botSource) => {
@@ -22,6 +22,9 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
               { type: "moveTo", position: { x: 12, y: 7 } },
             ],
           };
+        },
+        drainLogs() {
+          return [{ stream: "stdout", message: `tick ${onTickCalls.length}` }];
         },
         destroy() {
           destroyedRuntime = true;
@@ -57,6 +60,7 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
     },
   });
 
+  const replay = result.replay;
   assert.equal(observedBotSources.length, 1);
   assert.match(observedBotSources[0], /def on_tick/);
   assert.equal(replay.type, "robolocks.replay.v1");
@@ -66,6 +70,10 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
   assert.equal(replay.frames[0].tick, 0);
   assert.equal(replay.frames[2].tick, 2);
   assert.deepEqual(onTickCalls.map((call) => call.tick), [1, 2]);
+  assert.deepEqual(result.logs, [
+    { tick: 1, unitId: 1, stream: "stdout", message: "tick 1" },
+    { tick: 2, unitId: 1, stream: "stdout", message: "tick 2" },
+  ]);
   assert.equal(destroyedRunner, true);
   assert.equal(destroyedRuntime, true);
 });
