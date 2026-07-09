@@ -8,3 +8,4 @@ web/dist/
 web/public/wasm/*
 !web/public/wasm/.gitkeep
 web/src/generated/robolocks_wasm.js
+web/src/research/pythonSdkFiles.generated.ts

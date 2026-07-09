@@ -9,7 +9,12 @@
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "build:wasm": "../scripts/build.sh wasm",
-    "sync:wasm": "../scripts/build.sh sync"
+    "sync:wasm": "../scripts/build.sh sync",
+    "gen:sdk": "node scripts/gen-python-sdk.mjs",
+    "predev": "npm run gen:sdk",
+    "prebuild": "npm run gen:sdk",
+    "pretest": "npm run gen:sdk",
+    "pretypecheck": "npm run gen:sdk"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.16",
