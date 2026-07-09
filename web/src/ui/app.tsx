@@ -211,7 +211,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
                       value={research.researchTickCount}
                       disabled={isLoading}
                       onChange={(event) => {
-                        const nextTickCount = Number(event.currentTarget.value);
+                        const nextTickCount = event.currentTarget.valueAsNumber;
                         if (!Number.isNaN(nextTickCount)) {
                           research.setResearchTickCount(nextTickCount);
                         }

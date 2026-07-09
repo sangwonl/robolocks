@@ -93,7 +93,24 @@ export function useReplayPlayback(replay: BattleReplay | null): UseReplayPlaybac
     }
 
     rafIdRef.current = requestAnimationFrame(tick);
+
+    // Browsers suspend rAF callbacks in hidden/background tabs. When the tab
+    // becomes visible again, `now` in the next tick() jumps far ahead of
+    // `startTimestamp`, which would otherwise compute a far-future frame and
+    // snap playback to the end. Rebase the elapsed-time origin from the
+    // frame that was actually last displayed - the same rebase math used
+    // above when speed changes - so playback resumes from where it left off
+    // instead of jumping.
+    function handleVisibilityChange(): void {
+      if (document.visibilityState === "visible") {
+        lastAppliedIndex = frameIndexRef.current;
+        startTimestamp = performance.now() - (lastAppliedIndex * 1000) / (tickRate * speed);
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;

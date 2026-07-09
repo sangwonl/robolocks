@@ -179,6 +179,7 @@ export function createBattleScene(input: BattleSceneInput): BattleScene {
 
       disposeObjectTree(ground);
       scene.remove(ground);
+      disposeObjectTree(lighting);
       scene.remove(lighting);
       for (const mesh of obstacleMeshes) {
         disposeObjectTree(mesh);
@@ -769,5 +770,9 @@ function disposeObjectTree(root: THREE.Object3D): void {
     } else if (material) {
       material.dispose();
     }
+    // Lights (e.g. the shadow-casting DirectionalLight) own a dispose() that
+    // releases their shadow-map render target; other traversed object types
+    // don't define dispose(), so this is a no-op for them.
+    (object as THREE.Object3D & { dispose?: () => void }).dispose?.();
   });
 }

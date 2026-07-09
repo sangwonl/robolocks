@@ -159,6 +159,74 @@ test("units are removed from the scene when they disappear from the frame", () =
   assert.equal(battle.scene.getObjectByName("unit-2-scan-arc"), undefined);
 });
 
+test("dispose() disposes every tracked geometry, material, and light exactly once", () => {
+  const battle = createBattleScene({
+    obstacles: [
+      { id: "rock", position: { x: 5, y: 5 }, radiusMeters: 1.5, blocksMovement: true, blocksLineOfSight: true },
+    ],
+  });
+  const projectile = {
+    projectileId: 11,
+    ownerUnitId: 1,
+    previousPosition: { x: 1, y: 1 },
+    position: { x: 2, y: 2 },
+    radiusMeters: 0.1,
+    previousHeightMeters: 1,
+    heightMeters: 1.2,
+  };
+  battle.sync(makeFrame([makeUnit()], { projectiles: [projectile] }));
+
+  // Monkey-patch dispose on every geometry/material/light instance currently
+  // reachable from the scene, then assert battle.dispose() invokes each one.
+  const tracked = new Set();
+  const disposeCalls = new Map();
+
+  function trackDisposable(resource) {
+    if (!resource || typeof resource.dispose !== "function" || tracked.has(resource)) {
+      return;
+    }
+    tracked.add(resource);
+    disposeCalls.set(resource, 0);
+    const original = resource.dispose.bind(resource);
+    resource.dispose = (...args) => {
+      disposeCalls.set(resource, disposeCalls.get(resource) + 1);
+      return original(...args);
+    };
+  }
+
+  battle.scene.traverse((object) => {
+    const withGeometry = object;
+    if (withGeometry.geometry) {
+      trackDisposable(withGeometry.geometry);
+    }
+    const material = withGeometry.material;
+    if (Array.isArray(material)) {
+      for (const item of material) {
+        trackDisposable(item);
+      }
+    } else if (material) {
+      trackDisposable(material);
+    }
+    if (object.isLight) {
+      trackDisposable(object);
+    }
+  });
+
+  // Sanity check on the test itself: a shadow-casting light must be present,
+  // otherwise this test would pass vacuously without covering the leak.
+  assert.ok(Array.from(tracked).some((resource) => resource.isDirectionalLight));
+  assert.ok(tracked.size > 0);
+
+  battle.dispose();
+
+  for (const resource of tracked) {
+    assert.ok(
+      disposeCalls.get(resource) >= 1,
+      `expected dispose() to be called at least once for ${resource.type ?? resource.constructor?.name ?? "resource"}`,
+    );
+  }
+});
+
 test("projectile rigs persist across syncs and are removed on disappearance", () => {
   const battle = createBattleScene({ obstacles: [] });
 
