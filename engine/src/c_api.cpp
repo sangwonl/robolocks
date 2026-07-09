@@ -114,38 +114,6 @@ ActionRef action_at(RobolocksBattleRunnerHandle handle, size_t action_index) {
   return {};
 }
 
-const char* order_kind_name(robolocks::OrderKind kind) {
-  switch (kind) {
-    case robolocks::OrderKind::MoveTo:
-      return "moveTo";
-    case robolocks::OrderKind::AimAt:
-      return "aimAt";
-    case robolocks::OrderKind::FireIfSolution:
-      return "fireIfSolution";
-    case robolocks::OrderKind::ScanArc:
-      return "scanArc";
-    case robolocks::OrderKind::FaceArmorToward:
-      return "faceArmorToward";
-  }
-  return "unknown";
-}
-
-const char* order_channel_name(robolocks::OrderKind kind) {
-  switch (robolocks::order_channel(kind)) {
-    case robolocks::OrderChannel::Mobility:
-      return "mobility";
-    case robolocks::OrderChannel::Turret:
-      return "turret";
-    case robolocks::OrderChannel::Weapon:
-      return "weapon";
-    case robolocks::OrderChannel::Sensor:
-      return "sensor";
-    case robolocks::OrderChannel::Hull:
-      return "hull";
-  }
-  return "unknown";
-}
-
 }  // namespace
 
 namespace {
@@ -731,7 +699,7 @@ const char* robolocks_battle_runner_action_type(RobolocksBattleRunnerHandle hand
   if (action.order == nullptr) {
     return "";
   }
-  return order_kind_name(action.order->kind);
+  return robolocks::to_string(action.order->kind);
 }
 
 const char* robolocks_battle_runner_action_channel(RobolocksBattleRunnerHandle handle, size_t action_index) {
@@ -739,7 +707,7 @@ const char* robolocks_battle_runner_action_channel(RobolocksBattleRunnerHandle h
   if (action.order == nullptr) {
     return "";
   }
-  return order_channel_name(action.order->kind);
+  return robolocks::to_string(robolocks::order_channel(action.order->kind));
 }
 
 int robolocks_battle_runner_action_has_position(RobolocksBattleRunnerHandle handle, size_t action_index) {

@@ -45,6 +45,16 @@ enum class WeaponFireMode {
   Ballistic,
 };
 
+inline const char* to_string(WeaponFireMode mode) {
+  switch (mode) {
+    case WeaponFireMode::Direct:
+      return "direct";
+    case WeaponFireMode::Ballistic:
+      return "ballistic";
+  }
+  return "direct";
+}
+
 struct WeaponSpec {
   std::string id;
   WeaponFireMode fire_mode = WeaponFireMode::Direct;
@@ -65,6 +75,16 @@ enum class BodyShapeType {
   Circle,
   Box,
 };
+
+inline const char* to_string(BodyShapeType type) {
+  switch (type) {
+    case BodyShapeType::Circle:
+      return "circle";
+    case BodyShapeType::Box:
+      return "box";
+  }
+  return "circle";
+}
 
 struct BodyShapeSpec {
   BodyShapeType type = BodyShapeType::Circle;

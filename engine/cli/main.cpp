@@ -2,19 +2,19 @@
 #include <robolocks/battle_runner.hpp>
 #include <robolocks/controller_factory.hpp>
 #include <robolocks/snapshot.hpp>
+#include <robolocks/snapshot_json.hpp>
 
 #include <charconv>
 #include <cstdint>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
-#include <variant>
+
+#include <nlohmann/json.hpp>
 
 namespace {
 
@@ -73,403 +73,40 @@ bool parse_options(int argc, char** argv, CliOptions& options) {
   return options.battle_path.has_value();
 }
 
-void print_body_shape_json(const robolocks::UnitSnapshot& unit, std::ostream& out);
-void print_intents_json(const robolocks::UnitSnapshot& unit, std::ostream& out);
-void print_modules_json(const robolocks::UnitSnapshot& unit, std::ostream& out);
-void print_vec_json(const robolocks::Vec2& vec, std::ostream& out);
-void print_vec3_json(const robolocks::Vec3& vec, std::ostream& out);
-void print_projectiles_json_compact(const std::vector<robolocks::ProjectileSnapshot>& projectiles, std::ostream& out);
-void print_event_payload_json_compact(const robolocks::EventPayload& payload, std::ostream& out);
-void print_rule_state_json_compact(const robolocks::BattleRuleState* rule_state, std::ostream& out);
-
-void print_snapshot_json(const robolocks::WorldSnapshot& snapshot, std::ostream& out) {
-  out << std::setprecision(15);
-  out << "{\n";
-  out << "  \"tick\": " << snapshot.tick << ",\n";
-  out << "  \"units\": [\n";
-  for (std::size_t i = 0; i < snapshot.units.size(); i += 1) {
-    const auto& unit = snapshot.units[i];
-    out << "    {";
-    out << "\"unitId\": " << unit.unit_id.value << ", ";
-    out << "\"position\": {\"x\": " << unit.position.x << ", \"y\": " << unit.position.y << "}, ";
-    out << "\"hullHeadingDegrees\": " << unit.hull_heading_deg << ", ";
-    out << "\"turretHeadingDegrees\": " << unit.turret_heading_deg << ", ";
-    out << "\"armorIntegrity\": " << unit.armor_integrity << ", ";
-    out << "\"bodyShape\": ";
-    print_body_shape_json(unit, out);
-    out << ", \"modules\": ";
-    print_modules_json(unit, out);
-    out << ", \"intents\": ";
-    print_intents_json(unit, out);
-    out << "}";
-    if (i + 1 < snapshot.units.size()) {
-      out << ",";
-    }
-    out << "\n";
-  }
-  out << "  ],\n";
-  out << "  \"projectiles\": ";
-  print_projectiles_json_compact(snapshot.projectiles, out);
-  out << "\n";
-  out << "}\n";
-}
-
-void print_events_json_compact(const std::vector<robolocks::Event>& events, std::ostream& out) {
-  out << "[";
-  for (std::size_t i = 0; i < events.size(); i += 1) {
-    const auto& event = events[i];
-    out << "{";
-    out << "\"tick\":" << event.tick << ",";
-    out << "\"unitId\":" << event.unit_id.value << ",";
-    out << "\"code\":\"" << event.code << "\",";
-    out << "\"message\":\"" << event.message << "\",";
-    out << "\"payload\":";
-    print_event_payload_json_compact(event.payload, out);
-    out << "}";
-    if (i + 1 < events.size()) {
-      out << ",";
-    }
-  }
-  out << "]";
-}
-
-void print_event_payload_json_compact(const robolocks::EventPayload& payload, std::ostream& out) {
-  out << "{";
-  out << "\"projectileId\":" << payload.projectile_id << ",";
-  out << "\"sourceUnitId\":" << payload.source_unit_id.value << ",";
-  out << "\"targetUnitId\":" << payload.target_unit_id.value << ",";
-  out << "\"sourceTeamId\":" << payload.source_team_id << ",";
-  out << "\"targetTeamId\":" << payload.target_team_id << ",";
-  out << "\"damageType\":\"" << payload.damage_type << "\",";
-  out << "\"armorFacing\":\"" << payload.armor_facing << "\",";
-  out << "\"damage\":" << payload.damage << ",";
-  out << "\"remainingArmor\":" << payload.remaining_armor << ",";
-  out << "\"penetrationMillimeters\":" << payload.penetration_mm << ",";
-  out << "\"armorMillimeters\":" << payload.armor_mm << ",";
-  out << "\"impactDistanceMeters\":" << payload.impact_distance_m << ",";
-  out << "\"blastRadiusMeters\":" << payload.blast_radius_m;
-  out << "}";
-}
-
-std::string order_kind_name(robolocks::OrderKind kind) {
-  switch (kind) {
-    case robolocks::OrderKind::MoveTo:
-      return "moveTo";
-    case robolocks::OrderKind::AimAt:
-      return "aimAt";
-    case robolocks::OrderKind::FireIfSolution:
-      return "fireIfSolution";
-    case robolocks::OrderKind::ScanArc:
-      return "scanArc";
-    case robolocks::OrderKind::FaceArmorToward:
-      return "faceArmorToward";
-  }
-  return "unknown";
-}
-
-std::string order_channel_name(robolocks::OrderKind kind) {
-  switch (robolocks::order_channel(kind)) {
-    case robolocks::OrderChannel::Mobility:
-      return "mobility";
-    case robolocks::OrderChannel::Turret:
-      return "turret";
-    case robolocks::OrderChannel::Weapon:
-      return "weapon";
-    case robolocks::OrderChannel::Sensor:
-      return "sensor";
-    case robolocks::OrderChannel::Hull:
-      return "hull";
-  }
-  return "unknown";
-}
-
-void print_vec_json(const robolocks::Vec2& vec, std::ostream& out) {
-  out << "{\"x\":" << vec.x << ",\"y\":" << vec.y << "}";
-}
-
-void print_vec3_json(const robolocks::Vec3& vec, std::ostream& out) {
-  out << "{\"x\":" << vec.x << ",\"y\":" << vec.y << ",\"z\":" << vec.z << "}";
-}
-
-const char* fire_mode_json(robolocks::WeaponFireMode mode) {
-  switch (mode) {
-    case robolocks::WeaponFireMode::Direct:
-      return "direct";
-    case robolocks::WeaponFireMode::Ballistic:
-      return "ballistic";
-  }
-  return "direct";
-}
-
-void print_body_shape_json(const robolocks::UnitSnapshot& unit, std::ostream& out) {
-  out << "{";
-  if (unit.body_shape_type == robolocks::BodyShapeType::Box) {
-    out << "\"type\":\"box\",";
-    out << "\"radiusMeters\":" << unit.body_radius_m << ",";
-    out << "\"lengthMeters\":" << unit.body_length_m << ",";
-    out << "\"widthMeters\":" << unit.body_width_m;
-  } else {
-    out << "\"type\":\"circle\",";
-    out << "\"radiusMeters\":" << unit.body_radius_m;
-  }
-  out << "}";
-}
-
-void print_intent_target_json(const robolocks::Vec2& target, std::ostream& out) {
-  out << "{\"x\":" << target.x << ",\"y\":" << target.y << "}";
-}
-
-void print_modules_json(const robolocks::UnitSnapshot& unit, std::ostream& out) {
-  out << "{";
-  out << "\"mobility\":{";
-  out << "\"id\":\"" << unit.modules.mobility.id << "\",";
-  out << "\"maxSpeedMetersPerSecond\":" << unit.modules.mobility.max_speed_mps << ",";
-  out << "\"maxHullTurnDegreesPerSecond\":" << unit.modules.mobility.max_hull_turn_degps;
-  out << "},";
-  out << "\"turret\":{";
-  out << "\"id\":\"" << unit.modules.turret.id << "\",";
-  out << "\"maxTurnDegreesPerSecond\":" << unit.modules.turret.max_turn_degps;
-  out << "},";
-  out << "\"weapon\":{";
-  out << "\"id\":\"" << unit.modules.weapon.id << "\",";
-  out << "\"fireMode\":\"" << fire_mode_json(unit.modules.weapon.fire_mode) << "\",";
-  out << "\"damage\":" << unit.modules.weapon.damage << ",";
-  out << "\"penetrationMillimeters\":" << unit.modules.weapon.penetration_mm << ",";
-  out << "\"rangeMeters\":" << unit.modules.weapon.range_m << ",";
-  out << "\"muzzleVelocityMetersPerSecond\":" << unit.modules.weapon.muzzle_velocity_mps << ",";
-  out << "\"muzzleOffsetMeters\":";
-  print_vec3_json(unit.modules.weapon.muzzle_offset_m, out);
-  out << ",";
-  out << "\"launchAngleDegrees\":" << unit.modules.weapon.launch_angle_deg << ",";
-  out << "\"gravityMetersPerSecondSquared\":" << unit.modules.weapon.gravity_mps2 << ",";
-  out << "\"blastRadiusMeters\":" << unit.modules.weapon.blast_radius_m << ",";
-  out << "\"projectileRadiusMeters\":" << unit.modules.weapon.projectile_radius_m << ",";
-  out << "\"aimToleranceDegrees\":" << unit.modules.weapon.aim_tolerance_deg << ",";
-  out << "\"reloadTicks\":" << unit.modules.weapon.reload_ticks;
-  out << "},";
-  out << "\"armor\":{";
-  out << "\"id\":\"" << unit.modules.armor.id << "\",";
-  out << "\"integrity\":" << unit.modules.armor.integrity << ",";
-  out << "\"frontMillimeters\":" << unit.modules.armor.front_mm << ",";
-  out << "\"sideMillimeters\":" << unit.modules.armor.side_mm << ",";
-  out << "\"rearMillimeters\":" << unit.modules.armor.rear_mm;
-  out << "},";
-  out << "\"body\":{";
-  out << "\"id\":\"" << unit.modules.body.id << "\",";
-  out << "\"massKilograms\":" << unit.modules.body.mass_kg << ",";
-  out << "\"shape\":";
-  print_body_shape_json(unit, out);
-  out << "},";
-  out << "\"sensor\":{";
-  out << "\"id\":\"" << unit.modules.sensor.id << "\",";
-  out << "\"rangeMeters\":" << unit.modules.sensor.range_m << ",";
-  out << "\"fovDegrees\":" << unit.modules.sensor.fov_deg << ",";
-  out << "\"refreshTicks\":" << unit.modules.sensor.refresh_ticks;
-  out << "}";
-  out << "}";
-}
-
-void print_intents_json(const robolocks::UnitSnapshot& unit, std::ostream& out) {
-  out << "{";
-  out << "\"mobility\":{";
-  out << "\"active\":" << (unit.mobility_intent_active ? "true" : "false") << ",";
-  out << "\"target\":";
-  print_intent_target_json(unit.mobility_intent_target, out);
-  out << ",\"remainingMeters\":" << unit.mobility_intent_remaining_m << ",";
-  out << "\"ageTicks\":" << unit.mobility_intent_age_ticks;
-  out << "},";
-  out << "\"turret\":{";
-  out << "\"active\":" << (unit.turret_intent_active ? "true" : "false") << ",";
-  out << "\"target\":";
-  print_intent_target_json(unit.turret_intent_target, out);
-  out << ",\"errorDegrees\":" << unit.turret_intent_error_deg << ",";
-  out << "\"ageTicks\":" << unit.turret_intent_age_ticks;
-  out << "},";
-  out << "\"hull\":{";
-  out << "\"active\":" << (unit.hull_intent_active ? "true" : "false") << ",";
-  out << "\"target\":";
-  print_intent_target_json(unit.hull_intent_target, out);
-  out << ",\"errorDegrees\":" << unit.hull_intent_error_deg << ",";
-  out << "\"ageTicks\":" << unit.hull_intent_age_ticks;
-  out << "},";
-  out << "\"weapon\":{";
-  out << "\"active\":" << (unit.weapon_intent_active ? "true" : "false") << ",";
-  out << "\"minHitChance\":" << unit.weapon_intent_min_hit_chance << ",";
-  out << "\"ageTicks\":" << unit.weapon_intent_age_ticks;
-  out << "}";
-  out << "}";
-}
-
-void print_order_payload_json(const robolocks::Order& order, std::ostream& out) {
-  std::visit([&out](const auto& payload) {
-    using Payload = std::decay_t<decltype(payload)>;
-    if constexpr (std::is_same_v<Payload, robolocks::MoveToOrder>) {
-      out << "\"position\":";
-      print_vec_json(payload.position, out);
-    } else if constexpr (std::is_same_v<Payload, robolocks::AimAtOrder>) {
-      out << "\"target\":";
-      print_vec_json(payload.target, out);
-    } else if constexpr (std::is_same_v<Payload, robolocks::FaceArmorTowardOrder>) {
-      out << "\"target\":";
-      print_vec_json(payload.target, out);
-    } else if constexpr (std::is_same_v<Payload, robolocks::FireIfSolutionOrder>) {
-      out << "\"minHitChance\":" << payload.min_hit_chance;
-    } else if constexpr (std::is_same_v<Payload, robolocks::ScanArcOrder>) {
-      out << "\"directionDegrees\":" << payload.direction_deg << ",\"widthDegrees\":" << payload.width_deg;
-    }
-  }, order.payload);
-}
-
-void print_actions_json_compact(const std::vector<robolocks::UnitOrders>& orders_by_unit, std::ostream& out) {
-  out << "[";
-  bool first = true;
-  for (const auto& unit_orders : orders_by_unit) {
-    for (const auto& order : unit_orders.orders) {
-      if (!first) {
-        out << ",";
-      }
-      first = false;
-      out << "{";
-      out << "\"unitId\":" << unit_orders.unit_id.value << ",";
-      out << "\"type\":\"" << order_kind_name(order.kind) << "\",";
-      out << "\"channel\":\"" << order_channel_name(order.kind) << "\",";
-      print_order_payload_json(order, out);
-      out << "}";
-    }
-  }
-  out << "]";
-}
-
-void print_projectiles_json_compact(const std::vector<robolocks::ProjectileSnapshot>& projectiles, std::ostream& out) {
-  out << "[";
-  for (std::size_t i = 0; i < projectiles.size(); i += 1) {
-    const auto& projectile = projectiles[i];
-    out << "{";
-    out << "\"projectileId\":" << projectile.projectile_id << ",";
-    out << "\"ownerUnitId\":" << projectile.owner_unit_id.value << ",";
-    out << "\"previousPosition\":";
-    print_vec_json(projectile.previous_position, out);
-    out << ",\"position\":";
-    print_vec_json(projectile.position, out);
-    out << ",\"radiusMeters\":" << projectile.radius_m << ",";
-    out << "\"previousHeightMeters\":" << projectile.previous_height_m << ",";
-    out << "\"heightMeters\":" << projectile.height_m;
-    out << "}";
-    if (i + 1 < projectiles.size()) {
-      out << ",";
-    }
-  }
-  out << "]";
-}
-
-void print_snapshot_json_compact(
+// Assembles a full per-tick frame from the shared serializer, layering on the
+// step-only data (events, actions, rule state) that WorldSnapshot does not carry.
+nlohmann::ordered_json frame_json(
   const robolocks::WorldSnapshot& snapshot,
-  std::ostream& out,
   const std::vector<robolocks::Event>& events = {},
   const std::vector<robolocks::UnitOrders>& orders_by_unit = {},
   const robolocks::BattleRuleState* rule_state = nullptr
 ) {
-  out << std::setprecision(15);
-  out << "{\"tick\":" << snapshot.tick << ",\"units\":[";
-  for (std::size_t i = 0; i < snapshot.units.size(); i += 1) {
-    const auto& unit = snapshot.units[i];
-    out << "{";
-    out << "\"unitId\":" << unit.unit_id.value << ",";
-    out << "\"position\":{\"x\":" << unit.position.x << ",\"y\":" << unit.position.y << "},";
-    out << "\"hullHeadingDegrees\":" << unit.hull_heading_deg << ",";
-    out << "\"turretHeadingDegrees\":" << unit.turret_heading_deg << ",";
-    out << "\"armorIntegrity\":" << unit.armor_integrity << ",";
-    out << "\"weaponCooldownTicks\":" << unit.weapon_cooldown_ticks << ",";
-    out << "\"bodyShape\":";
-    print_body_shape_json(unit, out);
-    out << ",\"modules\":";
-    print_modules_json(unit, out);
-    out << ",\"intents\":";
-    print_intents_json(unit, out);
-    out << "}";
-    if (i + 1 < snapshot.units.size()) {
-      out << ",";
-    }
-  }
-  out << "],\"projectiles\":";
-  print_projectiles_json_compact(snapshot.projectiles, out);
-  out << ",\"events\":";
-  print_events_json_compact(events, out);
-  out << ",\"actions\":";
-  print_actions_json_compact(orders_by_unit, out);
-  out << ",\"ruleState\":";
-  print_rule_state_json_compact(rule_state, out);
-  out << "}";
-}
+  auto frame = robolocks::snapshot_to_json(snapshot);
 
-void print_rule_state_json_compact(const robolocks::BattleRuleState* rule_state, std::ostream& out) {
-  if (rule_state == nullptr) {
-    out << "{\"scores\":[],\"captureZones\":[],\"outcome\":{\"finished\":false,\"reason\":\"\",\"winnerUnitId\":0,\"winnerTeamId\":0}}";
-    return;
+  auto events_json = nlohmann::ordered_json::array();
+  for (const auto& event : events) {
+    events_json.push_back(robolocks::event_to_json(event));
   }
+  frame["events"] = std::move(events_json);
 
-  out << "{\"scores\":[";
-  for (std::size_t i = 0; i < rule_state->scores.size(); i += 1) {
-    const auto& score = rule_state->scores[i];
-    out << "{";
-    out << "\"unitId\":" << score.unit_id.value << ",";
-    out << "\"teamId\":" << score.team_id << ",";
-    out << "\"kills\":" << score.kills << ",";
-    out << "\"deaths\":" << score.deaths << ",";
-    out << "\"damageDealt\":" << score.damage_dealt;
-    out << "}";
-    if (i + 1 < rule_state->scores.size()) {
-      out << ",";
+  auto actions_json = nlohmann::ordered_json::array();
+  for (const auto& unit_orders : orders_by_unit) {
+    for (const auto& order : unit_orders.orders) {
+      actions_json.push_back(robolocks::action_to_json(unit_orders.unit_id, order));
     }
   }
-  out << "],\"captureZones\":[";
-  for (std::size_t i = 0; i < rule_state->capture_zones.size(); i += 1) {
-    const auto& zone = rule_state->capture_zones[i];
-    out << "{";
-    out << "\"id\":\"" << zone.id << "\",";
-    out << "\"position\":";
-    print_vec_json(zone.position, out);
-    out << ",\"radiusMeters\":" << zone.radius_m << ",";
-    out << "\"holdTicksRequired\":" << zone.hold_ticks_required << ",";
-    out << "\"heldTicks\":" << zone.held_ticks << ",";
-    out << "\"ownerUnitId\":" << zone.owner_unit_id.value << ",";
-    out << "\"ownerTeamId\":" << zone.owner_team_id << ",";
-    out << "\"contested\":" << (zone.contested ? "true" : "false");
-    out << "}";
-    if (i + 1 < rule_state->capture_zones.size()) {
-      out << ",";
-    }
-  }
-  out << "],\"outcome\":{";
-  out << "\"finished\":" << (rule_state->outcome.finished ? "true" : "false") << ",";
-  out << "\"reason\":\"" << rule_state->outcome.reason << "\",";
-  out << "\"winnerUnitId\":" << rule_state->outcome.winner_unit_id.value << ",";
-  out << "\"winnerTeamId\":" << rule_state->outcome.winner_team_id;
-  out << "}}";
-}
+  frame["actions"] = std::move(actions_json);
 
-void print_obstacles_json_compact(const std::vector<robolocks::StaticObstacle>& obstacles, std::ostream& out) {
-  out << "[";
-  for (std::size_t i = 0; i < obstacles.size(); i += 1) {
-    const auto& obstacle = obstacles[i];
-    out << "{";
-    out << "\"id\":\"" << obstacle.id << "\",";
-    out << "\"position\":{\"x\":" << obstacle.position.x << ",\"y\":" << obstacle.position.y << "},";
-    out << "\"radiusMeters\":" << obstacle.radius_m << ",";
-    out << "\"blocksMovement\":" << (obstacle.blocks_movement ? "true" : "false") << ",";
-    out << "\"blocksLineOfSight\":" << (obstacle.blocks_line_of_sight ? "true" : "false");
-    out << "}";
-    if (i + 1 < obstacles.size()) {
-      out << ",";
-    }
-  }
-  out << "]";
+  frame["ruleState"] = robolocks::rule_state_to_json(rule_state);
+  return frame;
 }
 
 void print_stream_frame(std::string_view type, const robolocks::WorldSnapshot& snapshot, std::ostream& out) {
-  out << "{\"type\":\"" << type << "\",\"frame\":";
-  print_snapshot_json_compact(snapshot, out);
-  out << "}\n";
+  const nlohmann::ordered_json message{
+    {"type", type},
+    {"frame", robolocks::snapshot_to_json(snapshot)},
+  };
+  out << message.dump() << "\n";
 }
 
 void print_snapshot_stream(robolocks::BattleRunner& runtime, robolocks::Tick ticks, std::ostream& out) {
@@ -498,19 +135,30 @@ void write_replay_json(
     throw std::runtime_error("Failed to open replay output: " + path);
   }
 
-  out << "{\"type\":\"robolocks.replay.v1\",";
-  out << "\"tickRate\":" << tick_rate << ",";
-  out << "\"obstacles\":";
-  print_obstacles_json_compact(obstacles, out);
-  out << ",";
-  out << "\"frames\":[";
-  print_snapshot_json_compact(runtime.snapshot(), out);
+  auto obstacles_json = nlohmann::ordered_json::array();
+  for (const auto& obstacle : obstacles) {
+    obstacles_json.push_back(robolocks::obstacle_to_json(obstacle));
+  }
+
+  auto frames = nlohmann::ordered_json::array();
+  frames.push_back(frame_json(runtime.snapshot()));
   for (robolocks::Tick tick = 0; tick < ticks; tick += 1) {
     const auto result = runtime.step_once();
-    out << ",";
-    print_snapshot_json_compact(result.snapshot, out, result.events, result.orders_by_unit, &result.rule_state);
+    frames.push_back(frame_json(
+      result.snapshot,
+      result.events,
+      result.orders_by_unit,
+      &result.rule_state
+    ));
   }
-  out << "]}\n";
+
+  const nlohmann::ordered_json replay{
+    {"type", "robolocks.replay.v1"},
+    {"tickRate", tick_rate},
+    {"obstacles", std::move(obstacles_json)},
+    {"frames", std::move(frames)},
+  };
+  out << replay.dump() << "\n";
 }
 
 }  // namespace
@@ -536,10 +184,10 @@ int main(int argc, char** argv) {
     if (options.replay_out_path.has_value()) {
       write_replay_json(runtime, options.ticks, options.tick_rate, replay_obstacles, *options.replay_out_path);
     } else if (options.stream_json) {
-    print_snapshot_stream(runtime, options.ticks, std::cout);
+      print_snapshot_stream(runtime, options.ticks, std::cout);
     } else {
       const auto snapshot = runtime.run_ticks(options.ticks);
-      print_snapshot_json(snapshot, std::cout);
+      std::cout << frame_json(snapshot).dump() << "\n";
     }
   } catch (const std::exception& error) {
     std::cerr << error.what() << "\n";

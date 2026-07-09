@@ -21,6 +21,7 @@ struct UnitModulesSnapshot {
 struct UnitSnapshot {
   UnitId unit_id;
   std::uint32_t team_id = 0;
+  std::string name;
   Vec2 position;
   double hull_heading_deg = 0.0;
   double turret_heading_deg = 0.0;

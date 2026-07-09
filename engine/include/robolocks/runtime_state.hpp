@@ -10,6 +10,7 @@ namespace robolocks {
 struct UnitState {
   UnitId unit_id;
   std::uint32_t team_id = 0;
+  std::string name;
   TransformSpec spawn_transform;
   TransformSpec transform;
   MobilitySpec mobility;

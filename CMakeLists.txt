@@ -24,6 +24,7 @@ add_library(robolocks_core
   engine/src/physics_system.cpp
   engine/src/battle_runner.cpp
   engine/src/controller_protocol_json.cpp
+  engine/src/snapshot_json.cpp
   engine/src/json_callback_bot_controller.cpp
   engine/src/sensor_system.cpp
   engine/src/c_api.cpp
@@ -88,6 +89,7 @@ if(NOT EMSCRIPTEN)
     engine/tests/c_api_test.cpp
     engine/tests/battle_loader_test.cpp
     engine/tests/controller_protocol_json_test.cpp
+    engine/tests/snapshot_json_test.cpp
     engine/tests/python_bot_controller_test.cpp
     engine/tests/sensor_system_test.cpp
   )

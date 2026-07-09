@@ -40,6 +40,7 @@ BattleSimulation::BattleSimulation(BattleConfig config)
     units_.push_back(UnitState{
       .unit_id = unit_spec.unit_id,
       .team_id = team_id,
+      .name = unit_spec.name,
       .spawn_transform = unit_spec.transform,
       .transform = unit_spec.transform,
       .mobility = unit_spec.mobility,
@@ -118,6 +119,7 @@ WorldSnapshot BattleSimulation::snapshot() const {
     out.units.push_back(UnitSnapshot{
       .unit_id = unit.unit_id,
       .team_id = unit.team_id,
+      .name = unit.name,
       .position = unit.transform.position,
       .hull_heading_deg = unit.transform.hull_heading_deg,
       .turret_heading_deg = unit.turret.heading_deg,

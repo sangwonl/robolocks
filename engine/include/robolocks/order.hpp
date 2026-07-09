@@ -61,6 +61,38 @@ struct Order {
 
 using OrderList = std::vector<Order>;
 
+inline const char* to_string(OrderKind kind) {
+  switch (kind) {
+    case OrderKind::MoveTo:
+      return "moveTo";
+    case OrderKind::AimAt:
+      return "aimAt";
+    case OrderKind::FireIfSolution:
+      return "fireIfSolution";
+    case OrderKind::ScanArc:
+      return "scanArc";
+    case OrderKind::FaceArmorToward:
+      return "faceArmorToward";
+  }
+  return "unknown";
+}
+
+inline const char* to_string(OrderChannel channel) {
+  switch (channel) {
+    case OrderChannel::Mobility:
+      return "mobility";
+    case OrderChannel::Turret:
+      return "turret";
+    case OrderChannel::Weapon:
+      return "weapon";
+    case OrderChannel::Sensor:
+      return "sensor";
+    case OrderChannel::Hull:
+      return "hull";
+  }
+  return "unknown";
+}
+
 inline OrderChannel order_channel(OrderKind kind) {
   switch (kind) {
     case OrderKind::MoveTo:
