@@ -7,6 +7,20 @@
 
 namespace robolocks {
 
+struct IntentChannelState {
+  bool active = false;
+  Vec2 target{};
+  Tick started_tick = 0;
+  Tick updated_tick = 0;
+};
+
+struct WeaponIntentState {
+  bool active = false;
+  double min_hit_chance = 0.0;
+  Tick started_tick = 0;
+  Tick updated_tick = 0;
+};
+
 struct UnitState {
   UnitId unit_id;
   std::uint32_t team_id = 0;
@@ -23,22 +37,10 @@ struct UnitState {
   double max_armor_integrity = 100.0;
   Tick invulnerable_until_tick = 0;
   Tick weapon_cooldown_ticks = 0;
-  bool mobility_intent_active = false;
-  Vec2 mobility_intent_target;
-  Tick mobility_intent_started_tick = 0;
-  Tick mobility_intent_updated_tick = 0;
-  bool turret_intent_active = false;
-  Vec2 turret_intent_target;
-  Tick turret_intent_started_tick = 0;
-  Tick turret_intent_updated_tick = 0;
-  bool hull_intent_active = false;
-  Vec2 hull_intent_target;
-  Tick hull_intent_started_tick = 0;
-  Tick hull_intent_updated_tick = 0;
-  bool weapon_intent_active = false;
-  double weapon_intent_min_hit_chance = 0.0;
-  Tick weapon_intent_started_tick = 0;
-  Tick weapon_intent_updated_tick = 0;
+  IntentChannelState mobility_intent;
+  IntentChannelState turret_intent;
+  IntentChannelState hull_intent;
+  WeaponIntentState weapon_intent;
 };
 
 struct ProjectileState {

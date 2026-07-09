@@ -6,35 +6,37 @@
 TEST_CASE("intent state applies resolved orders without resetting unchanged targets") {
   robolocks::UnitState unit{
     .unit_id = robolocks::UnitId{1},
-    .mobility_intent_active = true,
-    .mobility_intent_target = robolocks::Vec2{10.0, 0.0},
-    .mobility_intent_started_tick = 3,
-    .mobility_intent_updated_tick = 3,
+    .mobility_intent = robolocks::IntentChannelState{
+      .active = true,
+      .target = robolocks::Vec2{10.0, 0.0},
+      .started_tick = 3,
+      .updated_tick = 3,
+    },
   };
   robolocks::ResolvedUnitOrders resolved;
   resolved.move_to = robolocks::MoveToOrder{robolocks::Vec2{10.0, 0.0}};
 
   robolocks::apply_resolved_orders_to_intents(unit, resolved, 8);
 
-  REQUIRE(unit.mobility_intent_active);
-  REQUIRE(unit.mobility_intent_started_tick == 3);
-  REQUIRE(unit.mobility_intent_updated_tick == 8);
+  REQUIRE(unit.mobility_intent.active);
+  REQUIRE(unit.mobility_intent.started_tick == 3);
+  REQUIRE(unit.mobility_intent.updated_tick == 8);
 }
 
 TEST_CASE("intent state clears all active intents") {
   robolocks::UnitState unit{
     .unit_id = robolocks::UnitId{1},
-    .mobility_intent_active = true,
-    .turret_intent_active = true,
-    .hull_intent_active = true,
-    .weapon_intent_active = true,
+    .mobility_intent = robolocks::IntentChannelState{.active = true},
+    .turret_intent = robolocks::IntentChannelState{.active = true},
+    .hull_intent = robolocks::IntentChannelState{.active = true},
+    .weapon_intent = robolocks::WeaponIntentState{.active = true},
   };
 
   robolocks::clear_intents(unit);
 
-  REQUIRE_FALSE(unit.mobility_intent_active);
-  REQUIRE_FALSE(unit.turret_intent_active);
-  REQUIRE_FALSE(unit.hull_intent_active);
-  REQUIRE_FALSE(unit.weapon_intent_active);
+  REQUIRE_FALSE(unit.mobility_intent.active);
+  REQUIRE_FALSE(unit.turret_intent.active);
+  REQUIRE_FALSE(unit.hull_intent.active);
+  REQUIRE_FALSE(unit.weapon_intent.active);
 }
 

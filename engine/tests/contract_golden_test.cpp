@@ -104,21 +104,21 @@ robolocks::UnitSnapshot make_blue_unit() {
   unit.body_length_m = 6.4;
   unit.body_width_m = 3.1;
   unit.modules = make_blue_modules();
-  unit.mobility_intent_active = true;
-  unit.mobility_intent_target = robolocks::Vec2{24.0, 14.0};
-  unit.mobility_intent_remaining_m = 18.5;
-  unit.mobility_intent_age_ticks = 12;
-  unit.turret_intent_active = true;
-  unit.turret_intent_target = robolocks::Vec2{28.0, 16.5};
-  unit.turret_intent_error_deg = 6.5;
-  unit.turret_intent_age_ticks = 8;
-  unit.hull_intent_active = true;
-  unit.hull_intent_target = robolocks::Vec2{22.0, 10.0};
-  unit.hull_intent_error_deg = 11.0;
-  unit.hull_intent_age_ticks = 5;
-  unit.weapon_intent_active = true;
-  unit.weapon_intent_min_hit_chance = 0.65;
-  unit.weapon_intent_age_ticks = 3;
+  unit.mobility_intent.active = true;
+  unit.mobility_intent.target = robolocks::Vec2{24.0, 14.0};
+  unit.mobility_intent.remaining_m = 18.5;
+  unit.mobility_intent.age_ticks = 12;
+  unit.turret_intent.active = true;
+  unit.turret_intent.target = robolocks::Vec2{28.0, 16.5};
+  unit.turret_intent.error_deg = 6.5;
+  unit.turret_intent.age_ticks = 8;
+  unit.hull_intent.active = true;
+  unit.hull_intent.target = robolocks::Vec2{22.0, 10.0};
+  unit.hull_intent.error_deg = 11.0;
+  unit.hull_intent.age_ticks = 5;
+  unit.weapon_intent.active = true;
+  unit.weapon_intent.min_hit_chance = 0.65;
+  unit.weapon_intent.age_ticks = 3;
   return unit;
 }
 

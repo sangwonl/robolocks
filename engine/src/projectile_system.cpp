@@ -161,7 +161,7 @@ std::vector<Event> resolve_weapon_fire(
       }
     }
 
-    if (fire_order_count > 1 || !unit.weapon_intent_active) {
+    if (fire_order_count > 1 || !unit.weapon_intent.active) {
       continue;
     }
     if (unit.weapon_cooldown_ticks > 0) {
@@ -177,9 +177,9 @@ std::vector<Event> resolve_weapon_fire(
       continue;
     }
 
-    const double min_hit_chance = unit.weapon_intent_min_hit_chance;
+    const double min_hit_chance = unit.weapon_intent.min_hit_chance;
     if (fire_order_count == 1 && fire_if_solution.has_value()) {
-      unit.weapon_intent_min_hit_chance = fire_if_solution->min_hit_chance;
+      unit.weapon_intent.min_hit_chance = fire_if_solution->min_hit_chance;
     }
 
     std::optional<std::size_t> target_index;
@@ -252,9 +252,9 @@ std::vector<Event> resolve_weapon_fire(
     }
 
     unit.weapon_cooldown_ticks = unit.weapon.reload_ticks;
-    unit.weapon_intent_active = false;
-    unit.weapon_intent_min_hit_chance = 0.0;
-    unit.weapon_intent_updated_tick = tick;
+    unit.weapon_intent.active = false;
+    unit.weapon_intent.min_hit_chance = 0.0;
+    unit.weapon_intent.updated_tick = tick;
     const Vec2 direction = forward_vector(unit.turret.heading_deg);
     const bool ballistic = unit.weapon.fire_mode == WeaponFireMode::Ballistic;
     const double launch_angle_rad = unit.weapon.launch_angle_deg * kPi / 180.0;

@@ -29,9 +29,9 @@ robolocks::UnitSnapshot make_unit() {
   unit.modules.armor.id = "rolled_armor_mk1";
   unit.modules.body.id = "medium_hull_mk1";
   unit.modules.sensor.id = "visual_optic_mk1";
-  unit.mobility_intent_active = true;
-  unit.mobility_intent_target = robolocks::Vec2{20.0, 12.0};
-  unit.mobility_intent_remaining_m = 16.0;
+  unit.mobility_intent.active = true;
+  unit.mobility_intent.target = robolocks::Vec2{20.0, 12.0};
+  unit.mobility_intent.remaining_m = 16.0;
   return unit;
 }
 

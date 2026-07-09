@@ -48,22 +48,10 @@ BattleSimulation::BattleSimulation(BattleConfig config)
       },
       .max_armor_integrity = unit_spec.armor.integrity,
       .weapon_cooldown_ticks = 0,
-      .mobility_intent_active = false,
-      .mobility_intent_target = unit_spec.transform.position,
-      .mobility_intent_started_tick = 0,
-      .mobility_intent_updated_tick = 0,
-      .turret_intent_active = false,
-      .turret_intent_target = unit_spec.transform.position,
-      .turret_intent_started_tick = 0,
-      .turret_intent_updated_tick = 0,
-      .hull_intent_active = false,
-      .hull_intent_target = unit_spec.transform.position,
-      .hull_intent_started_tick = 0,
-      .hull_intent_updated_tick = 0,
-      .weapon_intent_active = false,
-      .weapon_intent_min_hit_chance = 0.0,
-      .weapon_intent_started_tick = 0,
-      .weapon_intent_updated_tick = 0,
+      .mobility_intent = IntentChannelState{.target = unit_spec.transform.position},
+      .turret_intent = IntentChannelState{.target = unit_spec.transform.position},
+      .hull_intent = IntentChannelState{.target = unit_spec.transform.position},
+      .weapon_intent = WeaponIntentState{},
     });
     rule_state_.scores.push_back(BattleScore{
       .unit_id = unit_spec.unit_id,
@@ -90,19 +78,19 @@ WorldSnapshot BattleSimulation::snapshot() const {
   out.tick = tick_;
   out.units.reserve(units_.size());
   for (const auto& unit : units_) {
-    const double mobility_remaining = unit.mobility_intent_active
-      ? distance(unit.transform.position, unit.mobility_intent_target)
+    const double mobility_remaining = unit.mobility_intent.active
+      ? distance(unit.transform.position, unit.mobility_intent.target)
       : 0.0;
-    const double turret_error = unit.turret_intent_active
+    const double turret_error = unit.turret_intent.active
       ? std::abs(shortest_angle_delta_deg(
           unit.turret.heading_deg,
-          angle_to(unit.transform.position, unit.turret_intent_target)
+          angle_to(unit.transform.position, unit.turret_intent.target)
         ))
       : 0.0;
-    const double hull_error = unit.hull_intent_active
+    const double hull_error = unit.hull_intent.active
       ? std::abs(shortest_angle_delta_deg(
           unit.transform.hull_heading_deg,
-          angle_to(unit.transform.position, unit.hull_intent_target)
+          angle_to(unit.transform.position, unit.hull_intent.target)
         ))
       : 0.0;
     out.units.push_back(UnitSnapshot{
@@ -120,21 +108,29 @@ WorldSnapshot BattleSimulation::snapshot() const {
       .body_width_m = unit.body.shape.width_m,
       .modules = unit.module_specs,
       .invulnerable_until_tick = unit.invulnerable_until_tick,
-      .mobility_intent_active = unit.mobility_intent_active,
-      .mobility_intent_target = unit.mobility_intent_target,
-      .mobility_intent_remaining_m = mobility_remaining,
-      .mobility_intent_age_ticks = intent_age(tick_, unit.mobility_intent_updated_tick),
-      .turret_intent_active = unit.turret_intent_active,
-      .turret_intent_target = unit.turret_intent_target,
-      .turret_intent_error_deg = turret_error,
-      .turret_intent_age_ticks = intent_age(tick_, unit.turret_intent_updated_tick),
-      .hull_intent_active = unit.hull_intent_active,
-      .hull_intent_target = unit.hull_intent_target,
-      .hull_intent_error_deg = hull_error,
-      .hull_intent_age_ticks = intent_age(tick_, unit.hull_intent_updated_tick),
-      .weapon_intent_active = unit.weapon_intent_active,
-      .weapon_intent_min_hit_chance = unit.weapon_intent_min_hit_chance,
-      .weapon_intent_age_ticks = intent_age(tick_, unit.weapon_intent_updated_tick),
+      .mobility_intent = MobilityIntentSnapshot{
+        .active = unit.mobility_intent.active,
+        .target = unit.mobility_intent.target,
+        .remaining_m = mobility_remaining,
+        .age_ticks = intent_age(tick_, unit.mobility_intent.updated_tick),
+      },
+      .turret_intent = AimIntentSnapshot{
+        .active = unit.turret_intent.active,
+        .target = unit.turret_intent.target,
+        .error_deg = turret_error,
+        .age_ticks = intent_age(tick_, unit.turret_intent.updated_tick),
+      },
+      .hull_intent = AimIntentSnapshot{
+        .active = unit.hull_intent.active,
+        .target = unit.hull_intent.target,
+        .error_deg = hull_error,
+        .age_ticks = intent_age(tick_, unit.hull_intent.updated_tick),
+      },
+      .weapon_intent = WeaponIntentSnapshot{
+        .active = unit.weapon_intent.active,
+        .min_hit_chance = unit.weapon_intent.min_hit_chance,
+        .age_ticks = intent_age(tick_, unit.weapon_intent.updated_tick),
+      },
     });
   }
   out.projectiles.reserve(projectiles_.size());
@@ -188,8 +184,8 @@ StepResult BattleSimulation::step(const std::vector<UnitOrders>& orders_by_unit)
   std::vector<double> pre_physics_move_remaining;
   pre_physics_move_remaining.reserve(units_.size());
   for (const auto& unit : units_) {
-    pre_physics_move_remaining.push_back(unit.mobility_intent_active
-      ? distance(unit.transform.position, unit.mobility_intent_target)
+    pre_physics_move_remaining.push_back(unit.mobility_intent.active
+      ? distance(unit.transform.position, unit.mobility_intent.target)
       : 0.0);
     physics_bodies.push_back(PhysicsBody{
       .unit_id = unit.unit_id,
@@ -203,13 +199,13 @@ StepResult BattleSimulation::step(const std::vector<UnitOrders>& orders_by_unit)
   events.insert(events.end(), physics_events.begin(), physics_events.end());
   for (std::size_t i = 0; i < units_.size(); i += 1) {
     units_[i].transform.position = physics_bodies[i].position;
-    if (units_[i].mobility_intent_active) {
+    if (units_[i].mobility_intent.active) {
       const double post_physics_remaining = distance(
         units_[i].transform.position,
-        units_[i].mobility_intent_target
+        units_[i].mobility_intent.target
       );
       if (post_physics_remaining > pre_physics_move_remaining[i] + kPhysicsBlockedEpsilonM) {
-        units_[i].mobility_intent_active = false;
+        units_[i].mobility_intent.active = false;
       }
     }
   }

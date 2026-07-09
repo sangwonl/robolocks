@@ -18,6 +18,26 @@ struct UnitModulesSnapshot {
   SensorSpec sensor;
 };
 
+struct MobilityIntentSnapshot {
+  bool active = false;
+  Vec2 target{};
+  double remaining_m = 0.0;
+  Tick age_ticks = 0;
+};
+
+struct AimIntentSnapshot {
+  bool active = false;
+  Vec2 target{};
+  double error_deg = 0.0;
+  Tick age_ticks = 0;
+};
+
+struct WeaponIntentSnapshot {
+  bool active = false;
+  double min_hit_chance = 0.0;
+  Tick age_ticks = 0;
+};
+
 struct UnitSnapshot {
   UnitId unit_id;
   std::uint32_t team_id = 0;
@@ -33,21 +53,10 @@ struct UnitSnapshot {
   double body_width_m = 2.8;
   UnitModulesSnapshot modules;
   Tick invulnerable_until_tick = 0;
-  bool mobility_intent_active = false;
-  Vec2 mobility_intent_target;
-  double mobility_intent_remaining_m = 0.0;
-  Tick mobility_intent_age_ticks = 0;
-  bool turret_intent_active = false;
-  Vec2 turret_intent_target;
-  double turret_intent_error_deg = 0.0;
-  Tick turret_intent_age_ticks = 0;
-  bool hull_intent_active = false;
-  Vec2 hull_intent_target;
-  double hull_intent_error_deg = 0.0;
-  Tick hull_intent_age_ticks = 0;
-  bool weapon_intent_active = false;
-  double weapon_intent_min_hit_chance = 0.0;
-  Tick weapon_intent_age_ticks = 0;
+  MobilityIntentSnapshot mobility_intent;
+  AimIntentSnapshot turret_intent;
+  AimIntentSnapshot hull_intent;
+  WeaponIntentSnapshot weapon_intent;
 };
 
 struct ProjectileSnapshot {

@@ -14,8 +14,10 @@ TEST_CASE("actuator system moves along current hull heading before turning") {
       .max_speed_mps = 2.0,
       .max_hull_turn_degps = 90.0,
     },
-    .mobility_intent_active = true,
-    .mobility_intent_target = robolocks::Vec2{0.0, 10.0},
+    .mobility_intent = robolocks::IntentChannelState{
+      .active = true,
+      .target = robolocks::Vec2{0.0, 10.0},
+    },
   };
 
   robolocks::advance_unit_actuators(unit, 1.0);

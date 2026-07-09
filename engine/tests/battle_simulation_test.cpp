@@ -123,11 +123,11 @@ TEST_CASE("battle_simulation keeps MoveTo intent active until replaced or comple
   const auto second = battle_simulation.step({});
 
   REQUIRE(first.snapshot.units[0].position.x == Catch::Approx(2.0));
-  REQUIRE(first.snapshot.units[0].mobility_intent_active);
-  REQUIRE(first.snapshot.units[0].mobility_intent_target.x == Catch::Approx(10.0));
+  REQUIRE(first.snapshot.units[0].mobility_intent.active);
+  REQUIRE(first.snapshot.units[0].mobility_intent.target.x == Catch::Approx(10.0));
   REQUIRE(second.snapshot.units[0].position.x == Catch::Approx(4.0));
-  REQUIRE(second.snapshot.units[0].mobility_intent_active);
-  REQUIRE(second.snapshot.units[0].mobility_intent_age_ticks == 1);
+  REQUIRE(second.snapshot.units[0].mobility_intent.active);
+  REQUIRE(second.snapshot.units[0].mobility_intent.age_ticks == 1);
 }
 
 TEST_CASE("battle_simulation clears MoveTo intent when physics blocks progress against an obstacle") {
@@ -181,7 +181,7 @@ TEST_CASE("battle_simulation clears MoveTo intent when physics blocks progress a
     },
   });
 
-  REQUIRE_FALSE(result.snapshot.units[0].mobility_intent_active);
+  REQUIRE_FALSE(result.snapshot.units[0].mobility_intent.active);
 }
 
 TEST_CASE("battle_simulation keeps AimAt intent slewing when no new order is submitted") {
@@ -215,12 +215,12 @@ TEST_CASE("battle_simulation keeps AimAt intent slewing when no new order is sub
   const auto second = battle_simulation.step({});
 
   REQUIRE(first.snapshot.units[0].turret_heading_deg == Catch::Approx(45.0));
-  REQUIRE(first.snapshot.units[0].turret_intent_active);
-  REQUIRE(first.snapshot.units[0].turret_intent_error_deg == Catch::Approx(45.0));
+  REQUIRE(first.snapshot.units[0].turret_intent.active);
+  REQUIRE(first.snapshot.units[0].turret_intent.error_deg == Catch::Approx(45.0));
   REQUIRE(second.snapshot.units[0].turret_heading_deg == Catch::Approx(90.0));
-  REQUIRE(second.snapshot.units[0].turret_intent_active);
-  REQUIRE(second.snapshot.units[0].turret_intent_error_deg == Catch::Approx(0.0));
-  REQUIRE(second.snapshot.units[0].turret_intent_age_ticks == 1);
+  REQUIRE(second.snapshot.units[0].turret_intent.active);
+  REQUIRE(second.snapshot.units[0].turret_intent.error_deg == Catch::Approx(0.0));
+  REQUIRE(second.snapshot.units[0].turret_intent.age_ticks == 1);
 }
 
 TEST_CASE("battle_simulation ignores orders for destroyed units") {
@@ -253,9 +253,9 @@ TEST_CASE("battle_simulation ignores orders for destroyed units") {
   });
 
   REQUIRE(result.snapshot.units[0].position.x == Catch::Approx(5.0));
-  REQUIRE_FALSE(result.snapshot.units[0].mobility_intent_active);
-  REQUIRE_FALSE(result.snapshot.units[0].turret_intent_active);
-  REQUIRE_FALSE(result.snapshot.units[0].weapon_intent_active);
+  REQUIRE_FALSE(result.snapshot.units[0].mobility_intent.active);
+  REQUIRE_FALSE(result.snapshot.units[0].turret_intent.active);
+  REQUIRE_FALSE(result.snapshot.units[0].weapon_intent.active);
 }
 
 TEST_CASE("battle_simulation clears active intents when a unit is destroyed") {
@@ -297,9 +297,9 @@ TEST_CASE("battle_simulation clears active intents when a unit is destroyed") {
   });
 
   REQUIRE(result.snapshot.units[0].armor_integrity == Catch::Approx(0.0));
-  REQUIRE_FALSE(result.snapshot.units[0].mobility_intent_active);
-  REQUIRE_FALSE(result.snapshot.units[0].turret_intent_active);
-  REQUIRE_FALSE(result.snapshot.units[0].weapon_intent_active);
+  REQUIRE_FALSE(result.snapshot.units[0].mobility_intent.active);
+  REQUIRE_FALSE(result.snapshot.units[0].turret_intent.active);
+  REQUIRE_FALSE(result.snapshot.units[0].weapon_intent.active);
 }
 
 TEST_CASE("battle_simulation keeps unit footprint inside arena bounds") {
@@ -1173,12 +1173,12 @@ TEST_CASE("battle_simulation keeps FireIfSolution intent until turret solution i
   });
 
   REQUIRE(first.snapshot.units[1].armor_integrity == Catch::Approx(100.0));
-  REQUIRE(first.snapshot.units[0].weapon_intent_active);
+  REQUIRE(first.snapshot.units[0].weapon_intent.active);
 
   const auto second = battle_simulation.step({});
 
   REQUIRE(second.snapshot.units[1].armor_integrity == Catch::Approx(62.5));
-  REQUIRE_FALSE(second.snapshot.units[0].weapon_intent_active);
+  REQUIRE_FALSE(second.snapshot.units[0].weapon_intent.active);
   REQUIRE(second.events.size() == 2);
   REQUIRE(second.events[0].code == "weapon_fired");
 }
