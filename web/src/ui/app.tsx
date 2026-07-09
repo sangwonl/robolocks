@@ -17,8 +17,8 @@ import { Inspector, Stat } from "./Inspector.tsx";
 import { PlaybackControls } from "./PlaybackControls.tsx";
 import { RuleSummary } from "./RuleSummary.tsx";
 import { teamCssVariables } from "./teamPalette.ts";
-import { usePanelResize } from "./hooks/usePanelResize.ts";
-import { useReplayPlayback } from "./hooks/useReplayPlayback.ts";
+import { PANEL_WIDTH_KEYBOARD_STEP, PANEL_WIDTH_MAX, PANEL_WIDTH_MIN, usePanelResize } from "./hooks/usePanelResize.ts";
+import { shortcutAction, useReplayPlayback } from "./hooks/useReplayPlayback.ts";
 import { useResearchRun } from "./hooks/useResearchRun.ts";
 
 const CodeEditor = lazy(() => import("./CodeEditor.tsx").then((module) => ({ default: module.CodeEditor })));
@@ -66,7 +66,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     setIsLoading,
     pause: playback.pause,
   });
-  const { leftPanelWidth, rightPanelWidth, beginPanelResize } = usePanelResize();
+  const { leftPanelWidth, rightPanelWidth, beginPanelResize, stepPanelWidth } = usePanelResize();
 
   const fetchText = options.fetchText ?? fetchTextFromUrl;
   const defaultReplayUrl = options.defaultReplayUrl === undefined ? null : options.defaultReplayUrl;
@@ -93,6 +93,50 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     }
     void loadReplayUrl(defaultReplayUrl, autoplayDefaultReplay);
   }, [defaultReplayUrl, autoplayDefaultReplay]);
+
+  // Global playback shortcuts: Space toggles play/pause, ArrowLeft/Right
+  // step one frame, Shift+Arrow steps 10 frames. Active only once a replay
+  // is loaded, and only when focus is not inside a text-entry surface (see
+  // isEditableTarget below - this is what keeps Space from being swallowed
+  // while typing bot code in the Monaco editor).
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (!loadedReplay || isEditableTarget(event.target)) {
+        return;
+      }
+      const action = shortcutAction(event);
+      if (!action) {
+        return;
+      }
+      if (action === "toggle-play" && !canPlay) {
+        return;
+      }
+      event.preventDefault();
+      switch (action) {
+        case "toggle-play":
+          if (isPlaying) {
+            playback.pause();
+          } else {
+            playback.play();
+          }
+          break;
+        case "step-backward":
+          playback.stepTo(Math.max(0, replayIndex - 1));
+          break;
+        case "step-forward":
+          playback.stepTo(Math.min(frameCount - 1, replayIndex + 1));
+          break;
+        case "step-backward-large":
+          playback.stepTo(Math.max(0, replayIndex - 10));
+          break;
+        case "step-forward-large":
+          playback.stepTo(Math.min(frameCount - 1, replayIndex + 10));
+          break;
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [loadedReplay, canPlay, isPlaying, replayIndex, frameCount, playback]);
 
   async function loadReplayUrl(url: string, autoplay: boolean): Promise<void> {
     playback.pause();
@@ -254,7 +298,12 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
           {statusText}
         </div>
       </aside>
-      <PanelResizeHandle side="left" onResizeStart={(pointerX) => beginPanelResize("left", pointerX)} />
+      <PanelResizeHandle
+        side="left"
+        width={leftPanelWidth}
+        onResizeStart={(pointerX) => beginPanelResize("left", pointerX)}
+        onStep={(deltaPx) => stepPanelWidth("left", deltaPx)}
+      />
       <section className="battle-scene">
         <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? NO_OBSTACLES} />
         <PlaybackControls
@@ -273,7 +322,12 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
           onSpeedChange={playback.setSpeed}
         />
       </section>
-      <PanelResizeHandle side="right" onResizeStart={(pointerX) => beginPanelResize("right", pointerX)} />
+      <PanelResizeHandle
+        side="right"
+        width={rightPanelWidth}
+        onResizeStart={(pointerX) => beginPanelResize("right", pointerX)}
+        onStep={(deltaPx) => stepPanelWidth("right", deltaPx)}
+      />
       <aside className="panel panel-right">
         <div className="panel-title">
           <h1>Bot State</h1>
@@ -338,10 +392,14 @@ function ReplaySummary({
 
 function PanelResizeHandle({
   onResizeStart,
+  onStep,
   side,
+  width,
 }: {
   onResizeStart: (pointerX: number) => void;
+  onStep: (deltaPx: number) => void;
   side: "left" | "right";
+  width: number;
 }) {
   return (
     <div
@@ -349,9 +407,22 @@ function PanelResizeHandle({
       role="separator"
       aria-label={`${side} panel resize handle`}
       aria-orientation="vertical"
+      aria-valuenow={width}
+      aria-valuemin={PANEL_WIDTH_MIN}
+      aria-valuemax={PANEL_WIDTH_MAX}
+      tabIndex={0}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
         onResizeStart(event.clientX);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          onStep(PANEL_WIDTH_KEYBOARD_STEP);
+        } else if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          onStep(-PANEL_WIDTH_KEYBOARD_STEP);
+        }
       }}
     />
   );
@@ -359,4 +430,25 @@ function PanelResizeHandle({
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+// Focus guard for the global playback shortcuts. Blocks the shortcuts
+// whenever focus is anywhere text entry could consume the same keys:
+// native inputs/textareas/selects, any contenteditable, and Monaco's
+// editing surface. Monaco's own keyboard-capturing node already renders as
+// a <textarea class="inputarea"> (verified in CodeEditor.tsx), so the
+// TEXTAREA tag check alone covers it; the `.monaco-editor` closest() check
+// is kept as a second, more resilient line of defense in case that
+// internal implementation detail ever changes.
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") {
+    return true;
+  }
+  if (target.isContentEditable) {
+    return true;
+  }
+  return target.closest(".monaco-editor") !== null;
 }

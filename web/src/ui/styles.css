@@ -242,6 +242,16 @@ input {
   background: var(--brand);
 }
 
+/*
+ * The resize handles are plain divs made focusable for keyboard resizing
+ * (tabIndex + Arrow keys in app.tsx); browsers draw no default focus ring
+ * for a div, so give it one explicitly from the token layer.
+ */
+.panel-resize-handle:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -1px;
+}
+
 .panel-title {
   display: flex;
   align-items: baseline;
@@ -1106,6 +1116,12 @@ th {
   accent-color: var(--brand);
 }
 
+.playback-progress input:focus-visible,
+.playback-speed select:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 .battle-scene-canvas {
   display: block;
   width: 100%;
@@ -1153,6 +1169,11 @@ th {
 .view-mode-menu button.active {
   background: var(--brand);
   color: var(--ink);
+}
+
+.view-mode-menu button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 @media (max-width: 960px) {

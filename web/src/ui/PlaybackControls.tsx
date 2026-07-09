@@ -55,7 +55,8 @@ export function PlaybackControls({
           size="icon"
           disabled={!canStepBackward}
           aria-label="Previous frame"
-          title="Previous frame"
+          aria-keyshortcuts="ArrowLeft"
+          title="Previous frame (Left arrow)"
           onClick={onPrev}
         >
           <SkipBack aria-hidden="true" />
@@ -66,7 +67,9 @@ export function PlaybackControls({
           size="icon"
           disabled={!canPlay}
           aria-label={isPlaying ? "Pause replay" : "Play replay"}
-          title={isPlaying ? "Pause" : "Play"}
+          aria-pressed={isPlaying}
+          aria-keyshortcuts="Space"
+          title={isPlaying ? "Pause (Space)" : "Play (Space)"}
           onClick={onPlayPause}
         >
           {isPlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
@@ -77,7 +80,8 @@ export function PlaybackControls({
           size="icon"
           disabled={!canStepForward}
           aria-label="Next frame"
-          title="Next frame"
+          aria-keyshortcuts="ArrowRight"
+          title="Next frame (Right arrow)"
           onClick={onNext}
         >
           <SkipForward aria-hidden="true" />

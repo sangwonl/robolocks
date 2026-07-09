@@ -170,6 +170,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
         <button
           type="button"
           className={cameraMode === "top" ? "active" : ""}
+          aria-pressed={cameraMode === "top"}
           onClick={() => setCameraMode("top")}
         >
           Top
@@ -177,6 +178,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
         <button
           type="button"
           className={cameraMode === "iso" ? "active" : ""}
+          aria-pressed={cameraMode === "iso"}
           onClick={() => setCameraMode("iso")}
         >
           Iso

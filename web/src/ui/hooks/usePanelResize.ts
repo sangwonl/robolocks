@@ -3,10 +3,20 @@ import { useState } from "react";
 const MIN_PANEL_WIDTH = 240;
 const MAX_PANEL_WIDTH = 640;
 
+// Exposed so callers (keyboard handlers rendering aria-valuemin/max) can
+// reflect the same bounds the pointer-drag path already clamps to below.
+export const PANEL_WIDTH_MIN = MIN_PANEL_WIDTH;
+export const PANEL_WIDTH_MAX = MAX_PANEL_WIDTH;
+
+// A single keyboard press moves the panel edge by this many pixels - large
+// enough to be noticeable, small enough for a few presses to fine-tune.
+export const PANEL_WIDTH_KEYBOARD_STEP = 16;
+
 export type UsePanelResizeResult = {
   leftPanelWidth: number;
   rightPanelWidth: number;
   beginPanelResize: (panel: "left" | "right", pointerStartX: number) => void;
+  stepPanelWidth: (panel: "left" | "right", deltaPx: number) => void;
 };
 
 export function usePanelResize(): UsePanelResizeResult {
@@ -34,7 +44,15 @@ export function usePanelResize(): UsePanelResizeResult {
     window.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
-  return { leftPanelWidth, rightPanelWidth, beginPanelResize };
+  // Keyboard equivalent of the pointer-drag path above: same clamp, applied
+  // as a one-shot delta against the panel's current width instead of a
+  // continuous pointer position.
+  function stepPanelWidth(panel: "left" | "right", deltaPx: number): void {
+    const applyWidth = panel === "left" ? setLeftPanelWidth : setRightPanelWidth;
+    applyWidth((current) => clamp(current + deltaPx, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH));
+  }
+
+  return { leftPanelWidth, rightPanelWidth, beginPanelResize, stepPanelWidth };
 }
 
 function clamp(value: number, min: number, max: number): number {

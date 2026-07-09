@@ -35,6 +35,40 @@ export function frameIndexAt(elapsedMs: number, tickRate: number, speed: number,
   return Math.min(maxIndex, Math.max(0, rawIndex));
 }
 
+export type PlaybackShortcutAction =
+  | "toggle-play"
+  | "step-backward"
+  | "step-forward"
+  | "step-backward-large"
+  | "step-forward-large";
+
+// Structural subset of KeyboardEvent - kept minimal so this stays a pure,
+// DOM-free mapping that tests can call with a plain object literal.
+export type ShortcutKeyEvent = {
+  key: string;
+  shiftKey: boolean;
+};
+
+/**
+ * Maps a keydown event to a playback action, or null when the key is not a
+ * playback shortcut. Pure: it knows nothing about whether a replay is
+ * loaded, where focus currently is, or how to apply the action - callers
+ * own the focus guard and the actual play/seek dispatch.
+ */
+export function shortcutAction(event: ShortcutKeyEvent): PlaybackShortcutAction | null {
+  switch (event.key) {
+    case " ":
+    case "Spacebar":
+      return "toggle-play";
+    case "ArrowLeft":
+      return event.shiftKey ? "step-backward-large" : "step-backward";
+    case "ArrowRight":
+      return event.shiftKey ? "step-forward-large" : "step-forward";
+    default:
+      return null;
+  }
+}
+
 export function useReplayPlayback(replay: BattleReplay | null): UseReplayPlaybackResult {
   const [trackedReplay, setTrackedReplay] = useState(replay);
   const [frameIndex, setFrameIndex] = useState(0);
