@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
+import { cn } from "../lib/utils.ts";
 import { createBattleScene, type BattleScene } from "./battleSceneThreeScene.ts";
 
 type CameraMode = "top" | "iso";
@@ -52,7 +53,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
-    renderer.domElement.className = "battle-scene-webgl";
+    renderer.domElement.className = "block h-full w-full";
     host.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -61,7 +62,9 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
 
     const renderCurrentScene = () => {
       const scene = sceneRef.current;
+      const battleScene = battleSceneRef.current;
       if (scene) {
+        battleScene?.faceCamera(camera);
         renderer.render(scene, camera);
       }
     };
@@ -124,6 +127,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
     cameraModeRef.current = cameraMode;
     applyCameraMode(camera, controls, cameraMode, aspectRef.current);
     if (renderer && scene) {
+      battleSceneRef.current?.faceCamera(camera);
       renderer.render(scene, camera);
     }
   }, [cameraMode]);
@@ -140,6 +144,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
     const controls = controlsRef.current;
     if (renderer && camera) {
       controls?.update();
+      battleScene.faceCamera(camera);
       renderer.render(battleScene.scene, camera);
     }
     return () => {
@@ -160,16 +165,23 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
     const renderer = rendererRef.current;
     const camera = cameraRef.current;
     if (renderer && camera) {
+      battleScene.faceCamera(camera);
       renderer.render(battleScene.scene, camera);
     }
   }, [frame]);
 
   return (
-    <div ref={hostRef} className="battle-scene-three" aria-label="Battle scene viewport">
-      <div className="view-mode-menu" aria-label="Camera mode">
+    <div ref={hostRef} className="relative block h-full w-full" aria-label="Battle scene viewport">
+      <div
+        className="absolute right-3 top-3 z-[2] grid grid-cols-[repeat(2,54px)] gap-1 rounded-lg border border-[var(--brand-border-menu)] bg-[var(--overlay)] p-1 backdrop-blur-md"
+        aria-label="Camera mode"
+      >
         <button
           type="button"
-          className={cameraMode === "top" ? "active" : ""}
+          className={cn(
+            "w-[54px] rounded-[5px] border-0 bg-transparent px-0 py-2 text-[10px] font-semibold leading-none text-[var(--text-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
+            cameraMode === "top" && "bg-[var(--brand)] text-[var(--ink)]",
+          )}
           aria-pressed={cameraMode === "top"}
           onClick={() => setCameraMode("top")}
         >
@@ -177,7 +189,10 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
         </button>
         <button
           type="button"
-          className={cameraMode === "iso" ? "active" : ""}
+          className={cn(
+            "w-[54px] rounded-[5px] border-0 bg-transparent px-0 py-2 text-[10px] font-semibold leading-none text-[var(--text-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
+            cameraMode === "iso" && "bg-[var(--brand)] text-[var(--ink)]",
+          )}
           aria-pressed={cameraMode === "iso"}
           onClick={() => setCameraMode("iso")}
         >

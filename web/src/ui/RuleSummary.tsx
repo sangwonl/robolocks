@@ -1,4 +1,5 @@
 import type { BattleFrame } from "../types/protocol";
+import { cn } from "../lib/utils.ts";
 
 export type RuleSummaryProps = {
   frame: BattleFrame | null;
@@ -6,26 +7,48 @@ export type RuleSummaryProps = {
 
 export function RuleSummary({ frame }: RuleSummaryProps) {
   if (!frame) {
-    return <div className="rule-summary rule-summary-empty">No rule state.</div>;
+    return (
+      <div className="border border-dashed border-[var(--line-dashed)] p-2 text-[11px] font-semibold text-[var(--text-muted)]">
+        No rule state.
+      </div>
+    );
   }
+
   const { outcome, scores } = frame.ruleState;
   return (
-    <div className="rule-summary">
-      <div className="rule-outcome" data-finished={outcome.finished}>
+    <div className="grid min-w-0 gap-1.5">
+      <div
+        className={cn(
+          "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 rounded-md border border-[var(--line)] bg-[var(--ink)] p-2",
+          outcome.finished && "border-[var(--brand-border-strong)] bg-[var(--brand-tint)]",
+        )}
+      >
         <span className="u-label">{outcome.finished ? "Finished" : "Running"}</span>
-        <strong>{outcome.reason || "active"}</strong>
+        <strong className="min-w-0 text-[12px] font-semibold leading-tight text-[var(--text)] [overflow-wrap:anywhere]">
+          {outcome.reason || "active"}
+        </strong>
         {(outcome.winnerTeamId > 0 || outcome.winnerUnitId > 0) && (
-          <em>
+          <em className="col-span-full text-[11px] font-semibold not-italic text-[var(--brand)]">
             {outcome.winnerTeamId > 0 ? `team ${outcome.winnerTeamId}` : ""}
             {outcome.winnerUnitId > 0 ? ` unit ${outcome.winnerUnitId}` : ""}
           </em>
         )}
       </div>
+
       {scores.length === 0 ? (
-        <div className="rule-summary-empty">No scores.</div>
+        <div className="border border-dashed border-[var(--line-dashed)] p-2 text-[11px] font-semibold text-[var(--text-muted)]">
+          No scores.
+        </div>
       ) : (
-        <div className="score-table" role="table" aria-label="Battle scores">
-          <div className="score-row score-row-head" role="row">
+        <div
+          className="grid overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface-well)]"
+          role="table"
+          aria-label="Battle scores"
+        >
+          <div
+            className="grid grid-cols-[1.1fr_1fr_0.7fr_0.7fr_1fr] gap-1.5 px-1.5 py-1 text-[10px] font-semibold uppercase text-[var(--text-muted)]"
+            role="row"
+          >
             <span>Unit</span>
             <span>Team</span>
             <span>K</span>
@@ -33,7 +56,11 @@ export function RuleSummary({ frame }: RuleSummaryProps) {
             <span>Dmg</span>
           </div>
           {scores.map((score) => (
-            <div key={`${score.unitId}-${score.teamId}`} className="score-row" role="row">
+            <div
+              key={`${score.unitId}-${score.teamId}`}
+              className="grid min-w-0 grid-cols-[1.1fr_1fr_0.7fr_0.7fr_1fr] gap-1.5 border-t border-[var(--line-subtle)] px-1.5 py-1 text-[11px] leading-tight text-[var(--text-soft)] [font-variant-numeric:tabular-nums] [&>span]:truncate"
+              role="row"
+            >
               <span>{score.unitId}</span>
               <span>{score.teamId}</span>
               <span>{score.kills}</span>
@@ -43,15 +70,22 @@ export function RuleSummary({ frame }: RuleSummaryProps) {
           ))}
         </div>
       )}
+
       {frame.ruleState.captureZones.length > 0 && (
-        <div className="capture-zone-list">
+        <div className="grid gap-1">
           {frame.ruleState.captureZones.map((zone) => (
-            <div key={zone.id} className="capture-zone-row" data-contested={zone.contested}>
-              <span className="u-label">{zone.id}</span>
-              <strong>
+            <div
+              key={zone.id}
+              className={cn(
+                "grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 rounded-md border border-[var(--line)] bg-[var(--surface-well)] p-1.5",
+                zone.contested && "border-[var(--status-contested-border)]",
+              )}
+            >
+              <span className="u-label min-w-0 truncate">{zone.id}</span>
+              <strong className="text-[12px] font-semibold leading-tight text-[var(--text)] [font-variant-numeric:tabular-nums]">
                 {zone.heldTicks}/{zone.holdTicksRequired}
               </strong>
-              <em className="u-label">
+              <em className="u-label col-span-full min-w-0 truncate not-italic text-[var(--brand)]">
                 {zone.contested
                   ? "contested"
                   : zone.ownerTeamId > 0

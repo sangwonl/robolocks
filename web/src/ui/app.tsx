@@ -21,8 +21,9 @@ import "dockview-react/dist/styles/dockview.css";
 import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
-import { RESEARCH_BATTLE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
+import { RESEARCH_BOT_LOGIC_PRESETS, RESEARCH_BATTLE_PRESETS, RESEARCH_RULE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
 import type { ResearchProgress } from "../research/researchWorkerProtocol.ts";
+import { cn } from "../lib/utils.ts";
 import { deriveStatusText } from "./statusText.ts";
 import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
@@ -67,6 +68,7 @@ type WorkbenchPanelContextValue = {
   isPlaying: boolean;
   loadReplayFile: (file: File) => Promise<void>;
   loadedReplay: BattleReplay | null;
+  onPlayPause: () => void;
   playback: PlaybackState;
   replayIndex: number;
   research: ResearchState;
@@ -84,6 +86,12 @@ const DOCKVIEW_COMPONENTS: Record<string, FunctionComponent<IDockviewPanelProps>
   units: UnitsDockPanel,
   console: ConsoleDockPanel,
 };
+
+const DOCK_PANEL_CLASS = "h-full min-h-0 overflow-auto bg-[var(--surface-raised)] p-2.5";
+const STATE_DOCK_PANEL_CLASS = "h-full min-h-0 overflow-auto bg-[var(--surface-raised)] p-2";
+const FIELD_CLASS = "grid gap-1.5 text-[11px] font-semibold text-[var(--text-dim)]";
+const SELECT_CLASS =
+  "h-7 w-full min-w-0 rounded-md border border-[var(--line)] bg-[var(--surface-inset)] px-2 py-1 text-[11px] font-semibold text-[var(--text-soft)] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-55";
 
 export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): void {
   const existing = reactRoots.get(root);
@@ -120,7 +128,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const frame = loadedReplay?.frames[replayIndex] ?? null;
   const canStepBackward = Boolean(loadedReplay && replayIndex > 0);
   const canStepForward = Boolean(loadedReplay && replayIndex < loadedReplay.frames.length - 1);
-  const canPlay = Boolean(loadedReplay && loadedReplay.frames.length > 1);
+  const canPlay = Boolean((loadedReplay && loadedReplay.frames.length > 1) || research.researchMode === "ready");
   const frameCount = loadedReplay?.frames.length ?? 0;
 
   const statusText = useMemo(() => {
@@ -160,11 +168,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       event.preventDefault();
       switch (action) {
         case "toggle-play":
-          if (isPlaying) {
-            playback.pause();
-          } else {
-            playback.play();
-          }
+          handlePlayPause();
           break;
         case "step-backward":
           playback.stepTo(Math.max(0, replayIndex - 1));
@@ -182,7 +186,19 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [loadedReplay, canPlay, isPlaying, replayIndex, frameCount, playback]);
+  }, [loadedReplay, canPlay, isPlaying, replayIndex, frameCount, playback, research]);
+
+  function handlePlayPause(): void {
+    if (isPlaying) {
+      playback.pause();
+      return;
+    }
+    if (research.researchMode === "ready") {
+      research.runResearch();
+      return;
+    }
+    playback.play();
+  }
 
   async function loadReplayUrl(url: string, autoplay: boolean): Promise<void> {
     playback.pause();
@@ -237,6 +253,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     isPlaying,
     loadReplayFile,
     loadedReplay,
+    onPlayPause: handlePlayPause,
     playback,
     replayIndex,
     research,
@@ -251,6 +268,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     isLoading,
     isPlaying,
     loadedReplay,
+    handlePlayPause,
     playback,
     replayIndex,
     research,
@@ -269,7 +287,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       component: "research",
       title: "Research",
       position: { referencePanel: "battle-scene", direction: "left" },
-      initialWidth: 420,
+      initialWidth: 640,
     });
     event.api.addPanel({
       id: "replay",
@@ -303,21 +321,31 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
 
   return (
     <section
-      className="workbench"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden"
       style={{
         ...TEAM_CSS_VARIABLES,
       } as CSSProperties}
     >
       <WorkbenchPanelContext.Provider value={panelContext}>
         <DockviewReact
-          className="dockview-workbench dockview-theme-dark"
+          className="dockview-workbench dockview-theme-dark min-h-0 flex-1 bg-[var(--surface-app)] text-[var(--text)]"
           components={DOCKVIEW_COMPONENTS}
           onReady={handleDockReady}
         />
       </WorkbenchPanelContext.Provider>
-      <div className="workbench-statusbar" role="status" data-variant={statusIsError ? "error" : "info"}>
-        <span>Robolocks</span>
-        <strong>{statusText}</strong>
+      <div
+        className="flex min-h-[26px] items-center gap-2.5 border-t border-[var(--line-strong)] bg-[var(--surface-sunken)] px-2.5 text-[11px] font-semibold text-[var(--text-muted)]"
+        role="status"
+      >
+        <span className="text-[10px] font-bold uppercase text-[var(--brand)]">Robolocks</span>
+        <strong
+          className={cn(
+            "min-w-0 overflow-hidden truncate text-[11px] font-semibold text-[var(--text-soft)]",
+            statusIsError && "text-[var(--danger)]",
+          )}
+        >
+          {statusText}
+        </strong>
       </div>
     </section>
   );
@@ -354,12 +382,13 @@ function BattleDockPanel() {
     frameCount,
     isPlaying,
     loadedReplay,
+    onPlayPause,
     playback,
     replayIndex,
     research,
   } = useWorkbenchPanel();
   return (
-    <section className="battle-scene">
+    <section className="battle-scene relative h-full min-h-0 w-full min-w-0 overflow-hidden bg-[var(--surface-scene)]">
       <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? NO_OBSTACLES} />
       {research.isResearchRunning ? (
         <ResearchRunOverlay progress={research.researchProgress} onCancel={research.cancelResearch} />
@@ -372,7 +401,7 @@ function BattleDockPanel() {
         frameCount={frameCount}
         isPlaying={isPlaying}
         onNext={() => playback.stepTo(Math.min(frameCount - 1, replayIndex + 1))}
-        onPlayPause={() => (isPlaying ? playback.pause() : playback.play())}
+        onPlayPause={onPlayPause}
         onPrev={() => playback.stepTo(Math.max(0, replayIndex - 1))}
         onReset={() => playback.seek(0)}
         onSeek={(index) => playback.seek(index)}
@@ -386,14 +415,15 @@ function BattleDockPanel() {
 function ResearchDockPanel() {
   const { isLoading, research } = useWorkbenchPanel();
   return (
-    <section className="dock-panel dock-panel-research">
-      <div className="research-panel">
-        <div className="research-toolbar">
-          <div className="preset-controls" aria-label="Research presets">
-            <div className="field-control">
+    <section className="h-full min-h-0 overflow-hidden bg-[var(--surface-raised)] p-2.5">
+      <div className="grid h-full min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-end gap-x-1.5 gap-y-1.5" aria-label="Research presets">
+            <div className={cn(FIELD_CLASS, "min-w-0 flex-[1_1_116px]")}>
               <Label htmlFor="research-battle-preset">Battle</Label>
               <select
                 id="research-battle-preset"
+                className={SELECT_CLASS}
                 value={research.researchBattlePresetId}
                 disabled={isLoading}
                 onChange={(event) => research.setResearchBattlePresetId(event.currentTarget.value)}
@@ -405,10 +435,27 @@ function ResearchDockPanel() {
                 ))}
               </select>
             </div>
-            <div className="field-control">
+            <div className={cn(FIELD_CLASS, "min-w-0 flex-[1_1_116px]")}>
+              <Label htmlFor="research-rule-preset">Rule</Label>
+              <select
+                id="research-rule-preset"
+                className={SELECT_CLASS}
+                value={research.researchRulePresetId}
+                disabled={isLoading}
+                onChange={(event) => research.setResearchRulePresetId(event.currentTarget.value)}
+              >
+                {RESEARCH_RULE_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={cn(FIELD_CLASS, "min-w-0 flex-[1_1_116px]")}>
               <Label htmlFor="research-unit-preset">Unit</Label>
               <select
                 id="research-unit-preset"
+                className={SELECT_CLASS}
                 value={research.researchUnitPresetId}
                 disabled={isLoading}
                 onChange={(event) => research.setResearchUnitPresetId(event.currentTarget.value)}
@@ -420,7 +467,7 @@ function ResearchDockPanel() {
                 ))}
               </select>
             </div>
-            <div className="field-control field-control-inline">
+            <div className={cn(FIELD_CLASS, "flex-[0_0_92px] grid-cols-[auto_minmax(0,1fr)] items-center")}>
               <Label htmlFor="research-ticks">Ticks</Label>
               <Input
                 id="research-ticks"
@@ -439,21 +486,33 @@ function ResearchDockPanel() {
             </div>
             <Button
               type="button"
+              className="flex-[0_0_70px]"
               disabled={isLoading || research.isResearchRunning}
-              onClick={() => research.runResearch()}
+              onClick={() => research.setupResearch()}
             >
-              Run
+              {research.researchMode === "ready" ? "Ready" : "Setup"}
             </Button>
-            <div className="preset-description">
-              <span>{research.researchBattlePreset?.description ?? ""}</span>
-              <span>{research.researchUnitPreset?.description ?? ""}</span>
+            <div className="grid min-w-0 flex-[1_0_100%] gap-0.5 text-[10px] font-medium leading-tight text-[var(--text-faint)] [&>span]:truncate">
+              {/* <span>{research.researchBattlePreset?.description ?? ""}</span> */}
+              <span>{research.researchRulePreset?.description ?? ""}</span>
+              <span>
+                Logic: {RESEARCH_BOT_LOGIC_PRESETS.find((preset) => preset.id === research.researchBotLogicPresetId)?.label ?? "Custom"}
+                {research.researchBotSource !== research.appliedBotSource ? " - unapplied edits" : " - applied"}
+              </span>
+              {/* <span>{research.researchUnitPreset?.description ?? ""}</span> */}
             </div>
           </div>
         </div>
-        <Suspense fallback={<div className="code-editor-loading u-label">Loading editor</div>}>
+        <Suspense
+          fallback={
+            <div className="u-label grid min-h-60 place-items-center rounded-lg border border-[var(--line)] bg-[var(--surface-inset)] text-[10px]">
+              Loading editor
+            </div>
+          }
+        >
           <CodeEditor
             disabled={isLoading}
-            onRun={() => research.runResearch()}
+            onApply={research.applyBotSource}
             onValueChange={research.setResearchBotSource}
             value={research.researchBotSource}
           />
@@ -466,8 +525,8 @@ function ResearchDockPanel() {
 function ReplayDockPanel() {
   const { frame, isLoading, loadReplayFile, loadedReplay, replayIndex } = useWorkbenchPanel();
   return (
-    <section className="dock-panel">
-      <div className="file-control">
+    <section className={DOCK_PANEL_CLASS}>
+      <div className="grid gap-1.5 text-[11px] font-semibold text-[var(--text-dim)]">
         <Label htmlFor="replay-file">Replay JSON</Label>
         <Input
           id="replay-file"
@@ -489,9 +548,58 @@ function ReplayDockPanel() {
 }
 
 function UnitsDockPanel() {
-  const { frame } = useWorkbenchPanel();
+  const { frame, isLoading, research } = useWorkbenchPanel();
+  const units = frame?.units ?? [];
   return (
-    <section className="dock-panel dock-panel-state">
+    <section className={STATE_DOCK_PANEL_CLASS}>
+      <div className="mb-2 grid gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-sunken)] p-2">
+        <div className="u-label text-[10px]">Logic presets</div>
+        <div className="grid gap-1">
+          {units.length > 0 ? units.map((unit) => {
+            const botLogic = research.botLogicByUnit[unit.unitId] ?? { presetId: "empty", editorSource: "", appliedSource: "" };
+            const dirty = botLogic.editorSource !== botLogic.appliedSource;
+            return (
+              <div
+                key={unit.unitId}
+                className="grid grid-cols-[minmax(0,72px)_minmax(0,1fr)_auto] items-center gap-1.5"
+              >
+                <button
+                  type="button"
+                  className={cn(
+                    "min-w-0 truncate rounded-md border border-[var(--line-control)] bg-[var(--surface-well)] px-1.5 py-1 text-left text-[10px] font-bold text-[var(--text-soft)]",
+                    research.activeResearchBotUnitId === unit.unitId && "border-[var(--brand)] text-[var(--brand)]",
+                  )}
+                  disabled={isLoading || research.isResearchRunning}
+                  onClick={() => research.setActiveResearchBotUnitId(unit.unitId)}
+                  title={`Edit ${unit.name} logic`}
+                >
+                  {unit.name}
+                </button>
+                <select
+                  className={SELECT_CLASS}
+                  value={botLogic.presetId}
+                  disabled={isLoading || research.isResearchRunning}
+                  onChange={(event) => research.setResearchBotLogicPresetId(unit.unitId, event.currentTarget.value)}
+                >
+                  {RESEARCH_BOT_LOGIC_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="u-label w-12 text-right text-[9px]">
+                  {dirty ? "edited" : "applied"}
+                </span>
+              </div>
+            );
+          }) : (
+            <div className="text-[10px] font-semibold text-[var(--text-faint)]">Setup a research scene to assign bot logic.</div>
+          )}
+        </div>
+        <div className="text-[10px] font-semibold leading-tight text-[var(--text-faint)]">
+          {RESEARCH_BOT_LOGIC_PRESETS.find((preset) => preset.id === research.researchBotLogicPresetId)?.description ?? "Use the current editor contents."}
+        </div>
+      </div>
       <Inspector frame={frame} />
     </section>
   );
@@ -500,7 +608,7 @@ function UnitsDockPanel() {
 function RulesDockPanel() {
   const { frame } = useWorkbenchPanel();
   return (
-    <section className="dock-panel dock-panel-state">
+    <section className={STATE_DOCK_PANEL_CLASS}>
       <RuleSummary frame={frame} />
     </section>
   );
@@ -509,7 +617,7 @@ function RulesDockPanel() {
 function ConsoleDockPanel() {
   const { frame, research } = useWorkbenchPanel();
   return (
-    <section className="dock-panel dock-panel-state">
+    <section className={STATE_DOCK_PANEL_CLASS}>
       <BotConsole logs={research.botLogs} currentTick={frame?.tick ?? 0} />
     </section>
   );
@@ -529,16 +637,20 @@ function ResearchRunOverlay({
   const stageLabel = RESEARCH_STAGE_LABELS[stage];
   const showTicks = stage === "simulating" && typeof progress?.totalTicks === "number";
   return (
-    <div className="research-overlay" role="status" aria-live="polite">
-      <div className="research-overlay-card">
+    <div
+      className="absolute inset-0 z-[4] flex items-center justify-center bg-[var(--overlay)] backdrop-blur-md"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex flex-col items-center gap-3 border border-[var(--brand-border)] bg-[var(--overlay-strong)] px-7 py-5 text-center shadow-[0_14px_42px_var(--shadow)]">
         <span className="research-overlay-spinner" aria-hidden="true" />
-        <span className="research-overlay-stage">{stageLabel}</span>
+        <span className="text-[13px] font-semibold text-[var(--text)]">{stageLabel}</span>
         {showTicks ? (
-          <span className="research-overlay-ticks u-label">
+          <span className="u-label text-[var(--text-muted)]">
             tick {progress?.tick ?? 0} / {progress?.totalTicks}
           </span>
         ) : null}
-        <Button type="button" variant="secondary" onClick={onCancel} className="research-overlay-cancel">
+        <Button type="button" variant="secondary" onClick={onCancel} className="mt-1">
           Cancel
         </Button>
       </div>
@@ -556,10 +668,10 @@ function ReplaySummary({
   replayIndex: number;
 }) {
   if (!replay) {
-    return <div className="summary summary-empty">No replay loaded.</div>;
+    return <div className="text-[11px] font-semibold text-[var(--text-muted)]">No replay loaded.</div>;
   }
   return (
-    <dl className="summary">
+    <dl className="mt-2.5 grid grid-cols-2 gap-x-2 gap-y-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-sunken)] p-2">
       <Stat label="Frames" value={String(replay.frames.length)} />
       <Stat label="Tick Rate" value={`${replay.tickRate} Hz`} />
       <Stat label="Units" value={String(frame?.units.length ?? 0)} />

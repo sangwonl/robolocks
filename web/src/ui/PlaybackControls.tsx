@@ -36,8 +36,11 @@ export function PlaybackControls({
 }: PlaybackControlsProps) {
   const maxIndex = Math.max(0, frameCount - 1);
   return (
-    <div className="playback" aria-label="Replay playback controls">
-      <div className="playback-buttons">
+    <div
+      className="absolute bottom-3 left-1/2 z-[3] grid w-[min(360px,calc(100%_-_24px))] -translate-x-1/2 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-[10px] border border-[var(--brand-border)] bg-[var(--overlay-strong)] p-1.5 shadow-[0_14px_42px_var(--shadow)] backdrop-blur-md"
+      aria-label="Replay playback controls"
+    >
+      <div className="flex gap-1 [&_button]:min-w-7 [&_svg]:h-[13px] [&_svg]:w-[13px]">
         <Button
           type="button"
           variant="secondary"
@@ -87,9 +90,10 @@ export function PlaybackControls({
           <SkipForward aria-hidden="true" />
         </Button>
       </div>
-      <label className="playback-progress">
+      <label className="grid grid-cols-[42px_minmax(0,1fr)] items-center gap-2 text-[11px] font-semibold text-[var(--text-dim)] [font-variant-numeric:tabular-nums]">
         <span>{frameCount > 0 ? `${currentIndex + 1}/${frameCount}` : "0/0"}</span>
         <input
+          className="w-full accent-[var(--brand)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
           type="range"
           min={0}
           max={maxIndex}
@@ -98,9 +102,13 @@ export function PlaybackControls({
           onChange={(event) => onSeek(Number(event.currentTarget.value))}
         />
       </label>
-      <label className="playback-speed" aria-label="Playback speed">
+      <label
+        className="col-span-full grid grid-cols-[42px_minmax(0,1fr)] items-center gap-2 text-[11px] font-semibold text-[var(--text-dim)]"
+        aria-label="Playback speed"
+      >
         <span>Speed</span>
         <select
+          className="w-full rounded-md border border-[var(--brand-border)] bg-[var(--surface-well)] px-1 py-0.5 text-[11px] font-semibold text-[var(--text-soft)] [font-variant-numeric:tabular-nums] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:opacity-50"
           value={String(speed)}
           disabled={!canPlay}
           onChange={(event) => onSpeedChange(Number(event.currentTarget.value) as PlaybackSpeed)}

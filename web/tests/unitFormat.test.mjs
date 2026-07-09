@@ -97,6 +97,16 @@ test("eventPayloadSummary falls back to armor facing only when damage is zero", 
   );
 });
 
+test("eventPayloadSummary makes bounced armor hits explicit", () => {
+  assert.equal(
+    eventPayloadSummary({
+      code: "armor_bounced",
+      payload: { damage: 0, armorFacing: "front", remainingArmor: 100, blastRadiusMeters: 0 },
+    }),
+    " front no hp loss",
+  );
+});
+
 test("eventItems formats each event's tick and payload summary from the golden fixture", () => {
   assert.deepEqual(eventItems(eventsForUnit2), [
     { label: "42", value: "armor_penetrated -42.0 hp=62.0 direct side d=15.5/2.3m" },

@@ -17,6 +17,7 @@ export type ResearchProgress = {
 // Main thread -> worker: the one request that kicks off a run.
 export type ResearchRunRequest = {
   botSource: string;
+  botSourcesByUnit?: Record<number, string>;
   battleConfigJson?: string;
   tickCount: number;
 };
@@ -37,6 +38,9 @@ export function runRequest(request: ResearchRunRequest): ResearchRunRequest {
   const built: ResearchRunRequest = { botSource: request.botSource, tickCount: request.tickCount };
   if (request.battleConfigJson !== undefined) {
     built.battleConfigJson = request.battleConfigJson;
+  }
+  if (request.botSourcesByUnit !== undefined) {
+    built.botSourcesByUnit = request.botSourcesByUnit;
   }
   return built;
 }
@@ -109,8 +113,12 @@ export function parseRunRequest(data: unknown): ResearchRunRequest | null {
   if (data.battleConfigJson !== undefined && typeof data.battleConfigJson !== "string") {
     return null;
   }
+  if (data.botSourcesByUnit !== undefined && !isStringRecord(data.botSourcesByUnit)) {
+    return null;
+  }
   return runRequest({
     botSource: data.botSource,
+    botSourcesByUnit: data.botSourcesByUnit,
     tickCount: data.tickCount,
     battleConfigJson: data.battleConfigJson,
   });
@@ -122,4 +130,11 @@ function isResearchStage(value: unknown): value is ResearchStage {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isStringRecord(value: unknown): value is Record<number, string> {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return Object.values(value).every((entry) => typeof entry === "string");
 }

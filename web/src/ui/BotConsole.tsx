@@ -8,15 +8,27 @@ export type BotConsoleProps = {
 export function BotConsole({ currentTick, logs }: BotConsoleProps) {
   const visibleLogs = logs.filter((entry) => entry.tick <= currentTick).slice(-80);
   return (
-    <div className="console-panel">
+    <div className="grid min-h-0">
       {visibleLogs.length === 0 ? (
-        <div className="console-empty">No bot logs.</div>
+        <div className="border border-dashed border-[var(--line-dashed)] p-2 text-[11px] font-semibold text-[var(--text-muted)]">
+          No bot logs.
+        </div>
       ) : (
-        <ol className="console-log">
+        <ol className="grid list-none gap-0.5 overflow-visible rounded-md border border-[var(--line)] bg-[var(--surface-well)] p-2 font-mono text-[11px] leading-snug text-[var(--text-soft)]">
           {visibleLogs.map((entry, index) => (
-            <li key={`${entry.tick}-${entry.unitId}-${index}`} data-stream={entry.stream}>
-              <span className="console-meta">t{entry.tick} u{entry.unitId}</span>
-              <span className="console-message">{entry.message}</span>
+            <li key={`${entry.tick}-${entry.unitId}-${index}`} className="grid grid-cols-[52px_minmax(0,1fr)] gap-1.5">
+              <span className="text-[var(--text-meta)] [font-variant-numeric:tabular-nums]">
+                t{entry.tick} u{entry.unitId}
+              </span>
+              <span
+                className={
+                  entry.stream === "stderr"
+                    ? "min-w-0 text-[var(--text-error)] [overflow-wrap:anywhere]"
+                    : "min-w-0 [overflow-wrap:anywhere]"
+                }
+              >
+                {entry.message}
+              </span>
             </li>
           ))}
         </ol>

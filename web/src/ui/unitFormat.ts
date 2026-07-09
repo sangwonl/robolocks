@@ -54,6 +54,10 @@ export function eventItems(events: BattleEvent[]): FormattedItem[] {
 export function eventPayloadSummary(event: BattleEvent): string {
   const payload = event.payload;
   if (!payload || payload.damage <= 0) {
+    if (event.code === "armor_bounced") {
+      const facing = payload?.armorFacing ? ` ${payload.armorFacing}` : "";
+      return `${facing} no hp loss`;
+    }
     return payload?.armorFacing ? ` ${payload.armorFacing}` : "";
   }
   const parts = [`-${payload.damage.toFixed(1)}`, `hp=${payload.remainingArmor.toFixed(1)}`];

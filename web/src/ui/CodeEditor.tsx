@@ -3,6 +3,7 @@ import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import { initVimMode, type VimAdapterInstance } from "monaco-vim";
+import { cn } from "../lib/utils.ts";
 
 type MonacoEnvironment = {
   getWorker: () => Worker;
@@ -16,25 +17,25 @@ type MonacoEnvironment = {
 
 export type CodeEditorProps = {
   disabled: boolean;
-  onRun: () => void;
+  onApply: () => void;
   onValueChange: (value: string) => void;
   value: string;
 };
 
-export function CodeEditor({ disabled, onRun, onValueChange, value }: CodeEditorProps) {
+export function CodeEditor({ disabled, onApply, onValueChange, value }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const statusRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const vimRef = useRef<VimAdapterInstance | null>(null);
-  const onRunRef = useRef(onRun);
+  const onApplyRef = useRef(onApply);
   const onValueChangeRef = useRef(onValueChange);
   const [lineCount, setLineCount] = useState(Math.max(1, value.split("\n").length));
   const [vimEnabled, setVimEnabled] = useState(true);
 
   useEffect(() => {
-    onRunRef.current = onRun;
+    onApplyRef.current = onApply;
     onValueChangeRef.current = onValueChange;
-  }, [onRun, onValueChange]);
+  }, [onApply, onValueChange]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -73,7 +74,7 @@ export function CodeEditor({ disabled, onRun, onValueChange, value }: CodeEditor
       onValueChangeRef.current(nextValue);
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      onRunRef.current();
+      onApplyRef.current();
     });
 
     if (statusRef.current) {
@@ -128,14 +129,17 @@ export function CodeEditor({ disabled, onRun, onValueChange, value }: CodeEditor
   }, [vimEnabled]);
 
   return (
-    <div className="code-editor">
-      <div className="code-editor-head u-label">
+    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface-inset)]">
+      <div className="u-label flex min-w-0 items-center justify-between gap-2 border-b border-[var(--line)] px-2 py-1 text-[10px]">
         <span>Bot code</span>
-        <div className="code-editor-tools">
+        <div className="flex items-center gap-1.5">
           <span>Python</span>
           <button
             type="button"
-            className={vimEnabled ? "active" : ""}
+            className={cn(
+              "w-auto rounded-[5px] border border-[var(--line-control)] bg-transparent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[var(--text-dim)]",
+              vimEnabled && "bg-[var(--brand)] text-[var(--ink)]",
+            )}
             disabled={disabled}
             onClick={() => setVimEnabled((enabled) => !enabled)}
           >
@@ -143,11 +147,19 @@ export function CodeEditor({ disabled, onRun, onValueChange, value }: CodeEditor
           </button>
         </div>
       </div>
-      <div ref={containerRef} className="code-editor-monaco" aria-label="Bot Python code" />
-      <div className="code-editor-status u-label">
+      <div ref={containerRef} className="h-full min-h-[260px] overflow-hidden" aria-label="Bot Python code" />
+      <div className="u-label grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 border-t border-[var(--line)] px-2 py-1 text-[10px] normal-case">
         <span>{lineCount} lines</span>
-        <div ref={statusRef} className="code-editor-vim-status" />
-        <span>Cmd/Ctrl+Enter run</span>
+        <div ref={statusRef} className="min-w-0 truncate font-mono text-[var(--text-soft)]" />
+        <span>Cmd/Ctrl+Enter apply</span>
+        <button
+          type="button"
+          className="w-auto rounded-[5px] border border-[var(--line-control)] bg-[var(--brand)] px-2 py-0.5 text-[10px] font-bold leading-none text-[var(--ink)] disabled:opacity-50"
+          disabled={disabled}
+          onClick={onApply}
+        >
+          Apply
+        </button>
       </div>
     </div>
   );

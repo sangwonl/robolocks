@@ -25,6 +25,7 @@ ctx.onmessage = (event: MessageEvent) => {
     try {
       const result = await runResearchInBrowser({
         botSource: request.botSource,
+        botSourcesByUnit: request.botSourcesByUnit,
         battleConfigJson: request.battleConfigJson,
         tickCount: request.tickCount,
         onProgress: (progress) => ctx.postMessage(progressMessage(progress)),

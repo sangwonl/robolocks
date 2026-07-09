@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import type { BattleFrame, BodyShapeFrame, StaticObstacleFrame, UnitFrame } from "../types/protocol";
+import type { BattleFrame, BodyShapeFrame, CaptureZoneFrame, StaticObstacleFrame, UnitFrame } from "../types/protocol";
 import { teamColor } from "./teamPalette.ts";
 
 const HULL_HEIGHT_M = 1.2;
@@ -10,6 +10,9 @@ const TURRET_LENGTH_RATIO = 0.52;
 const MIN_BARREL_LENGTH_M = 0.25;
 const MIN_TRACK_WIDTH_M = 0.28;
 const ARMOR_OVERLAY_HEIGHT_M = 0.06;
+const HEALTH_BAR_HEIGHT_M = 0.16;
+const HEALTH_BAR_SCREEN_OFFSET_M = 3.0;
+const HEALTH_BAR_WORLD_HEIGHT_M = 2.25;
 
 type ScanAction = BattleFrame["actions"][number];
 type ProjectileFrame = BattleFrame["projectiles"][number];
@@ -31,8 +34,12 @@ type UnitRig = {
   turret: THREE.Group;
   sensor: THREE.Group;
   scanArc: THREE.Mesh;
+  healthBar: THREE.Group;
   hullMaterial: THREE.MeshStandardMaterial;
   armorMaterial: THREE.MeshStandardMaterial;
+  healthFill: THREE.Mesh;
+  healthFillMaterial: THREE.MeshBasicMaterial;
+  healthBarWidthM: number;
   scanArcMaterial: THREE.MeshBasicMaterial;
   mount: SensorMount;
   lastArcKey: string;
@@ -52,6 +59,12 @@ type ProjectileRig = {
   trailPositions: THREE.Float32BufferAttribute;
 };
 
+type CaptureZoneRig = {
+  group: THREE.Group;
+  fillMaterial: THREE.MeshBasicMaterial;
+  ringMaterial: THREE.MeshBasicMaterial;
+};
+
 export type BattleSceneInput = {
   obstacles: StaticObstacleFrame[];
 };
@@ -61,6 +74,8 @@ export type BattleScene = {
   readonly scene: THREE.Scene;
   /** Reconcile the persistent unit/projectile rigs to the given frame. Allocates nothing per frame except documented exceptions (new rigs, scan-arc geometry rebuild on param change, new projectile radii). */
   sync(frame: BattleFrame | null): void;
+  /** Rotate screen-space overlays so they stay camera-facing and horizontally readable. */
+  faceCamera(camera: THREE.Camera): void;
   /** Fully dispose the scene, every rig, and shared resources. Called on replay switch. */
   dispose(): void;
 };
@@ -105,6 +120,7 @@ export function createBattleScene(input: BattleSceneInput): BattleScene {
 
   const unitRigs = new Map<number, UnitRig>();
   const projectileRigs = new Map<number, ProjectileRig>();
+  const captureZoneRigs = new Map<string, CaptureZoneRig>();
 
   const syncUnits = (frame: BattleFrame): void => {
     const seen = new Set<number>();
@@ -119,6 +135,7 @@ export function createBattleScene(input: BattleSceneInput): BattleScene {
         unitRigs.set(unit.unitId, rig);
         scene.add(rig.group);
         scene.add(rig.scanArc);
+        scene.add(rig.healthBar);
       }
       updateUnitRig(rig, unit, scanAction);
     }
@@ -150,6 +167,26 @@ export function createBattleScene(input: BattleSceneInput): BattleScene {
     }
   };
 
+  const syncCaptureZones = (frame: BattleFrame): void => {
+    const seen = new Set<string>();
+    for (const zone of frame.ruleState.captureZones) {
+      seen.add(zone.id);
+      let rig = captureZoneRigs.get(zone.id);
+      if (!rig) {
+        rig = createCaptureZoneRig(zone);
+        captureZoneRigs.set(zone.id, rig);
+        scene.add(rig.group);
+      }
+      updateCaptureZoneRig(rig, zone);
+    }
+    for (const [zoneId, rig] of captureZoneRigs) {
+      if (!seen.has(zoneId)) {
+        destroyCaptureZoneRig(scene, rig);
+        captureZoneRigs.delete(zoneId);
+      }
+    }
+  };
+
   return {
     scene,
     sync(frame: BattleFrame | null): void {
@@ -162,10 +199,20 @@ export function createBattleScene(input: BattleSceneInput): BattleScene {
           destroyProjectileRig(scene, rig);
         }
         projectileRigs.clear();
+        for (const [, rig] of captureZoneRigs) {
+          destroyCaptureZoneRig(scene, rig);
+        }
+        captureZoneRigs.clear();
         return;
       }
+      syncCaptureZones(frame);
       syncUnits(frame);
       syncProjectiles(frame);
+    },
+    faceCamera(camera: THREE.Camera): void {
+      for (const [, rig] of unitRigs) {
+        rig.healthBar.quaternion.copy(camera.quaternion);
+      }
     },
     dispose(): void {
       for (const [, rig] of unitRigs) {
@@ -176,6 +223,10 @@ export function createBattleScene(input: BattleSceneInput): BattleScene {
         destroyProjectileRig(scene, rig);
       }
       projectileRigs.clear();
+      for (const [, rig] of captureZoneRigs) {
+        destroyCaptureZoneRig(scene, rig);
+      }
+      captureZoneRigs.clear();
 
       disposeObjectTree(ground);
       scene.remove(ground);
@@ -270,6 +321,7 @@ function createUnitRig(unit: UnitFrame, scanAction: ScanAction | undefined): Uni
   const armor = createArmorModule(unit);
   const turret = createTurret(unit);
   const sensor = createSensorModule(unit);
+  const healthBar = createHealthBar(unit);
 
   group.add(mobility);
   group.add(hull);
@@ -285,8 +337,12 @@ function createUnitRig(unit: UnitFrame, scanAction: ScanAction | undefined): Uni
     turret,
     sensor,
     scanArc,
+    healthBar: healthBar.group,
     hullMaterial: hull.material as THREE.MeshStandardMaterial,
     armorMaterial: (armor.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial,
+    healthFill: healthBar.fill,
+    healthFillMaterial: healthBar.fill.material as THREE.MeshBasicMaterial,
+    healthBarWidthM: healthBar.widthM,
     scanArcMaterial: scanArc.material as THREE.MeshBasicMaterial,
     mount,
     lastArcKey: scanArc.userData.arcKey as string,
@@ -305,6 +361,7 @@ function updateUnitRig(rig: UnitRig, unit: UnitFrame, scanAction: ScanAction | u
 
   rig.hullMaterial.color.set(unitColor(unit));
   rig.armorMaterial.color.set(armorColorForIntegrity(unit.armorIntegrity, unit.modules.armor.integrity));
+  updateHealthBar(rig, unit);
 
   updateScanArc(rig, unit, scanAction);
 }
@@ -312,8 +369,10 @@ function updateUnitRig(rig: UnitRig, unit: UnitFrame, scanAction: ScanAction | u
 function destroyUnitRig(scene: THREE.Scene, rig: UnitRig): void {
   scene.remove(rig.group);
   scene.remove(rig.scanArc);
+  scene.remove(rig.healthBar);
   disposeObjectTree(rig.group);
   disposeObjectTree(rig.scanArc);
+  disposeObjectTree(rig.healthBar);
 }
 
 function createHull(unit: UnitFrame): THREE.Mesh {
@@ -437,6 +496,69 @@ function createArmorModule(unit: UnitFrame): THREE.Group {
     rearMillimeters: unit.modules.armor.rearMillimeters,
   };
   return group;
+}
+
+function createHealthBar(unit: UnitFrame): { group: THREE.Group; fill: THREE.Mesh; widthM: number } {
+  const metrics = shapeMetrics(unit.bodyShape);
+  const widthM = Math.max(1.8, metrics.lengthMeters * 0.72);
+  const group = new THREE.Group();
+  group.name = `unit-${unit.unitId}-health-bar`;
+  group.position.set(unit.position.x, HEALTH_BAR_WORLD_HEIGHT_M, unit.position.y);
+  group.renderOrder = 12;
+
+  const background = new THREE.Mesh(
+    new THREE.PlaneGeometry(widthM, HEALTH_BAR_HEIGHT_M),
+    new THREE.MeshBasicMaterial({
+      color: "#121711",
+      transparent: true,
+      opacity: 0.86,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  background.name = `unit-${unit.unitId}-health-bar-bg`;
+  background.position.y = -HEALTH_BAR_SCREEN_OFFSET_M;
+  background.renderOrder = 12;
+  group.add(background);
+
+  const fill = new THREE.Mesh(
+    new THREE.PlaneGeometry(widthM, HEALTH_BAR_HEIGHT_M),
+    new THREE.MeshBasicMaterial({
+      color: healthColorForIntegrity(unit.armorIntegrity, unit.modules.armor.integrity),
+      transparent: true,
+      opacity: 0.96,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  fill.name = `unit-${unit.unitId}-health-bar-fill`;
+  fill.position.y = -HEALTH_BAR_SCREEN_OFFSET_M;
+  fill.position.z = 0.01;
+  fill.renderOrder = 13;
+  group.add(fill);
+
+  group.userData = {
+    armorIntegrity: unit.armorIntegrity,
+    maxArmorIntegrity: unit.modules.armor.integrity,
+    widthMeters: widthM,
+  };
+  return { group, fill, widthM };
+}
+
+function updateHealthBar(rig: UnitRig, unit: UnitFrame): void {
+  const ratio = armorIntegrityRatio(unit.armorIntegrity, unit.modules.armor.integrity);
+  const clampedScale = Math.max(0.001, ratio);
+  rig.healthBar.position.set(unit.position.x, HEALTH_BAR_WORLD_HEIGHT_M, unit.position.y);
+  rig.healthFill.scale.x = clampedScale;
+  rig.healthFill.position.x = -rig.healthBarWidthM * (1 - clampedScale) / 2;
+  rig.healthFill.visible = unit.armorIntegrity > 0;
+  rig.healthFillMaterial.color.set(healthColorForIntegrity(unit.armorIntegrity, unit.modules.armor.integrity));
+  rig.healthBar.userData = {
+    armorIntegrity: unit.armorIntegrity,
+    maxArmorIntegrity: unit.modules.armor.integrity,
+    ratio,
+    widthMeters: rig.healthBarWidthM,
+  };
 }
 
 function createTurret(unit: UnitFrame): THREE.Group {
@@ -600,6 +722,80 @@ function destroyProjectileRig(scene: THREE.Scene, rig: ProjectileRig): void {
   rig.trailGeometry.dispose();
 }
 
+function createCaptureZoneRig(zone: CaptureZoneFrame): CaptureZoneRig {
+  const group = new THREE.Group();
+  group.name = `capture-zone-${zone.id}`;
+
+  const fillMaterial = new THREE.MeshBasicMaterial({
+    color: captureZoneColor(zone),
+    transparent: true,
+    opacity: 0.12,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const fill = new THREE.Mesh(
+    new THREE.CircleGeometry(zone.radiusMeters, 48),
+    fillMaterial,
+  );
+  fill.name = `capture-zone-${zone.id}-fill`;
+  fill.rotation.x = -Math.PI / 2;
+  fill.position.y = 0.025;
+  group.add(fill);
+
+  const ringMaterial = new THREE.MeshBasicMaterial({
+    color: captureZoneColor(zone),
+    transparent: true,
+    opacity: 0.72,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(Math.max(0.01, zone.radiusMeters - 0.12), zone.radiusMeters, 64),
+    ringMaterial,
+  );
+  ring.name = `capture-zone-${zone.id}-ring`;
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.04;
+  group.add(ring);
+
+  group.renderOrder = 0;
+  updateCaptureZoneRig({ group, fillMaterial, ringMaterial }, zone);
+  return { group, fillMaterial, ringMaterial };
+}
+
+function updateCaptureZoneRig(rig: CaptureZoneRig, zone: CaptureZoneFrame): void {
+  rig.group.position.set(zone.position.x, 0, zone.position.y);
+  const color = captureZoneColor(zone);
+  rig.fillMaterial.color.set(color);
+  rig.ringMaterial.color.set(color);
+  rig.fillMaterial.opacity = zone.contested ? 0.2 : zone.ownerTeamId > 0 ? 0.16 : 0.1;
+  rig.ringMaterial.opacity = zone.contested ? 0.95 : zone.ownerTeamId > 0 ? 0.78 : 0.54;
+  rig.group.userData = {
+    id: zone.id,
+    radiusMeters: zone.radiusMeters,
+    holdTicksRequired: zone.holdTicksRequired,
+    heldTicks: zone.heldTicks,
+    ownerUnitId: zone.ownerUnitId,
+    ownerTeamId: zone.ownerTeamId,
+    contested: zone.contested,
+  };
+}
+
+function destroyCaptureZoneRig(scene: THREE.Scene, rig: CaptureZoneRig): void {
+  scene.remove(rig.group);
+  disposeObjectTree(rig.group);
+}
+
+function captureZoneColor(zone: CaptureZoneFrame): THREE.ColorRepresentation {
+  if (zone.contested) {
+    return "#ff9a8f";
+  }
+  if (zone.ownerTeamId > 0) {
+    return teamColor(zone.ownerTeamId).arc;
+  }
+  return "#d4e164";
+}
+
 function createScanArc(unit: UnitFrame, action: ScanAction | undefined, mount: SensorMount): THREE.Mesh {
   const params = scanArcParams(unit, action, mount);
   const geometry = buildScanArcGeometry(params.rangeMeters, params.directionDegrees, params.widthDegrees);
@@ -713,7 +909,7 @@ function armorPlateDepth(millimeters: number, maxArmorMillimeters: number): numb
 }
 
 function armorColorForIntegrity(current: number, maximum: number): THREE.ColorRepresentation {
-  const ratio = maximum > 0 ? current / maximum : 0;
+  const ratio = armorIntegrityRatio(current, maximum);
   if (ratio <= 0.25) {
     return "#7b5147";
   }
@@ -721,6 +917,21 @@ function armorColorForIntegrity(current: number, maximum: number): THREE.ColorRe
     return "#7c7358";
   }
   return "#8e9a84";
+}
+
+function healthColorForIntegrity(current: number, maximum: number): THREE.ColorRepresentation {
+  const ratio = armorIntegrityRatio(current, maximum);
+  if (ratio <= 0.25) {
+    return "#d66a58";
+  }
+  if (ratio <= 0.6) {
+    return "#d2b85f";
+  }
+  return "#8fd16a";
+}
+
+function armorIntegrityRatio(current: number, maximum: number): number {
+  return Math.max(0, Math.min(1, maximum > 0 ? current / maximum : 0));
 }
 
 function weaponCaliber(unit: UnitFrame): number {

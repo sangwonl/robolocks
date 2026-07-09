@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as THREE from "three";
 
 import { createBattleScene } from "../src/ui/battleSceneThreeScene.ts";
 
@@ -33,7 +34,15 @@ function makeUnit(overrides = {}) {
 }
 
 function makeFrame(units, extra = {}) {
-  return { tick: 1, projectiles: [], events: [], actions: [], units, ...extra };
+  return {
+    tick: 1,
+    projectiles: [],
+    events: [],
+    actions: [],
+    units,
+    ruleState: { scores: [], captureZones: [], outcome: { finished: false, reason: "", winnerUnitId: 0, winnerTeamId: 0 } },
+    ...extra,
+  };
 }
 
 test("battle scene renders unit sensor coverage when no scan action exists", () => {
@@ -82,16 +91,24 @@ test("battle scene renders unit modules from specs", () => {
   const turret = battle.scene.getObjectByName("unit-2-turret");
   const sensor = battle.scene.getObjectByName("unit-2-sensor-module");
   const muzzle = battle.scene.getObjectByName("unit-2-muzzle");
+  const healthBar = battle.scene.getObjectByName("unit-2-health-bar");
+  const healthFill = battle.scene.getObjectByName("unit-2-health-bar-fill");
 
   assert.ok(mobility);
   assert.ok(armor);
   assert.ok(turret);
   assert.ok(sensor);
   assert.ok(muzzle);
+  assert.ok(healthBar);
+  assert.ok(healthFill);
   assert.equal(mobility.userData.moduleId, "heavy_tracks_v0");
   assert.equal(armor.userData.frontMillimeters, 160);
   assert.equal(turret.userData.fireMode, "ballistic");
   assert.equal(sensor.userData.fovDegrees, 170);
+  assert.equal(healthBar.userData.maxArmorIntegrity, 150);
+  assert.equal(healthBar.userData.armorIntegrity, 80);
+  assert.equal(healthBar.userData.ratio, 80 / 150);
+  assert.equal(healthFill.scale.x, 80 / 150);
   assert.deepEqual(sensor.userData.originLocal, battle.scene.getObjectByName("unit-2-scan-arc").userData.originLocal);
   battle.dispose();
 });
@@ -144,6 +161,29 @@ test("unit rigs persist across syncs and update transforms in place", () => {
   assert.equal(groupSecond.position.x, 22);
   assert.equal(groupSecond.position.z, 3);
   assert.notEqual(turretSecond.rotation.y, firstTurretRotation);
+});
+
+test("unit health bars are camera-facing overlays independent of hull rotation", () => {
+  const battle = createBattleScene({ obstacles: [] });
+  const camera = new THREE.PerspectiveCamera();
+  camera.position.set(10, 12, 14);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(true);
+
+  battle.sync(makeFrame([makeUnit({ hullHeadingDegrees: 135, armorIntegrity: 25 })]));
+  battle.faceCamera(camera);
+
+  const group = battle.scene.getObjectByName("unit-1");
+  const healthBar = battle.scene.getObjectByName("unit-1-health-bar");
+  const healthFill = battle.scene.getObjectByName("unit-1-health-bar-fill");
+
+  assert.ok(group);
+  assert.ok(healthBar);
+  assert.ok(healthFill);
+  assert.notDeepEqual(healthBar.quaternion.toArray(), group.quaternion.toArray());
+  assert.deepEqual(healthBar.quaternion.toArray(), camera.quaternion.toArray());
+  assert.equal(healthFill.scale.x, 0.25);
+  battle.dispose();
 });
 
 test("units are removed from the scene when they disappear from the frame", () => {
@@ -251,5 +291,56 @@ test("projectile rigs persist across syncs and are removed on disappearance", ()
 
   battle.sync(makeFrame([makeUnit()], { projectiles: [] }));
   assert.equal(battle.scene.getObjectByName("projectile-7-body"), undefined);
+  battle.dispose();
+});
+
+test("capture zone rigs reflect rule state and persist across syncs", () => {
+  const battle = createBattleScene({ obstacles: [] });
+  const alpha = {
+    id: "alpha",
+    position: { x: 20, y: 12 },
+    radiusMeters: 3.5,
+    holdTicksRequired: 90,
+    heldTicks: 12,
+    ownerUnitId: 1,
+    ownerTeamId: 1,
+    contested: false,
+  };
+
+  battle.sync(makeFrame([makeUnit()], {
+    ruleState: {
+      scores: [],
+      captureZones: [alpha],
+      outcome: { finished: false, reason: "", winnerUnitId: 0, winnerTeamId: 0 },
+    },
+  }));
+
+  const zoneFirst = battle.scene.getObjectByName("capture-zone-alpha");
+  const fill = battle.scene.getObjectByName("capture-zone-alpha-fill");
+  const ring = battle.scene.getObjectByName("capture-zone-alpha-ring");
+
+  assert.ok(zoneFirst);
+  assert.ok(fill);
+  assert.ok(ring);
+  assert.equal(zoneFirst.position.x, 20);
+  assert.equal(zoneFirst.position.z, 12);
+  assert.equal(zoneFirst.userData.heldTicks, 12);
+  assert.equal(zoneFirst.userData.ownerTeamId, 1);
+
+  battle.sync(makeFrame([makeUnit()], {
+    ruleState: {
+      scores: [],
+      captureZones: [{ ...alpha, heldTicks: 45, contested: true }],
+      outcome: { finished: false, reason: "", winnerUnitId: 0, winnerTeamId: 0 },
+    },
+  }));
+
+  const zoneSecond = battle.scene.getObjectByName("capture-zone-alpha");
+  assert.equal(zoneFirst, zoneSecond);
+  assert.equal(zoneSecond.userData.heldTicks, 45);
+  assert.equal(zoneSecond.userData.contested, true);
+
+  battle.sync(makeFrame([makeUnit()]));
+  assert.equal(battle.scene.getObjectByName("capture-zone-alpha"), undefined);
   battle.dispose();
 });
