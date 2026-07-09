@@ -103,6 +103,57 @@ TEST_CASE("battle loader reads python controller paths") {
   REQUIRE(loaded.controllers[1].resolved_path.ends_with("examples/bots/hold_line_blue.py"));
 }
 
+namespace {
+const char* kMinimalBattleJson = R"json({
+  "battleId": "field_schema_test",
+  "seed": 1,
+  "tickRate": 30,
+  "tickLimit": 9000,
+  %FIELD%
+  "units": [
+    {"unitId": 1, "teamId": 1, "name": "Blue", "spawn": {"x": 0, "y": 0, "headingDeg": 0}, "modules": {}}
+  ],
+  "controllers": [
+    {"unitId": 1, "type": "json_callback"}
+  ]
+})json";
+
+std::string battle_json_with_field(const std::string& field_fragment) {
+  std::string json = kMinimalBattleJson;
+  const auto marker = json.find("%FIELD%");
+  json.replace(marker, std::string("%FIELD%").size(), field_fragment);
+  return json;
+}
+}  // namespace
+
+TEST_CASE("battle loader parses an explicit play field") {
+  const auto loaded = robolocks::load_battle_from_json_string(
+    battle_json_with_field(R"json("field": {"min": {"x": -12, "y": -8}, "max": {"x": 52, "y": 32}},)json")
+  );
+  REQUIRE(loaded.config.bounds.min.x == Catch::Approx(-12.0));
+  REQUIRE(loaded.config.bounds.min.y == Catch::Approx(-8.0));
+  REQUIRE(loaded.config.bounds.max.x == Catch::Approx(52.0));
+  REQUIRE(loaded.config.bounds.max.y == Catch::Approx(32.0));
+}
+
+TEST_CASE("battle loader falls back to the default field when omitted") {
+  const auto loaded = robolocks::load_battle_from_json_string(battle_json_with_field(""));
+  REQUIRE(loaded.config.bounds.min.x == Catch::Approx(0.0));
+  REQUIRE(loaded.config.bounds.min.y == Catch::Approx(0.0));
+  REQUIRE(loaded.config.bounds.max.x == Catch::Approx(40.0));
+  REQUIRE(loaded.config.bounds.max.y == Catch::Approx(24.0));
+}
+
+TEST_CASE("battle loader rejects a degenerate play field") {
+  REQUIRE_THROWS_MATCHES(
+    robolocks::load_battle_from_json_string(
+      battle_json_with_field(R"json("field": {"min": {"x": 10, "y": 0}, "max": {"x": 10, "y": 24}},)json")
+    ),
+    std::runtime_error,
+    Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring("field.max must be greater than field.min"))
+  );
+}
+
 TEST_CASE("battle loader reads deathmatch rule and respawn spawn points") {
   const auto fixture_path = std::filesystem::temp_directory_path() / "robolocks_rule_config_test.json";
   {

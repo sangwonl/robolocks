@@ -22,6 +22,8 @@ class BattleSimulation {
 
  private:
   double tick_dt_sec_ = 1.0 / 30.0;
+  Tick tick_limit_ = 9000;
+  BattleBounds bounds_;
   PhysicsSystem physics_;
   ProjectileSystem projectiles_;
   Tick tick_ = 0;

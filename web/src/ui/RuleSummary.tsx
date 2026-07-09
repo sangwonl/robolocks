@@ -5,6 +5,25 @@ export type RuleSummaryProps = {
   frame: BattleFrame | null;
 };
 
+// Maps the engine's outcome reason codes to readable labels. "tick_limit" is the
+// safety-deadline settle-on-score path (the rule did not resolve on its own).
+function outcomeReasonLabel(reason: string): string {
+  switch (reason) {
+    case "kill_limit":
+      return "Kill limit";
+    case "capture_point":
+      return "Capture point";
+    case "time_limit":
+      return "Time limit";
+    case "tick_limit":
+      return "Time up (by score)";
+    case "":
+      return "active";
+    default:
+      return reason;
+  }
+}
+
 export function RuleSummary({ frame }: RuleSummaryProps) {
   if (!frame) {
     return (
@@ -25,14 +44,18 @@ export function RuleSummary({ frame }: RuleSummaryProps) {
       >
         <span className="u-label">{outcome.finished ? "Finished" : "Running"}</span>
         <strong className="min-w-0 text-[12px] font-semibold leading-tight text-[var(--text)] [overflow-wrap:anywhere]">
-          {outcome.reason || "active"}
+          {outcomeReasonLabel(outcome.reason)}
         </strong>
-        {(outcome.winnerTeamId > 0 || outcome.winnerUnitId > 0) && (
+        {outcome.winnerTeamId > 0 || outcome.winnerUnitId > 0 ? (
           <em className="col-span-full text-[11px] font-semibold not-italic text-[var(--brand)]">
             {outcome.winnerTeamId > 0 ? `team ${outcome.winnerTeamId}` : ""}
             {outcome.winnerUnitId > 0 ? ` unit ${outcome.winnerUnitId}` : ""}
           </em>
-        )}
+        ) : outcome.finished ? (
+          <em className="col-span-full text-[11px] font-semibold not-italic text-[var(--text-muted)]">
+            Draw
+          </em>
+        ) : null}
       </div>
 
       {scores.length === 0 ? (

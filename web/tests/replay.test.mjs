@@ -150,3 +150,24 @@ test("replay parser reads CLI replay JSON frames", () => {
 test("replay parser rejects unsupported replay payloads", () => {
   assert.throws(() => parseBattleReplay(JSON.stringify({ type: "other", frames: [] })));
 });
+
+function minimalReplay(frameExtra) {
+  return JSON.stringify({
+    type: "robolocks.replay.v1",
+    tickRate: 30,
+    obstacles: [],
+    frames: [{ tick: 0, units: [], projectiles: [], events: [], actions: [], ...frameExtra }],
+  });
+}
+
+test("replay parser reads the play field bounds from a frame", () => {
+  const replay = parseBattleReplay(minimalReplay({
+    field: { min: { x: -12, y: -8 }, max: { x: 52, y: 32 } },
+  }));
+  assert.deepEqual(replay.frames[0].field, { min: { x: -12, y: -8 }, max: { x: 52, y: 32 } });
+});
+
+test("replay parser defaults the field to the 40x24 arena when omitted", () => {
+  const replay = parseBattleReplay(minimalReplay({}));
+  assert.deepEqual(replay.frames[0].field, { min: { x: 0, y: 0 }, max: { x: 40, y: 24 } });
+});

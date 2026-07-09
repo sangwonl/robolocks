@@ -1,5 +1,5 @@
 import type { BattleReplay } from "../replay/replay";
-import type { BattleFrame, BodyShapeFrame, UnitFrame, UnitModulesFrame } from "../types/protocol";
+import type { BattleFrame, BodyShapeFrame, FieldBoundsFrame, UnitFrame, UnitModulesFrame } from "../types/protocol";
 import { createResearchDuelWithJsonBotFromWasmFactory, type JsonBotTick, type KernelBattleRunner } from "../sim/kernelAdapter.ts";
 import { PYTHON_SDK_FILES } from "./pythonSdkFiles.generated.ts";
 import type { ResearchProgress } from "./researchWorkerProtocol.ts";
@@ -162,6 +162,20 @@ export const RESEARCH_BOT_LOGIC_PRESETS: ResearchBotLogicPreset[] = [
 
 export const DEFAULT_RESEARCH_BOT_SOURCE = ADVANCE_FIRE_BOT_SOURCE;
 
+export const NO_OP_BOT_SOURCE = `from robolocks import (
+    BattleState,
+    OrderLike,
+    run_bot,
+)
+
+
+def on_tick(state: BattleState) -> list[OrderLike]:
+    return []
+
+
+run_bot(on_tick)
+`;
+
 export type ResearchRunOptions = {
   botSource: string;
   botSourcesByUnit?: Record<number, string>;
@@ -194,7 +208,7 @@ export type BrowserBotRuntime = {
   destroy?(): void;
 };
 
-export type BrowserBotRuntimeFactory = (botSource: string) => Promise<BrowserBotRuntime>;
+export type BrowserBotRuntimeFactory = (botSource: string, botId: number) => Promise<BrowserBotRuntime>;
 
 export type ResearchRunnerFactory = (options: {
   botId: number;
@@ -240,11 +254,11 @@ export async function runResearchInBrowser(options: ResearchRunOptions): Promise
   const tickCount = normalizeTickCount(options.tickCount);
   const battleConfigJson = options.battleConfigJson ?? DEFAULT_RESEARCH_BATTLE_CONFIG_JSON;
   const onProgress = options.onProgress ?? (() => {});
-  const createBotRuntime = options.createBotRuntime ?? ((botSource) => createPyodideBotRuntime(botSource, onProgress));
+  const createBotRuntime = options.createBotRuntime ?? ((botSource, botId) => createPyodideBotRuntime(botSource, botId, onProgress));
   const botSourcesByUnit = botSourcesByUnitFromConfig(battleConfigJson, options.botSource, options.botSourcesByUnit);
   const botRuntimes = new Map<number, BrowserBotRuntime>();
   for (const [unitId, botSource] of botSourcesByUnit) {
-    botRuntimes.set(unitId, await createBotRuntime(botSource));
+    botRuntimes.set(unitId, await createBotRuntime(botSource, unitId));
   }
   const createRunner = options.createRunner ?? ((runnerOptions) => createResearchDuelWithJsonBotFromWasmFactory(runnerOptions));
   const runner = await createRunner({
@@ -269,6 +283,13 @@ export async function runResearchInBrowser(options: ResearchRunOptions): Promise
         }
       }
       const completed = i + 1;
+      // Stop as soon as the rule decides the battle (or the engine settles it on
+      // score at the tick-limit deadline). tickCount is the max, not a fixed run
+      // length — the rule governs when the battle actually ends.
+      if (frame.ruleState?.outcome?.finished) {
+        onProgress({ stage: "simulating", tick: completed, totalTicks: tickCount });
+        break;
+      }
       if (completed === tickCount || completed % SIMULATION_PROGRESS_INTERVAL === 0) {
         onProgress({ stage: "simulating", tick: completed, totalTicks: tickCount });
       }
@@ -323,7 +344,7 @@ export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
     {
       unitId: 2,
       teamId: 2,
-      name: "Target",
+      name: "Red",
       spawn: { x: 34, y: 18, headingDeg: 215 },
       modules: {
         mobility: { id: "fixed_target_chassis", maxSpeedMetersPerSecond: 0.0, maxHullTurnDegreesPerSecond: 60.0 },
@@ -512,20 +533,37 @@ export const RESEARCH_RULE_PRESETS: ResearchRulePreset[] = [
   },
 ];
 
+// Play field for research battles. Centered on (20, 12) — the map center the
+// bots rally to (see the Python SDK's BattleMap.center) — and sized well beyond
+// the spawn footprint (x in [4, 34], y in [5, 18]) so units have room to
+// maneuver instead of pinning against the boundary. The engine clamps units to
+// this box and the renderer draws the visible boundary from it.
+const RESEARCH_FIELD = { min: { x: -12, y: -8 }, max: { x: 52, y: 32 } };
+
 export function createResearchBattleConfigJson(options: {
   battlePresetId: string;
   rulePresetId?: string;
   unitPresetId: string;
+  // Deadline (safety cap) in ticks. When the rule does not resolve on its own by
+  // this tick, the engine settles the battle on the current score. Defaults to a
+  // large backstop; the research UI passes its tick count here so the run stops
+  // as soon as the rule (or this deadline) decides, rather than always running a
+  // fixed number of ticks.
+  maxTicks?: number;
 }): string {
   const battlePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === options.battlePresetId) ?? RESEARCH_BATTLE_PRESETS[0];
   const rulePreset = RESEARCH_RULE_PRESETS.find((preset) => preset.id === options.rulePresetId) ?? RESEARCH_RULE_PRESETS[0];
   const unitPreset = RESEARCH_UNIT_PRESETS.find((preset) => preset.id === options.unitPresetId) ?? RESEARCH_UNIT_PRESETS[0];
+  // Normalize with the same clamp the run loop uses so the engine's settle-on-
+  // score deadline lands exactly on the loop's last tick (no early unresolved stop).
+  const tickLimit = options.maxTicks !== undefined ? normalizeTickCount(options.maxTicks) : MAX_RESEARCH_TICKS;
 
   return JSON.stringify({
     battleId: `research_${battlePreset.id}_${unitPreset.id}_${rulePreset.id}`,
     seed: 1,
     tickRate: 30,
-    tickLimit: 9000,
+    tickLimit,
+    field: cloneJson(RESEARCH_FIELD),
     obstacles: cloneJson(battlePreset.obstacles),
     units: [
       {
@@ -538,9 +576,9 @@ export function createResearchBattleConfigJson(options: {
       {
         unitId: 2,
         teamId: 2,
-        name: "Target",
+        name: "Red",
         spawn: battlePreset.targetSpawn,
-        modules: cloneJson(FIXED_TARGET_MODULES),
+        modules: cloneJson(unitPreset.modules),
       },
     ],
     controllers: [
@@ -557,10 +595,12 @@ export function createResearchSetupReplay(battleConfigJson: string): BattleRepla
     obstacles?: unknown[];
     units?: unknown[];
     rule?: unknown;
+    field?: unknown;
   };
   const units = Array.isArray(config.units) ? config.units.map(setupUnitFromConfig) : [];
   const frame: BattleFrame = {
     tick: 0,
+    field: setupFieldFromConfig(config.field),
     units,
     projectiles: [],
     events: [],
@@ -670,6 +710,23 @@ function setupBodyModule(payload: unknown): UnitModulesFrame["body"] {
     massKilograms: numberField(payload, "massKilograms"),
     shape: bodyShapeField(payload, "shape"),
   };
+}
+
+function setupFieldFromConfig(payload: unknown): FieldBoundsFrame {
+  const fallback: FieldBoundsFrame = { min: { x: 0, y: 0 }, max: { x: 40, y: 24 } };
+  if (!isRecord(payload)) {
+    return fallback;
+  }
+  const min = isRecord(payload.min) ? payload.min : {};
+  const max = isRecord(payload.max) ? payload.max : {};
+  const bounds: FieldBoundsFrame = {
+    min: { x: numberField(min, "x"), y: numberField(min, "y") },
+    max: { x: numberField(max, "x"), y: numberField(max, "y") },
+  };
+  if (bounds.max.x <= bounds.min.x || bounds.max.y <= bounds.min.y) {
+    return fallback;
+  }
+  return bounds;
 }
 
 function setupCaptureZonesFromRule(payload: unknown): BattleFrame["ruleState"]["captureZones"] {
@@ -784,15 +841,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// Upper bound on a research run's tick deadline. This is the safety cap the
+// battle settles on score at when the rule does not resolve first; it is not a
+// fixed run length (matches stop as soon as the rule decides). Kept in one place
+// so the loop bound, the engine deadline (config tickLimit), and the UI input
+// max all agree — a mismatch makes the run stop before the deadline, unresolved.
+export const MAX_RESEARCH_TICKS = 9000;
+
 function normalizeTickCount(value: number): number {
   if (!Number.isFinite(value)) {
     return 180;
   }
-  return Math.max(1, Math.min(900, Math.floor(value)));
+  return Math.max(1, Math.min(MAX_RESEARCH_TICKS, Math.floor(value)));
 }
 
 async function createPyodideBotRuntime(
   botSource: string,
+  botId: number,
   onProgress: (progress: ResearchProgress) => void = () => {},
 ): Promise<BrowserBotRuntime> {
   onProgress({ stage: "loading-python" });
@@ -822,6 +887,10 @@ sys.stderr = __robolocks_stderr
 `);
   pyodide.globals.set("__robolocks_bot_source", botSource);
   pyodide.runPython(`
+import builtins
+builtins.__robolocks_bot_id = ${botId}
+`);
+  pyodide.runPython(`
 __robolocks_bot_globals = {"__name__": "__robolocks_user_bot__"}
 exec(__robolocks_bot_source, __robolocks_bot_globals)
 from robolocks.runtime import call_registered_bot as __robolocks_call_registered_bot
@@ -830,7 +899,7 @@ from robolocks.runtime import call_registered_bot as __robolocks_call_registered
   return {
     onTick(observation: unknown): unknown {
       pyodide.globals.set("__robolocks_observation_json", JSON.stringify(observation));
-      return JSON.parse(String(pyodide.runPython("__robolocks_call_registered_bot(__robolocks_observation_json)")));
+      return JSON.parse(String(pyodide.runPython(`__robolocks_call_registered_bot(${botId}, __robolocks_observation_json)`)));
     },
     drainLogs(): Omit<BotLogEntry, "tick" | "unitId">[] {
       const payload = String(pyodide.runPython(`
@@ -849,7 +918,7 @@ json.dumps({
     destroy(): void {
       pyodide.runPython(`
 from robolocks.runtime import clear_registered_bot
-clear_registered_bot()
+clear_registered_bot(${botId})
 import sys
 sys.stdout = sys.__stdout__
 sys.stderr = sys.__stderr__

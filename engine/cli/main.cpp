@@ -90,8 +90,13 @@ void print_snapshot_stream(robolocks::BattleRunner& runtime, robolocks::Tick tic
   print_stream_frame("battleFrame", runtime.snapshot(), out);
   for (robolocks::Tick tick = 0; tick < ticks; tick += 1) {
     const auto result = runtime.step_once();
-    const auto type = result.snapshot.tick == ticks ? "battleComplete" : "battleFrame";
-    print_stream_frame(type, result.snapshot, out);
+    // The battle ends when the rule decides it (or the engine settles on score at
+    // the tick-limit deadline), not merely when the tick budget runs out.
+    const bool complete = result.rule_state.outcome.finished || result.snapshot.tick == ticks;
+    print_stream_frame(complete ? "battleComplete" : "battleFrame", result.snapshot, out);
+    if (result.rule_state.outcome.finished) {
+      break;
+    }
   }
 }
 
@@ -122,6 +127,11 @@ void write_replay_json(
       result.orders_by_unit,
       &result.rule_state
     ));
+    // Stop recording once the battle is decided by the rule (or settled on score
+    // at the tick-limit deadline) rather than always running the full budget.
+    if (result.rule_state.outcome.finished) {
+      break;
+    }
   }
 
   const nlohmann::ordered_json replay{

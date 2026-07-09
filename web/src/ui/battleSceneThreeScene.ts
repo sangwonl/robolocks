@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import type { BattleFrame, BodyShapeFrame, CaptureZoneFrame, StaticObstacleFrame, UnitFrame } from "../types/protocol";
+import type { BattleFrame, BodyShapeFrame, CaptureZoneFrame, FieldBoundsFrame, StaticObstacleFrame, UnitFrame } from "../types/protocol";
 import { teamColor } from "./teamPalette.ts";
 
 const HULL_HEIGHT_M = 1.2;
@@ -67,7 +67,11 @@ type CaptureZoneRig = {
 
 export type BattleSceneInput = {
   obstacles: StaticObstacleFrame[];
+  /** Play-field bounds. Defaults to the engine's historical 40x24 arena when omitted. */
+  field?: FieldBoundsFrame;
 };
+
+const DEFAULT_FIELD: FieldBoundsFrame = { min: { x: 0, y: 0 }, max: { x: 40, y: 24 } };
 
 export type BattleScene = {
   /** The persistent THREE scene. Statics (ground/grid/lights/obstacles) live for the whole handle. */
@@ -91,9 +95,12 @@ export function createBattleScene(input: BattleSceneInput): BattleScene {
   scene.name = "robolocks-battle-scene";
   scene.background = new THREE.Color("#1b211b");
 
-  const ground = createGround();
+  const field = input.field ?? DEFAULT_FIELD;
+  const ground = createGround(field);
+  const boundary = createBoundary(field);
   const lighting = createLights();
   scene.add(ground);
+  scene.add(boundary);
   scene.add(lighting);
 
   const obstacleMeshes: THREE.Mesh[] = [];
@@ -230,6 +237,8 @@ export function createBattleScene(input: BattleSceneInput): BattleScene {
 
       disposeObjectTree(ground);
       scene.remove(ground);
+      disposeObjectTree(boundary);
+      scene.remove(boundary);
       disposeObjectTree(lighting);
       scene.remove(lighting);
       for (const mesh of obstacleMeshes) {
@@ -248,25 +257,87 @@ export function replayToWorld(position: { x: number; y: number }, heightMeters =
   return new THREE.Vector3(position.x, heightMeters, position.y);
 }
 
-function createGround(): THREE.Group {
+// Extra ground drawn outside the play field so the world does not end abruptly
+// at the boundary line.
+const GROUND_MARGIN_M = 8;
+
+function createGround(field: FieldBoundsFrame): THREE.Group {
   const group = new THREE.Group();
   group.name = "terrain";
 
+  const centerX = (field.min.x + field.max.x) / 2;
+  const centerZ = (field.min.y + field.max.y) / 2;
+  const fieldWidth = field.max.x - field.min.x;
+  const fieldDepth = field.max.y - field.min.y;
+  const planeWidth = fieldWidth + GROUND_MARGIN_M * 2;
+  const planeDepth = fieldDepth + GROUND_MARGIN_M * 2;
+
   const plane = new THREE.Mesh(
-    new THREE.PlaneGeometry(56, 36),
+    new THREE.PlaneGeometry(planeWidth, planeDepth),
     new THREE.MeshStandardMaterial({ color: "#252d24", roughness: 0.92 }),
   );
   plane.name = "terrain-plane";
   plane.rotation.x = -Math.PI / 2;
-  plane.position.set(20, -0.03, 12);
+  plane.position.set(centerX, -0.03, centerZ);
   plane.receiveShadow = true;
   group.add(plane);
 
-  const grid = new THREE.GridHelper(56, 28, "#62705c", "#394137");
+  // A ~2m grid over the play field, sized so the lines land on whole-metre steps.
+  const gridSize = Math.max(fieldWidth, fieldDepth);
+  const divisions = Math.max(2, Math.round(gridSize / 2));
+  const grid = new THREE.GridHelper(gridSize, divisions, "#62705c", "#394137");
   grid.name = "terrain-grid";
-  grid.position.set(20, 0, 12);
+  grid.position.set(centerX, 0, centerZ);
   group.add(grid);
 
+  return group;
+}
+
+// A visible fence around the exact play field so the player can see where units
+// stop. Four low emissive rails framing the [min, max] bounds; drawn at the rim
+// so it reads as a wall in the iso view rather than a flat line.
+const BOUNDARY_HEIGHT_M = 0.5;
+const BOUNDARY_THICKNESS_M = 0.18;
+
+function createBoundary(field: FieldBoundsFrame): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "field-boundary";
+
+  const centerX = (field.min.x + field.max.x) / 2;
+  const centerZ = (field.min.y + field.max.y) / 2;
+  const width = field.max.x - field.min.x;
+  const depth = field.max.y - field.min.y;
+  const material = new THREE.MeshStandardMaterial({
+    color: "#8fae74",
+    emissive: "#2e3a24",
+    emissiveIntensity: 0.5,
+    roughness: 0.7,
+    transparent: true,
+    opacity: 0.85,
+  });
+
+  const makeRail = (name: string, sx: number, sz: number, x: number, z: number): THREE.Mesh => {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(sx, BOUNDARY_HEIGHT_M, sz), material);
+    rail.name = name;
+    rail.position.set(x, BOUNDARY_HEIGHT_M / 2, z);
+    rail.castShadow = false;
+    rail.receiveShadow = true;
+    return rail;
+  };
+
+  const span = BOUNDARY_THICKNESS_M;
+  const fullWidth = width + span;
+  group.add(makeRail("boundary-north", fullWidth, span, centerX, field.min.y));
+  group.add(makeRail("boundary-south", fullWidth, span, centerX, field.max.y));
+  group.add(makeRail("boundary-west", span, depth, field.min.x, centerZ));
+  group.add(makeRail("boundary-east", span, depth, field.max.x, centerZ));
+
+  group.userData = {
+    minX: field.min.x,
+    minY: field.min.y,
+    maxX: field.max.x,
+    maxY: field.max.y,
+  };
   return group;
 }
 

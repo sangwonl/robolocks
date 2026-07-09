@@ -95,6 +95,7 @@ struct Event {
 
 struct WorldSnapshot {
   Tick tick = 0;
+  BattleBounds bounds;
   std::vector<UnitSnapshot> units;
   std::vector<ProjectileSnapshot> projectiles;
 };

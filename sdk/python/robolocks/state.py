@@ -107,6 +107,13 @@ class UnitState:
         )
 
     @property
+    def alive(self) -> bool:
+        """True while the unit still has armor. Destroyed units linger in the
+        world as wrecks and keep showing up as contacts, so target selection
+        should gate on this."""
+        return self.armor_integrity > 0.0
+
+    @property
     def can_fire(self) -> bool:
         return self.weapon_cooldown == 0 and not self.intent.weapon.active
 
@@ -138,9 +145,13 @@ class ContactSet:
     def __len__(self) -> int:
         return len(self.units)
 
-    def closest_enemy(self) -> UnitState | None:
+    def closest_enemy(self, include_wrecks: bool = False) -> UnitState | None:
+        """Closest enemy contact (units are sorted nearest-first). Destroyed
+        enemies linger as wrecks and stay in contact; they are skipped by
+        default so a fire loop does not lock onto a corpse. Pass
+        include_wrecks=True to get the nearest enemy regardless of armor."""
         for unit in self.units:
-            if unit.is_enemy:
+            if unit.is_enemy and (include_wrecks or unit.alive):
                 return unit
         return None
 

@@ -1,4 +1,8 @@
-import type { BattleAction, BattleEvent, BattleFrame, BattleRuleStateFrame, BodyShapeFrame, ProjectileFrame, UnitFrame, UnitIntentsFrame, UnitModulesFrame } from "../types/protocol";
+import type { BattleAction, BattleEvent, BattleFrame, BattleRuleStateFrame, BodyShapeFrame, FieldBoundsFrame, ProjectileFrame, UnitFrame, UnitIntentsFrame, UnitModulesFrame } from "../types/protocol";
+
+// Matches the engine's default BattleBounds so replays predating the "field"
+// key still render at the historical play-area size.
+const DEFAULT_FIELD: FieldBoundsFrame = { min: { x: 0, y: 0 }, max: { x: 40, y: 24 } };
 
 // Shared per-tick frame parser used by both the replay file loader
 // (replay.ts) and the live wasm adapter (kernelAdapter.ts). Both consume the
@@ -6,6 +10,7 @@ import type { BattleAction, BattleEvent, BattleFrame, BattleRuleStateFrame, Body
 
 type FramePayload = {
   tick?: unknown;
+  field?: unknown;
   units?: unknown;
   projectiles?: unknown;
   events?: unknown;
@@ -122,6 +127,7 @@ export function parseFrame(raw: unknown): BattleFrame {
 
   return {
     tick: frame.tick,
+    field: parseField(frame.field),
     units: frame.units.map(parseUnit),
     projectiles: Array.isArray(frame.projectiles) ? frame.projectiles.map(parseProjectile) : [],
     events: Array.isArray(frame.events) ? frame.events.map(parseEvent) : [],
@@ -550,6 +556,21 @@ function parseAction(payload: unknown): BattleAction {
     parsed.rangeMeters = action.rangeMeters;
   }
   return parsed;
+}
+
+function parseField(payload: unknown): FieldBoundsFrame {
+  const field = payload as { min?: unknown; max?: unknown };
+  if (typeof field !== "object" || field === null) {
+    return DEFAULT_FIELD;
+  }
+  const min = parseOptionalVec(field.min);
+  const max = parseOptionalVec(field.max);
+  // Guard against a degenerate or missing box; fall back to the default so the
+  // renderer/camera never divide by a zero-sized field.
+  if (max.x <= min.x || max.y <= min.y) {
+    return DEFAULT_FIELD;
+  }
+  return { min, max };
 }
 
 function parseVec(payload: unknown, errorMessage: string): { x: number; y: number } {

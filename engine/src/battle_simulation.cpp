@@ -19,10 +19,40 @@ namespace {
 
 constexpr double kPhysicsBlockedEpsilonM = 1.0e-3;
 
+// The web renderer draws each tracked hull with drive tracks that sit outside
+// the bare hull box (see web/src/ui/battleSceneThreeScene.ts: createMobilityModule).
+// The physics footprint must cover those tracks, otherwise two units separated
+// to touching hulls still render with their tracks overlapping. These constants
+// mirror the renderer's track geometry and must stay in sync with it.
+constexpr double kRenderMinTrackWidthM = 0.28;
+constexpr double kRenderTrackWidthRatio = 0.18;
+// Outer track edge, measured from hull centerline, is width/2 + trackWidth*0.82
+// (trackOffsetZ = width/2 + trackWidth*0.32, plus half the track's own width).
+// Full collision width therefore adds 2 * 0.82 = 1.64 track widths.
+constexpr double kRenderTrackWidthOuterFactor = 1.64;
+// Tracks are drawn 2% longer than the hull, so extend the collision length to match.
+constexpr double kRenderTrackLengthFactor = 1.02;
+
+// Returns the body shape inflated to the full drawn vehicle footprint (hull +
+// tracks) so collision separation matches what the renderer shows. Circles are
+// returned unchanged.
+BodyShapeSpec collision_footprint(const BodyShapeSpec& shape) {
+  if (shape.type != BodyShapeType::Box || shape.length_m <= 0.0 || shape.width_m <= 0.0) {
+    return shape;
+  }
+  const double track_width = std::max(kRenderMinTrackWidthM, shape.width_m * kRenderTrackWidthRatio);
+  BodyShapeSpec inflated = shape;
+  inflated.width_m = shape.width_m + kRenderTrackWidthOuterFactor * track_width;
+  inflated.length_m = shape.length_m * kRenderTrackLengthFactor;
+  return inflated;
+}
+
 }  // namespace
 
 BattleSimulation::BattleSimulation(BattleConfig config)
     : tick_dt_sec_(config.tick_dt_sec),
+      tick_limit_(config.tick_limit),
+      bounds_(config.bounds),
       physics_(config.bounds, config.obstacles),
       rule_(config.rule),
       obstacles_(config.obstacles) {
@@ -79,6 +109,7 @@ BattleSimulation::BattleSimulation(BattleConfig config)
 WorldSnapshot BattleSimulation::snapshot() const {
   WorldSnapshot out;
   out.tick = tick_;
+  out.bounds = bounds_;
   out.units.reserve(units_.size());
   for (const auto& unit : units_) {
     const double mobility_remaining = unit.mobility_intent.active
@@ -228,7 +259,7 @@ void BattleSimulation::run_physics_phase(std::vector<Event>& events) {
     physics_bodies.push_back(PhysicsBody{
       .unit_id = unit.unit_id,
       .position = unit.transform.position,
-      .shape = unit.body.shape,
+      .shape = collision_footprint(unit.body.shape),
       .heading_deg = unit.transform.hull_heading_deg,
       .mass_kg = unit.body.mass_kg,
     });
@@ -509,6 +540,59 @@ void BattleSimulation::evaluate_outcome() {
       rule_state_.outcome.winner_team_id = leader->team_id;
     } else {
       rule_state_.outcome.winner_unit_id = leader->unit_id;
+    }
+    return;
+  }
+
+  // Universal deadline backstop: if the battle reaches the configured tick limit
+  // without its own rule resolving, settle it on the current score instead of
+  // leaving it undecided. The side with the most kills wins; an exact tie
+  // (including a scoreless battle) is a draw — finished with no winner set.
+  if (tick_limit_ > 0 && tick_ >= tick_limit_) {
+    rule_state_.outcome.finished = true;
+    rule_state_.outcome.reason = "tick_limit";
+    if (rule_.team_mode == BattleTeamMode::Team) {
+      std::vector<std::pair<std::uint32_t, std::uint32_t>> team_kills;  // (team_id, kills)
+      for (const auto& score : rule_state_.scores) {
+        auto entry = std::find_if(team_kills.begin(), team_kills.end(),
+          [&](const auto& candidate) { return candidate.first == score.team_id; });
+        if (entry == team_kills.end()) {
+          team_kills.emplace_back(score.team_id, score.kills);
+        } else {
+          entry->second += score.kills;
+        }
+      }
+      std::uint32_t best = 0;
+      for (const auto& entry : team_kills) {
+        best = std::max(best, entry.second);
+      }
+      std::uint32_t leaders = 0;
+      std::uint32_t winning_team = 0;
+      for (const auto& entry : team_kills) {
+        if (entry.second == best) {
+          leaders += 1;
+          winning_team = entry.first;
+        }
+      }
+      if (best > 0 && leaders == 1) {
+        rule_state_.outcome.winner_team_id = winning_team;
+      }
+    } else {
+      std::uint32_t best = 0;
+      for (const auto& score : rule_state_.scores) {
+        best = std::max(best, score.kills);
+      }
+      std::uint32_t leaders = 0;
+      UnitId winning_unit{};
+      for (const auto& score : rule_state_.scores) {
+        if (score.kills == best) {
+          leaders += 1;
+          winning_unit = score.unit_id;
+        }
+      }
+      if (best > 0 && leaders == 1) {
+        rule_state_.outcome.winner_unit_id = winning_unit;
+      }
     }
   }
 }

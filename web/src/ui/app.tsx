@@ -18,10 +18,10 @@ import {
 } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
 
-import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
+import type { BattleFrame, FieldBoundsFrame, StaticObstacleFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
-import { RESEARCH_BOT_LOGIC_PRESETS, RESEARCH_BATTLE_PRESETS, RESEARCH_RULE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
+import { MAX_RESEARCH_TICKS, RESEARCH_BOT_LOGIC_PRESETS, RESEARCH_BATTLE_PRESETS, RESEARCH_RULE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
 import type { ResearchProgress } from "../research/researchWorkerProtocol.ts";
 import { cn } from "../lib/utils.ts";
 import { deriveStatusText } from "./statusText.ts";
@@ -50,6 +50,10 @@ const reactRoots = new WeakMap<HTMLElement, Root>();
 // Stable empty-obstacle reference so the battle scene is not rebuilt every render
 // while no replay is loaded (scene lifetime keys on the obstacles identity).
 const NO_OBSTACLES: StaticObstacleFrame[] = [];
+
+// Stable default field (matches the engine's default BattleBounds) used while no
+// replay is loaded, so the scene/camera key on a constant identity.
+const NO_FIELD: FieldBoundsFrame = { min: { x: 0, y: 0 }, max: { x: 40, y: 24 } };
 
 // Team colors are sourced once from teamPalette.ts and applied at the app
 // root as CSS custom properties, so styles.css never hardcodes a team hex.
@@ -389,7 +393,7 @@ function BattleDockPanel() {
   } = useWorkbenchPanel();
   return (
     <section className="battle-scene relative h-full min-h-0 w-full min-w-0 overflow-hidden bg-[var(--surface-scene)]">
-      <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? NO_OBSTACLES} />
+      <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? NO_OBSTACLES} field={loadedReplay?.frames[0]?.field ?? NO_FIELD} />
       {research.isResearchRunning ? (
         <ResearchRunOverlay progress={research.researchProgress} onCancel={research.cancelResearch} />
       ) : null}
@@ -416,7 +420,7 @@ function ResearchDockPanel() {
   const { isLoading, research } = useWorkbenchPanel();
   return (
     <section className="h-full min-h-0 overflow-hidden bg-[var(--surface-raised)] p-2.5">
-      <div className="grid h-full min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2">
+      <div className="grid h-full min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-2">
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex min-w-0 flex-wrap items-end gap-x-1.5 gap-y-1.5" aria-label="Research presets">
             <div className={cn(FIELD_CLASS, "min-w-0 flex-[1_1_116px]")}>
@@ -467,13 +471,13 @@ function ResearchDockPanel() {
                 ))}
               </select>
             </div>
-            <div className={cn(FIELD_CLASS, "flex-[0_0_92px] grid-cols-[auto_minmax(0,1fr)] items-center")}>
+            <div className={cn(FIELD_CLASS, "flex-[0_0_92px]")}>
               <Label htmlFor="research-ticks">Ticks</Label>
               <Input
                 id="research-ticks"
                 type="number"
                 min={1}
-                max={900}
+                max={MAX_RESEARCH_TICKS}
                 value={research.researchTickCount}
                 disabled={isLoading}
                 onChange={(event) => {
@@ -484,22 +488,51 @@ function ResearchDockPanel() {
                 }}
               />
             </div>
-            <Button
-              type="button"
-              className="flex-[0_0_70px]"
-              disabled={isLoading || research.isResearchRunning}
-              onClick={() => research.setupResearch()}
-            >
-              {research.researchMode === "ready" ? "Ready" : "Setup"}
-            </Button>
-            <div className="grid min-w-0 flex-[1_0_100%] gap-0.5 text-[10px] font-medium leading-tight text-[var(--text-faint)] [&>span]:truncate">
-              {/* <span>{research.researchBattlePreset?.description ?? ""}</span> */}
-              <span>{research.researchRulePreset?.description ?? ""}</span>
-              <span>
-                Logic: {RESEARCH_BOT_LOGIC_PRESETS.find((preset) => preset.id === research.researchBotLogicPresetId)?.label ?? "Custom"}
-                {research.researchBotSource !== research.appliedBotSource ? " - unapplied edits" : " - applied"}
-              </span>
-              {/* <span>{research.researchUnitPreset?.description ?? ""}</span> */}
+          </div>
+          <div className="grid gap-1 rounded-lg border border-[var(--line)] bg-[var(--surface-sunken)] p-2">
+            <div className="u-label text-[10px]">Bot logic</div>
+            <div className="grid gap-1">
+              {Object.entries(research.botLogicByUnit)
+                .sort(([a], [b]) => Number(a) - Number(b))
+                .map(([unitIdStr, botLogic]) => {
+                  const unitId = Number(unitIdStr);
+                  const unitName = unitId === 1 ? "Blue" : unitId === 2 ? "Red" : `Unit ${unitId}`;
+                  const dirty = botLogic.editorSource !== botLogic.appliedSource;
+                  return (
+                    <div
+                      key={unitId}
+                      className="grid grid-cols-[minmax(0,72px)_minmax(0,1fr)_auto] items-center gap-1.5"
+                    >
+                      <button
+                        type="button"
+                        className={cn(
+                          "min-w-0 truncate rounded-md border border-[var(--line-control)] bg-[var(--surface-well)] px-1.5 py-1 text-left text-[10px] font-bold text-[var(--text-soft)]",
+                          research.activeResearchBotUnitId === unitId && "border-[var(--brand)] text-[var(--brand)]",
+                        )}
+                        disabled={isLoading || research.isResearchRunning}
+                        onClick={() => research.setActiveResearchBotUnitId(unitId)}
+                        title={`Edit ${unitName} logic`}
+                      >
+                        {unitName}
+                      </button>
+                      <select
+                        className={SELECT_CLASS}
+                        value={botLogic.presetId}
+                        disabled={isLoading || research.isResearchRunning}
+                        onChange={(event) => research.setResearchBotLogicPresetId(unitId, event.currentTarget.value)}
+                      >
+                        {RESEARCH_BOT_LOGIC_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="u-label w-12 text-right text-[9px]">
+                        {dirty ? "edited" : "applied"}
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -517,6 +550,14 @@ function ResearchDockPanel() {
             value={research.researchBotSource}
           />
         </Suspense>
+        <Button
+          type="button"
+          className="w-full"
+          disabled={isLoading || research.isResearchRunning}
+          onClick={() => research.setupResearch()}
+        >
+          {research.researchMode === "ready" ? "Ready" : "Setup"}
+        </Button>
       </div>
     </section>
   );
@@ -548,58 +589,9 @@ function ReplayDockPanel() {
 }
 
 function UnitsDockPanel() {
-  const { frame, isLoading, research } = useWorkbenchPanel();
-  const units = frame?.units ?? [];
+  const { frame } = useWorkbenchPanel();
   return (
     <section className={STATE_DOCK_PANEL_CLASS}>
-      <div className="mb-2 grid gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-sunken)] p-2">
-        <div className="u-label text-[10px]">Logic presets</div>
-        <div className="grid gap-1">
-          {units.length > 0 ? units.map((unit) => {
-            const botLogic = research.botLogicByUnit[unit.unitId] ?? { presetId: "empty", editorSource: "", appliedSource: "" };
-            const dirty = botLogic.editorSource !== botLogic.appliedSource;
-            return (
-              <div
-                key={unit.unitId}
-                className="grid grid-cols-[minmax(0,72px)_minmax(0,1fr)_auto] items-center gap-1.5"
-              >
-                <button
-                  type="button"
-                  className={cn(
-                    "min-w-0 truncate rounded-md border border-[var(--line-control)] bg-[var(--surface-well)] px-1.5 py-1 text-left text-[10px] font-bold text-[var(--text-soft)]",
-                    research.activeResearchBotUnitId === unit.unitId && "border-[var(--brand)] text-[var(--brand)]",
-                  )}
-                  disabled={isLoading || research.isResearchRunning}
-                  onClick={() => research.setActiveResearchBotUnitId(unit.unitId)}
-                  title={`Edit ${unit.name} logic`}
-                >
-                  {unit.name}
-                </button>
-                <select
-                  className={SELECT_CLASS}
-                  value={botLogic.presetId}
-                  disabled={isLoading || research.isResearchRunning}
-                  onChange={(event) => research.setResearchBotLogicPresetId(unit.unitId, event.currentTarget.value)}
-                >
-                  {RESEARCH_BOT_LOGIC_PRESETS.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.label}
-                    </option>
-                  ))}
-                </select>
-                <span className="u-label w-12 text-right text-[9px]">
-                  {dirty ? "edited" : "applied"}
-                </span>
-              </div>
-            );
-          }) : (
-            <div className="text-[10px] font-semibold text-[var(--text-faint)]">Setup a research scene to assign bot logic.</div>
-          )}
-        </div>
-        <div className="text-[10px] font-semibold leading-tight text-[var(--text-faint)]">
-          {RESEARCH_BOT_LOGIC_PRESETS.find((preset) => preset.id === research.researchBotLogicPresetId)?.description ?? "Use the current editor contents."}
-        </div>
-      </div>
       <Inspector frame={frame} />
     </section>
   );

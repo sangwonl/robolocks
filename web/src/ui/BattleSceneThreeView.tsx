@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
+import type { BattleFrame, FieldBoundsFrame, StaticObstacleFrame } from "../types/protocol";
 import { cn } from "../lib/utils.ts";
 import { createBattleScene, type BattleScene } from "./battleSceneThreeScene.ts";
 
@@ -11,22 +11,20 @@ type CameraMode = "top" | "iso";
 export type BattleSceneThreeViewProps = {
   frame: BattleFrame | null;
   obstacles: StaticObstacleFrame[];
+  field: FieldBoundsFrame;
 };
 
-const ARENA_CENTER = new THREE.Vector3(20, 0, 12);
-const ARENA_FIT_BOUNDS = {
-  minX: 0,
-  maxX: 40,
-  minY: 0,
-  maxY: 8,
-  minZ: 0,
-  maxZ: 24,
-};
+// Vertical extent (metres) folded into the camera fit so tall units stay framed.
+const FIELD_VERTICAL_M = 8;
 const FIT_PADDING = 1.12;
 const ISO_ELEVATION_DEG = 35.264;
 const ISO_POLAR_ANGLE = THREE.MathUtils.degToRad(90 - ISO_ELEVATION_DEG);
 
-export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewProps) {
+function fieldCenter(field: FieldBoundsFrame): THREE.Vector3 {
+  return new THREE.Vector3((field.min.x + field.max.x) / 2, 0, (field.min.y + field.max.y) / 2);
+}
+
+export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThreeViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
@@ -34,11 +32,13 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
   const sceneRef = useRef<THREE.Scene | null>(null);
   const battleSceneRef = useRef<BattleScene | null>(null);
   const frameRef = useRef<BattleFrame | null>(frame);
+  const fieldRef = useRef<FieldBoundsFrame>(field);
   const aspectRef = useRef(1);
   const cameraModeRef = useRef<CameraMode>("iso");
   const [cameraMode, setCameraMode] = useState<CameraMode>("iso");
 
   frameRef.current = frame;
+  fieldRef.current = field;
 
   useEffect(() => {
     cameraModeRef.current = cameraMode;
@@ -85,7 +85,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
       ONE: THREE.TOUCH.ROTATE,
       TWO: THREE.TOUCH.DOLLY_PAN,
     };
-    applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current);
+    applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current, fieldRef.current);
     controls.addEventListener("change", () => {
       renderCurrentScene();
     });
@@ -96,7 +96,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
       const width = Math.max(1, host.clientWidth);
       const height = Math.max(1, host.clientHeight);
       aspectRef.current = width / height;
-      applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current);
+      applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current, fieldRef.current);
       renderer.setSize(width, height, false);
       renderCurrentScene();
     };
@@ -125,25 +125,27 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
       return;
     }
     cameraModeRef.current = cameraMode;
-    applyCameraMode(camera, controls, cameraMode, aspectRef.current);
+    applyCameraMode(camera, controls, cameraMode, aspectRef.current, fieldRef.current);
     if (renderer && scene) {
       battleSceneRef.current?.faceCamera(camera);
       renderer.render(scene, camera);
     }
   }, [cameraMode]);
 
-  // Scene lifetime is tied to the loaded replay (its obstacle set). Statics build
-  // once here; frame stepping never recreates the scene.
+  // Scene lifetime is tied to the loaded replay (its obstacle set and play field).
+  // Statics — ground, grid, boundary — build once here from the field bounds;
+  // frame stepping never recreates the scene. The camera is refit to the field so
+  // a larger/smaller arena stays framed.
   useEffect(() => {
-    const battleScene = createBattleScene({ obstacles });
+    const battleScene = createBattleScene({ obstacles, field });
     battleSceneRef.current = battleScene;
     sceneRef.current = battleScene.scene;
     battleScene.sync(frameRef.current);
     const renderer = rendererRef.current;
     const camera = cameraRef.current;
     const controls = controlsRef.current;
-    if (renderer && camera) {
-      controls?.update();
+    if (renderer && camera && controls) {
+      applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current, field);
       battleScene.faceCamera(camera);
       renderer.render(battleScene.scene, camera);
     }
@@ -152,7 +154,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
       battleSceneRef.current = null;
       sceneRef.current = null;
     };
-  }, [obstacles]);
+  }, [obstacles, field]);
 
   // Frame stepping only updates the persistent rigs in place — no allocation of a
   // new scene, no disposal.
@@ -208,8 +210,10 @@ function applyCameraMode(
   controls: OrbitControls,
   mode: CameraMode,
   aspect: number,
+  field: FieldBoundsFrame,
 ): void {
-  controls.target.copy(ARENA_CENTER);
+  const center = fieldCenter(field);
+  controls.target.copy(center);
 
   if (mode === "iso") {
     const distance = 64;
@@ -217,36 +221,36 @@ function applyCameraMode(
     const height = distance * Math.sin(THREE.MathUtils.degToRad(ISO_ELEVATION_DEG));
     const diagonal = horizontal / Math.sqrt(2);
     camera.up.set(0, 1, 0);
-    camera.position.set(ARENA_CENTER.x + diagonal, ARENA_CENTER.y + height, ARENA_CENTER.z + diagonal);
+    camera.position.set(center.x + diagonal, center.y + height, center.z + diagonal);
     controls.enableRotate = true;
     controls.minPolarAngle = ISO_POLAR_ANGLE;
     controls.maxPolarAngle = ISO_POLAR_ANGLE;
   } else {
     camera.up.set(0, 0, -1);
-    camera.position.set(ARENA_CENTER.x, ARENA_CENTER.y + 58, ARENA_CENTER.z);
+    camera.position.set(center.x, center.y + 58, center.z);
     controls.enableRotate = false;
     controls.minPolarAngle = 0.02;
     controls.maxPolarAngle = 0.02;
   }
 
-  camera.lookAt(ARENA_CENTER);
+  camera.lookAt(center);
   camera.updateMatrixWorld(true);
-  fitCameraToArena(camera, aspect);
+  fitCameraToArena(camera, aspect, field);
   camera.updateProjectionMatrix();
   controls.update();
 }
 
-function fitCameraToArena(camera: THREE.OrthographicCamera, aspect: number): void {
+function fitCameraToArena(camera: THREE.OrthographicCamera, aspect: number, field: FieldBoundsFrame): void {
   const inverseCameraMatrix = camera.matrixWorldInverse;
   const corners = [
-    new THREE.Vector3(ARENA_FIT_BOUNDS.minX, ARENA_FIT_BOUNDS.minY, ARENA_FIT_BOUNDS.minZ),
-    new THREE.Vector3(ARENA_FIT_BOUNDS.minX, ARENA_FIT_BOUNDS.minY, ARENA_FIT_BOUNDS.maxZ),
-    new THREE.Vector3(ARENA_FIT_BOUNDS.maxX, ARENA_FIT_BOUNDS.minY, ARENA_FIT_BOUNDS.minZ),
-    new THREE.Vector3(ARENA_FIT_BOUNDS.maxX, ARENA_FIT_BOUNDS.minY, ARENA_FIT_BOUNDS.maxZ),
-    new THREE.Vector3(ARENA_FIT_BOUNDS.minX, ARENA_FIT_BOUNDS.maxY, ARENA_FIT_BOUNDS.minZ),
-    new THREE.Vector3(ARENA_FIT_BOUNDS.minX, ARENA_FIT_BOUNDS.maxY, ARENA_FIT_BOUNDS.maxZ),
-    new THREE.Vector3(ARENA_FIT_BOUNDS.maxX, ARENA_FIT_BOUNDS.maxY, ARENA_FIT_BOUNDS.minZ),
-    new THREE.Vector3(ARENA_FIT_BOUNDS.maxX, ARENA_FIT_BOUNDS.maxY, ARENA_FIT_BOUNDS.maxZ),
+    new THREE.Vector3(field.min.x, 0, field.min.y),
+    new THREE.Vector3(field.min.x, 0, field.max.y),
+    new THREE.Vector3(field.max.x, 0, field.min.y),
+    new THREE.Vector3(field.max.x, 0, field.max.y),
+    new THREE.Vector3(field.min.x, FIELD_VERTICAL_M, field.min.y),
+    new THREE.Vector3(field.min.x, FIELD_VERTICAL_M, field.max.y),
+    new THREE.Vector3(field.max.x, FIELD_VERTICAL_M, field.min.y),
+    new THREE.Vector3(field.max.x, FIELD_VERTICAL_M, field.max.y),
   ];
 
   let minX = Number.POSITIVE_INFINITY;

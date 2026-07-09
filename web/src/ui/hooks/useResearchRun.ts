@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { BattleReplay } from "../../replay/replay";
 import {
   DEFAULT_RESEARCH_BOT_SOURCE,
+  NO_OP_BOT_SOURCE,
   RESEARCH_BOT_LOGIC_PRESETS,
   RESEARCH_BATTLE_PRESETS,
   RESEARCH_RULE_PRESETS,
@@ -115,8 +116,11 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
       battlePresetId: researchBattlePresetId,
       rulePresetId: researchRulePresetId,
       unitPresetId: researchUnitPresetId,
+      // The tick count is the deadline (safety cap), not a fixed run length: the
+      // engine settles on score at this tick if the rule has not resolved first.
+      maxTicks: researchTickCount,
     }),
-    [researchBattlePresetId, researchRulePresetId, researchUnitPresetId],
+    [researchBattlePresetId, researchRulePresetId, researchUnitPresetId, researchTickCount],
   );
   const activeBotLogic = botLogicByUnit[activeResearchBotUnitId] ?? emptyBotLogicState();
   const researchBotLogicPresetId = activeBotLogic.presetId;
@@ -169,13 +173,6 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
   function setupResearch(): void {
     deps.pause();
     setBotLogs([]);
-    if (Object.values(botLogicByUnit).every((state) => !state.editorSource.trim() && !state.appliedSource.trim())) {
-      setBotLogicByUnit({
-        1: stateFromPresetId("advance_fire"),
-        2: stateFromPresetId("hold_line"),
-      });
-      setActiveResearchBotUnitId(1);
-    }
     setResearchMode("ready");
     deps.applyReplay(createResearchSetupReplay(researchBattleConfigJson), false);
     deps.setStatus("Research ready");
@@ -275,7 +272,7 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     };
 
     worker.postMessage(runRequest({
-      botSource: appliedBotSource || researchBotSource || DEFAULT_RESEARCH_BOT_SOURCE,
+      botSource: appliedBotSource || researchBotSource || (activeBotLogic.presetId === "empty" ? NO_OP_BOT_SOURCE : DEFAULT_RESEARCH_BOT_SOURCE),
       botSourcesByUnit: botSourcesByUnit(botLogicByUnit),
       battleConfigJson: researchBattleConfigJson,
       tickCount: researchTickCount,
@@ -336,13 +333,13 @@ function readStoredResearchState(): NormalizedStoredResearchState {
     battlePresetId: RESEARCH_BATTLE_PRESETS[0]?.id ?? "",
     rulePresetId: RESEARCH_RULE_PRESETS[0]?.id ?? "",
     unitPresetId: RESEARCH_UNIT_PRESETS[0]?.id ?? "",
-    botLogicPresetId: "empty",
-    editorBotSource: "",
-    appliedBotSource: "",
+    botLogicPresetId: "advance_fire",
+    editorBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "advance_fire")?.source ?? "",
+    appliedBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "advance_fire")?.source ?? "",
     activeBotUnitId: 1,
     botLogicByUnit: {
-      1: emptyBotLogicState(),
-      2: emptyBotLogicState(),
+      1: stateFromPresetId("advance_fire"),
+      2: stateFromPresetId("hold_line"),
     },
     tickCount: 180,
     mode: "empty",
@@ -405,14 +402,7 @@ function botLogicByUnitFromStored(
       return Object.fromEntries(entries);
     }
   }
-  return {
-    ...fallback.botLogicByUnit,
-    1: {
-      presetId: fallback.botLogicPresetId,
-      editorSource: fallback.editorBotSource,
-      appliedSource: fallback.appliedBotSource,
-    },
-  };
+  return { ...fallback.botLogicByUnit };
 }
 
 function botLogicStateFromUnknown(value: unknown): ResearchBotLogicState {
@@ -454,9 +444,18 @@ function stateFromPreset(preset: (typeof RESEARCH_BOT_LOGIC_PRESETS)[number] | u
 
 function botSourcesByUnit(botLogicByUnit: Record<number, ResearchBotLogicState>): Record<number, string> {
   return Object.fromEntries(
-    Object.entries(botLogicByUnit).map(([unitId, state]) => [
-      Number(unitId),
-      state.appliedSource || state.editorSource || DEFAULT_RESEARCH_BOT_SOURCE,
-    ]),
+    Object.entries(botLogicByUnit).map(([unitId, state]) => {
+      const source = state.appliedSource || state.editorSource;
+      if (source) {
+        return [Number(unitId), source];
+      }
+      // When the user explicitly selects the "empty" preset, both sources are ""
+      // and that is intentional — substitute a no-op bot so the simulation runs
+      // with a stationary unit instead of crashing on an unregistered bot.
+      if (state.presetId === "empty") {
+        return [Number(unitId), NO_OP_BOT_SOURCE];
+      }
+      return [Number(unitId), DEFAULT_RESEARCH_BOT_SOURCE];
+    }),
   );
 }

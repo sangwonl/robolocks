@@ -332,6 +332,10 @@ nlohmann::ordered_json snapshot_to_json(const WorldSnapshot& snapshot) {
 
   return nlohmann::ordered_json{
     {"tick", snapshot.tick},
+    {"field", {
+      {"min", {{"x", snapshot.bounds.min.x}, {"y", snapshot.bounds.min.y}}},
+      {"max", {{"x", snapshot.bounds.max.x}, {"y", snapshot.bounds.max.y}}},
+    }},
     {"units", std::move(units)},
     {"projectiles", std::move(projectiles)},
     {"events", nlohmann::ordered_json::array()},

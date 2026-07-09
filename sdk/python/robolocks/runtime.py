@@ -12,10 +12,10 @@ from .state import BattleState
 OnTick = Callable[[BattleState], Iterable[OrderLike]]
 LifecycleHook = Callable[[Any], None]
 
-_registered_on_tick: OnTick | None = None
-_registered_on_start: LifecycleHook | None = None
-_registered_on_end: LifecycleHook | None = None
-_started = False
+_registered_on_tick: dict[int, OnTick] = {}
+_registered_on_start: dict[int, LifecycleHook | None] = {}
+_registered_on_end: dict[int, LifecycleHook | None] = {}
+_started: dict[int, bool] = {}
 
 
 def _is_browser_runtime() -> bool:
@@ -33,31 +33,41 @@ def run_bot(
     _run_stdio_bot(on_tick, on_start, on_end)
 
 
-def call_registered_bot(observation_json: str) -> str:
-    global _started
-    if _registered_on_tick is None:
-        raise RuntimeError("bot did not call run_bot")
+def call_registered_bot(bot_id: int, observation_json: str) -> str:
+    on_tick = _registered_on_tick.get(bot_id)
+    if on_tick is None:
+        raise RuntimeError(f"bot {bot_id} did not call run_bot")
     payload = json.loads(observation_json)
-    response, _started = _handle_payload(payload, _registered_on_tick, _registered_on_start, _started)
+    response, was_started = _handle_payload(
+        payload, on_tick,
+        _registered_on_start.get(bot_id),
+        _started.get(bot_id, False),
+    )
+    _started[bot_id] = was_started
     return json.dumps(response if response is not None else {"orders": []})
 
 
-def clear_registered_bot() -> None:
-    global _registered_on_tick, _registered_on_start, _registered_on_end, _started
-    if _registered_on_end is not None:
-        _registered_on_end(None)
-    _registered_on_tick = None
-    _registered_on_start = None
-    _registered_on_end = None
-    _started = False
+def clear_registered_bot(bot_id: int) -> None:
+    on_end = _registered_on_end.pop(bot_id, None)
+    if on_end is not None:
+        on_end(None)
+    _registered_on_tick.pop(bot_id, None)
+    _registered_on_start.pop(bot_id, None)
+    _registered_on_end.pop(bot_id, None)
+    _started.pop(bot_id, None)
 
 
 def _register_bot(on_tick: OnTick, on_start: LifecycleHook | None, on_end: LifecycleHook | None) -> None:
-    global _registered_on_tick, _registered_on_start, _registered_on_end, _started
-    _registered_on_tick = on_tick
-    _registered_on_start = on_start
-    _registered_on_end = on_end
-    _started = False
+    bot_id = _resolve_bot_id()
+    _registered_on_tick[bot_id] = on_tick
+    _registered_on_start[bot_id] = on_start
+    _registered_on_end[bot_id] = on_end
+    _started[bot_id] = False
+
+
+def _resolve_bot_id() -> int:
+    import builtins
+    return getattr(builtins, "__robolocks_bot_id", 1)
 
 
 def _run_stdio_bot(on_tick: OnTick, on_start: LifecycleHook | None, on_end: LifecycleHook | None) -> None:

@@ -45,6 +45,28 @@ function makeFrame(units, extra = {}) {
   };
 }
 
+test("battle scene builds a visible boundary and ground sized from the play field", () => {
+  const field = { min: { x: -12, y: -8 }, max: { x: 52, y: 32 } };
+  const battle = createBattleScene({ obstacles: [], field });
+
+  const boundary = battle.scene.getObjectByName("field-boundary");
+  assert.ok(boundary, "boundary group should exist");
+  assert.deepEqual(boundary.userData, { minX: -12, minY: -8, maxX: 52, maxY: 32 });
+  // Four rails framing the field.
+  assert.ok(boundary.getObjectByName("boundary-north"));
+  assert.ok(boundary.getObjectByName("boundary-south"));
+  assert.ok(boundary.getObjectByName("boundary-west"));
+  assert.ok(boundary.getObjectByName("boundary-east"));
+
+  // Ground plane is centered on the field center (20, 12) rather than a fixed spot.
+  const plane = battle.scene.getObjectByName("terrain-plane");
+  assert.ok(plane);
+  assert.equal(plane.position.x, 20);
+  assert.equal(plane.position.z, 12);
+
+  battle.dispose();
+});
+
 test("battle scene renders unit sensor coverage when no scan action exists", () => {
   const battle = createBattleScene({ obstacles: [] });
   battle.sync(makeFrame([makeUnit()]));

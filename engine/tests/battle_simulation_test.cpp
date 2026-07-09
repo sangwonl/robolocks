@@ -453,6 +453,49 @@ TEST_CASE("battle_simulation resolves unit collisions using body mass and emits 
   REQUIRE(result.events[1].code == "unit_collision");
 }
 
+TEST_CASE("battle_simulation separates box hulls by the full track footprint, not the bare hull") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  const auto box_unit = [](robolocks::UnitId id, const char* name, robolocks::Vec2 position) {
+    return robolocks::UnitSpec{
+      .unit_id = id,
+      .name = name,
+      .transform = robolocks::TransformSpec{.position = position, .hull_heading_deg = 0.0},
+      .body = robolocks::BodySpec{
+        .shape = robolocks::BodyShapeSpec{
+          .type = robolocks::BodyShapeType::Box,
+          .radius_m = 1.2,
+          .length_m = 5.6,
+          .width_m = 2.8,
+        },
+        .mass_kg = 30000.0,
+      },
+    };
+  };
+  // Centers 3.0m apart across the hull width: the bare 2.8m hull would not
+  // overlap, but the rendered tracks (footprint ~3.63m wide) do, so they must
+  // still collide and push apart to the full track footprint.
+  config.units = {
+    box_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{20.0, 10.5}),
+    box_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{20.0, 13.5}),
+  };
+
+  robolocks::BattleSimulation battle_simulation(config);
+  const auto result = battle_simulation.step({});
+
+  // The bare 2.8m hull would leave the two 3.0m-apart units untouched; the fix
+  // makes them collide on their track footprint and push out to at least the
+  // inflated width (~3.63m). The exact value is backend-dependent (the legacy 2D
+  // solver lands at the footprint edge, Jolt adds a little separation margin),
+  // so assert the footprint floor rather than a single value.
+  const double dy = result.snapshot.units[1].position.y - result.snapshot.units[0].position.y;
+  REQUIRE(dy >= 3.6);
+  REQUIRE(dy < 4.5);
+  REQUIRE(result.events.size() == 2);
+  REQUIRE(result.events[0].code == "unit_collision");
+  REQUIRE(result.events[1].code == "unit_collision");
+}
+
 TEST_CASE("battle_simulation separates unit footprints from circular obstacles") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;
@@ -684,6 +727,41 @@ TEST_CASE("battle_simulation uses mobility turret and armor components from unit
   REQUIRE(result.snapshot.units[0].armor_integrity == Catch::Approx(87.5));
 }
 
+TEST_CASE("battle_simulation resolves a fire solution against a point-blank target inside the muzzle offset") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
+    // Target sits 3m ahead, closer than the 3.6m muzzle offset, so the muzzle
+    // tip is past the target. Aiming from the muzzle would flip the bearing and
+    // reject the shot; aiming from the turret pivot must still find the solution.
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{3.0, 0.0}, 0.0, 100.0, 180.0, 180.0),
+  };
+  config.units[0].weapon.muzzle_offset_m = robolocks::Vec3{3.6, 0.0, 1.65};
+
+  robolocks::BattleSimulation battle_simulation(config);
+
+  const auto result = battle_simulation.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{3.0, 0.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+
+  REQUIRE(result.events.size() >= 1);
+  REQUIRE(result.events[0].unit_id == robolocks::UnitId{1});
+  REQUIRE(result.events[0].code == "weapon_fired");
+}
+
 TEST_CASE("battle_simulation applies FireIfSolution through weapon damage and reload") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;
@@ -817,6 +895,66 @@ TEST_CASE("battle_simulation ends kill-limit deathmatch when a team reaches the 
   REQUIRE(result.rule_state.outcome.finished);
   REQUIRE(result.rule_state.outcome.reason == "kill_limit");
   REQUIRE(result.rule_state.outcome.winner_team_id == 1);
+}
+
+TEST_CASE("battle_simulation settles on the score leader when the tick limit is reached") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.tick_limit = 3;
+  config.rule.mode = robolocks::BattleRuleMode::KillLimitDeathmatch;
+  config.rule.team_mode = robolocks::BattleTeamMode::Team;
+  config.rule.kill_limit = 5;  // high enough that the rule itself never resolves
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{10.0, 0.0}, 0.0, 20.0, 180.0, 180.0),
+  };
+  config.units[0].team_id = 1;
+  config.units[0].weapon.damage = 25.0;
+  config.units[1].team_id = 2;
+
+  robolocks::BattleSimulation battle_simulation(config);
+  const robolocks::UnitOrders fire{
+    robolocks::UnitId{1},
+    {
+      robolocks::Order{.kind = robolocks::OrderKind::AimAt, .payload = robolocks::AimAtOrder{robolocks::Vec2{10.0, 0.0}}},
+      robolocks::Order{.kind = robolocks::OrderKind::FireIfSolution, .payload = robolocks::FireIfSolutionOrder{0.6}},
+    },
+  };
+
+  const auto killed = battle_simulation.step({fire});
+  REQUIRE(killed.rule_state.scores[0].kills == 1);
+  // kill_limit (5) not reached and tick 1 < tick_limit (3): not decided yet.
+  REQUIRE(killed.rule_state.outcome.finished == false);
+
+  battle_simulation.step({});
+  const auto deadline = battle_simulation.step({});  // tick 3 == tick_limit
+  REQUIRE(deadline.rule_state.outcome.finished);
+  REQUIRE(deadline.rule_state.outcome.reason == "tick_limit");
+  REQUIRE(deadline.rule_state.outcome.winner_team_id == 1);
+}
+
+TEST_CASE("battle_simulation records a draw when the tick limit is reached with no score lead") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.tick_limit = 2;
+  config.rule.mode = robolocks::BattleRuleMode::KillLimitDeathmatch;
+  config.rule.team_mode = robolocks::BattleTeamMode::Team;
+  config.rule.kill_limit = 5;
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{10.0, 0.0}, 0.0, 100.0, 180.0, 180.0),
+  };
+  config.units[0].team_id = 1;
+  config.units[1].team_id = 2;
+
+  robolocks::BattleSimulation battle_simulation(config);
+  battle_simulation.step({});
+  const auto deadline = battle_simulation.step({});  // tick 2 == tick_limit, nobody scored
+
+  REQUIRE(deadline.rule_state.outcome.finished);
+  REQUIRE(deadline.rule_state.outcome.reason == "tick_limit");
+  REQUIRE(deadline.rule_state.outcome.winner_team_id == 0);
+  REQUIRE(deadline.rule_state.outcome.winner_unit_id == robolocks::UnitId{0});
 }
 
 TEST_CASE("battle_simulation respawns destroyed units after cooldown without ending deathmatch") {

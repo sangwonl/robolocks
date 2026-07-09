@@ -457,6 +457,24 @@ const nlohmann::json& required_units_array(const nlohmann::json& data) {
   return data.at("units");
 }
 
+// Optional play-field bounds. When omitted the engine keeps its built-in default
+// (see BattleBounds). Shape: {"field": {"min": {x, y}, "max": {x, y}}}.
+std::optional<BattleBounds> optional_field_bounds(const nlohmann::json& data) {
+  if (!data.contains("field")) {
+    return std::nullopt;
+  }
+  const auto& field = data.at("field");
+  if (!field.is_object()) {
+    throw std::runtime_error("Expected object field: field");
+  }
+  const Vec2 min = required_vec2(field, "min", "field.min");
+  const Vec2 max = required_vec2(field, "max", "field.max");
+  if (max.x <= min.x || max.y <= min.y) {
+    throw std::runtime_error("field.max must be greater than field.min on both axes");
+  }
+  return BattleBounds{.min = min, .max = max};
+}
+
 }  // namespace
 
 LoadedBattle load_battle_from_json(const nlohmann::json& data, const std::filesystem::path& base_dir) {
@@ -470,6 +488,9 @@ LoadedBattle load_battle_from_json(const nlohmann::json& data, const std::filesy
   }
   loaded.config.tick_dt_sec = 1.0 / tick_rate;
   loaded.config.tick_limit = required_u32(data, "tickLimit");
+  if (const auto field_bounds = optional_field_bounds(data)) {
+    loaded.config.bounds = *field_bounds;
+  }
   loaded.config.obstacles = optional_obstacles(data);
   loaded.config.rule = optional_rule(data);
   const auto module_catalog = load_module_catalog(base_dir, data);

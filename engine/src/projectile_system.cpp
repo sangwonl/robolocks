@@ -373,7 +373,11 @@ std::vector<Event> ProjectileSystem::resolve_weapon_fire(
       if (target_distance > unit.weapon.range_m) {
         continue;
       }
-      const double target_heading = angle_to(muzzle.position, target.transform.position);
+      // Aim error is measured from the turret pivot (the unit center), not the
+      // muzzle tip: the turret rotates about the pivot, and for a target closer
+      // than the muzzle offset the muzzle sits *past* the target, which would
+      // flip the bearing ~180 deg and spuriously reject a point-blank solution.
+      const double target_heading = angle_to(unit.transform.position, target.transform.position);
       const double aim_error = std::abs(shortest_angle_delta_deg(unit.turret.heading_deg, target_heading));
       const double range_hit_chance = ballistic_range_hit_chance(
         unit.weapon,
@@ -403,7 +407,9 @@ std::vector<Event> ProjectileSystem::resolve_weapon_fire(
 
     auto& target = units[*target_index];
     const MuzzleTransform muzzle = muzzle_transform_for_unit(unit);
-    const double target_heading = angle_to(muzzle.position, target.transform.position);
+    // Aim error is measured from the turret pivot (see the selection loop above)
+    // so a point-blank target inside the muzzle offset still resolves a solution.
+    const double target_heading = angle_to(unit.transform.position, target.transform.position);
     const double aim_error = std::abs(shortest_angle_delta_deg(unit.turret.heading_deg, target_heading));
     const double hit_chance = hit_chance_for_error(aim_error, unit.weapon.aim_tolerance_deg)
       * ballistic_range_hit_chance(

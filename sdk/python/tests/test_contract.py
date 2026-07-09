@@ -18,6 +18,7 @@ import unittest
 from pathlib import Path
 
 from robolocks import BattleState
+from robolocks.state import ContactSet
 
 _GOLDEN_PATH = (
     Path(__file__).resolve().parents[3] / "fixtures" / "contracts" / "observation.golden.json"
@@ -161,6 +162,44 @@ class ObservationGoldenContractTest(unittest.TestCase):
             self.assertEqual(obstacle.blocks_movement, obstacle_json["blocksMovement"])
             self.assertEqual(obstacle.blocks_line_of_sight, obstacle_json["blocksLineOfSight"])
             self.assertNotEqual(obstacle.id, "")
+
+
+class ClosestEnemyWreckTest(unittest.TestCase):
+    """Destroyed enemies linger as wrecks and keep showing up as contacts.
+    closest_enemy() must skip them by default so a fire loop does not lock onto
+    a corpse and stall on fire_no_solution."""
+
+    @staticmethod
+    def _enemy(unit_id: int, armor: float, x: float) -> dict:
+        return {
+            "unitId": unit_id,
+            "teamId": 2,
+            "isEnemy": True,
+            "name": f"Enemy{unit_id}",
+            "position": {"x": x, "y": 0.0},
+            "hullHeadingDegrees": 0.0,
+            "turretHeadingDegrees": 0.0,
+            "armorIntegrity": armor,
+            "weaponCooldownTicks": 0,
+        }
+
+    def test_closest_enemy_skips_wrecks_by_default(self) -> None:
+        # Nearest enemy is a wreck (armor 0); a live enemy is farther out.
+        contacts = ContactSet.from_json({"units": [self._enemy(2, 0.0, 5.0), self._enemy(3, 80.0, 20.0)]})
+
+        wreck, alive = contacts.units[0], contacts.units[1]
+        self.assertFalse(wreck.alive)
+        self.assertTrue(alive.alive)
+
+        # Default: skip the wreck, return the live enemy.
+        self.assertIs(contacts.closest_enemy(), alive)
+        # Opt-in: nearest enemy regardless of armor.
+        self.assertIs(contacts.closest_enemy(include_wrecks=True), wreck)
+
+    def test_closest_enemy_returns_none_when_only_wrecks_remain(self) -> None:
+        contacts = ContactSet.from_json({"units": [self._enemy(2, 0.0, 5.0)]})
+        self.assertIsNone(contacts.closest_enemy())
+        self.assertIsNotNone(contacts.closest_enemy(include_wrecks=True))
 
 
 if __name__ == "__main__":

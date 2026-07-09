@@ -193,8 +193,14 @@ export type ProjectileFrame = {
   heightMeters: number;
 };
 
+export type FieldBoundsFrame = {
+  min: Vec2;
+  max: Vec2;
+};
+
 export type BattleFrame = {
   tick: number;
+  field: FieldBoundsFrame;
   units: UnitFrame[];
   projectiles: ProjectileFrame[];
   events: BattleEvent[];
