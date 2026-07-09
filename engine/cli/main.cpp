@@ -73,34 +73,6 @@ bool parse_options(int argc, char** argv, CliOptions& options) {
   return options.battle_path.has_value();
 }
 
-// Assembles a full per-tick frame from the shared serializer, layering on the
-// step-only data (events, actions, rule state) that WorldSnapshot does not carry.
-nlohmann::ordered_json frame_json(
-  const robolocks::WorldSnapshot& snapshot,
-  const std::vector<robolocks::Event>& events = {},
-  const std::vector<robolocks::UnitOrders>& orders_by_unit = {},
-  const robolocks::BattleRuleState* rule_state = nullptr
-) {
-  auto frame = robolocks::snapshot_to_json(snapshot);
-
-  auto events_json = nlohmann::ordered_json::array();
-  for (const auto& event : events) {
-    events_json.push_back(robolocks::event_to_json(event));
-  }
-  frame["events"] = std::move(events_json);
-
-  auto actions_json = nlohmann::ordered_json::array();
-  for (const auto& unit_orders : orders_by_unit) {
-    for (const auto& order : unit_orders.orders) {
-      actions_json.push_back(robolocks::action_to_json(unit_orders.unit_id, order));
-    }
-  }
-  frame["actions"] = std::move(actions_json);
-
-  frame["ruleState"] = robolocks::rule_state_to_json(rule_state);
-  return frame;
-}
-
 void print_stream_frame(std::string_view type, const robolocks::WorldSnapshot& snapshot, std::ostream& out) {
   const nlohmann::ordered_json message{
     {"type", type},
@@ -141,10 +113,10 @@ void write_replay_json(
   }
 
   auto frames = nlohmann::ordered_json::array();
-  frames.push_back(frame_json(runtime.snapshot()));
+  frames.push_back(robolocks::frame_to_json(runtime.snapshot()));
   for (robolocks::Tick tick = 0; tick < ticks; tick += 1) {
     const auto result = runtime.step_once();
-    frames.push_back(frame_json(
+    frames.push_back(robolocks::frame_to_json(
       result.snapshot,
       result.events,
       result.orders_by_unit,
@@ -187,7 +159,7 @@ int main(int argc, char** argv) {
       print_snapshot_stream(runtime, options.ticks, std::cout);
     } else {
       const auto snapshot = runtime.run_ticks(options.ticks);
-      std::cout << frame_json(snapshot).dump() << "\n";
+      std::cout << robolocks::frame_to_json(snapshot).dump() << "\n";
     }
   } catch (const std::exception& error) {
     std::cerr << error.what() << "\n";

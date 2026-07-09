@@ -149,43 +149,14 @@ if(EMSCRIPTEN)
     _malloc
     _free
     _robolocks_engine_version
+    _robolocks_last_error
     _robolocks_battle_runner_create_from_json
     _robolocks_battle_runner_set_json_bot_callback
     _robolocks_battle_runner_destroy
     _robolocks_battle_runner_step
     _robolocks_battle_runner_run
     _robolocks_battle_runner_tick
-    _robolocks_battle_runner_unit_count
-    _robolocks_battle_runner_unit_id
-    _robolocks_battle_runner_unit_x
-    _robolocks_battle_runner_unit_y
-    _robolocks_battle_runner_unit_hull_heading
-    _robolocks_battle_runner_unit_turret_heading
-    _robolocks_battle_runner_unit_armor
-    _robolocks_battle_runner_unit_weapon_cooldown
-    _robolocks_battle_runner_unit_body_shape_type
-    _robolocks_battle_runner_unit_body_radius
-    _robolocks_battle_runner_unit_body_length
-    _robolocks_battle_runner_unit_body_width
-    _robolocks_battle_runner_unit_modules_json
-    _robolocks_battle_runner_unit_mobility_intent_active
-    _robolocks_battle_runner_unit_mobility_intent_target_x
-    _robolocks_battle_runner_unit_mobility_intent_target_y
-    _robolocks_battle_runner_unit_mobility_intent_remaining
-    _robolocks_battle_runner_unit_mobility_intent_age
-    _robolocks_battle_runner_unit_turret_intent_active
-    _robolocks_battle_runner_unit_turret_intent_target_x
-    _robolocks_battle_runner_unit_turret_intent_target_y
-    _robolocks_battle_runner_unit_turret_intent_error
-    _robolocks_battle_runner_unit_turret_intent_age
-    _robolocks_battle_runner_unit_hull_intent_active
-    _robolocks_battle_runner_unit_hull_intent_target_x
-    _robolocks_battle_runner_unit_hull_intent_target_y
-    _robolocks_battle_runner_unit_hull_intent_error
-    _robolocks_battle_runner_unit_hull_intent_age
-    _robolocks_battle_runner_unit_weapon_intent_active
-    _robolocks_battle_runner_unit_weapon_intent_min_hit_chance
-    _robolocks_battle_runner_unit_weapon_intent_age
+    _robolocks_battle_runner_frame_json
     _robolocks_battle_runner_obstacle_count
     _robolocks_battle_runner_obstacle_id
     _robolocks_battle_runner_obstacle_x
@@ -193,71 +164,6 @@ if(EMSCRIPTEN)
     _robolocks_battle_runner_obstacle_radius
     _robolocks_battle_runner_obstacle_blocks_movement
     _robolocks_battle_runner_obstacle_blocks_line_of_sight
-    _robolocks_battle_runner_event_count
-    _robolocks_battle_runner_event_tick
-    _robolocks_battle_runner_event_unit_id
-    _robolocks_battle_runner_event_code
-    _robolocks_battle_runner_event_message
-    _robolocks_battle_runner_event_projectile_id
-    _robolocks_battle_runner_event_source_unit_id
-    _robolocks_battle_runner_event_target_unit_id
-    _robolocks_battle_runner_event_source_team_id
-    _robolocks_battle_runner_event_target_team_id
-    _robolocks_battle_runner_event_damage_type
-    _robolocks_battle_runner_event_armor_facing
-    _robolocks_battle_runner_event_damage
-    _robolocks_battle_runner_event_remaining_armor
-    _robolocks_battle_runner_event_penetration_millimeters
-    _robolocks_battle_runner_event_armor_millimeters
-    _robolocks_battle_runner_event_impact_distance_meters
-    _robolocks_battle_runner_event_blast_radius_meters
-    _robolocks_battle_runner_projectile_count
-    _robolocks_battle_runner_projectile_id
-    _robolocks_battle_runner_projectile_owner_unit_id
-    _robolocks_battle_runner_projectile_previous_x
-    _robolocks_battle_runner_projectile_previous_y
-    _robolocks_battle_runner_projectile_x
-    _robolocks_battle_runner_projectile_y
-    _robolocks_battle_runner_projectile_radius
-    _robolocks_battle_runner_projectile_previous_height
-    _robolocks_battle_runner_projectile_height
-    _robolocks_battle_runner_action_count
-    _robolocks_battle_runner_action_unit_id
-    _robolocks_battle_runner_action_type
-    _robolocks_battle_runner_action_channel
-    _robolocks_battle_runner_action_has_position
-    _robolocks_battle_runner_action_position_x
-    _robolocks_battle_runner_action_position_y
-    _robolocks_battle_runner_action_has_target
-    _robolocks_battle_runner_action_target_x
-    _robolocks_battle_runner_action_target_y
-    _robolocks_battle_runner_action_has_min_hit_chance
-    _robolocks_battle_runner_action_min_hit_chance
-    _robolocks_battle_runner_action_has_scan_arc
-    _robolocks_battle_runner_action_direction
-    _robolocks_battle_runner_action_width
-    _robolocks_battle_runner_action_has_range
-    _robolocks_battle_runner_action_range
-    _robolocks_battle_runner_score_count
-    _robolocks_battle_runner_score_unit_id
-    _robolocks_battle_runner_score_team_id
-    _robolocks_battle_runner_score_kills
-    _robolocks_battle_runner_score_deaths
-    _robolocks_battle_runner_score_damage_dealt
-    _robolocks_battle_runner_capture_zone_count
-    _robolocks_battle_runner_capture_zone_id
-    _robolocks_battle_runner_capture_zone_x
-    _robolocks_battle_runner_capture_zone_y
-    _robolocks_battle_runner_capture_zone_radius
-    _robolocks_battle_runner_capture_zone_hold_ticks_required
-    _robolocks_battle_runner_capture_zone_held_ticks
-    _robolocks_battle_runner_capture_zone_owner_unit_id
-    _robolocks_battle_runner_capture_zone_owner_team_id
-    _robolocks_battle_runner_capture_zone_contested
-    _robolocks_battle_runner_outcome_finished
-    _robolocks_battle_runner_outcome_reason
-    _robolocks_battle_runner_outcome_winner_unit_id
-    _robolocks_battle_runner_outcome_winner_team_id
   )
   list(JOIN ROBOLOCKS_WASM_EXPORTED_FUNCTIONS "','" ROBOLOCKS_WASM_EXPORTED_FUNCTIONS_JOINED)
 

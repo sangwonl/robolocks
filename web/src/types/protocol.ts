@@ -23,6 +23,7 @@ export type BodyShapeFrame =
 
 export type UnitFrame = {
   unitId: number;
+  teamId: number;
   name: string;
   position: Vec2;
   hullHeadingDegrees: number;
@@ -198,15 +199,3 @@ export type BattleFrame = {
   actions: BattleAction[];
   ruleState: BattleRuleStateFrame;
 };
-
-export type SimWorkerRequest =
-  | { type: "liveReset" }
-  | { type: "liveStep" }
-  | { type: "livePlay"; tickLimit: number }
-  | { type: "livePause" };
-
-export type SimWorkerResponse =
-  | { type: "battleStatic"; obstacles: StaticObstacleFrame[] }
-  | { type: "battleFrame"; frame: BattleFrame }
-  | { type: "battleComplete"; finalFrame: BattleFrame }
-  | { type: "battlePaused" };

@@ -11,6 +11,10 @@ typedef void* RobolocksBattleRunnerHandle;
 typedef const char* (*RobolocksJsonBotCallback)(uint32_t bot_id, const char* observation_json, void* user_data);
 typedef void (*RobolocksJsonBotReleaseCallback)(const char* response_json, void* user_data);
 
+// Returns the message of the most recent C API error (e.g. a failed
+// create_from_json). Valid until the next failing call. Never null.
+const char* robolocks_last_error(void);
+
 RobolocksBattleRunnerHandle robolocks_battle_runner_create_from_json(const char* json_config);
 void robolocks_battle_runner_destroy(RobolocksBattleRunnerHandle handle);
 
@@ -24,37 +28,13 @@ void robolocks_battle_runner_step(RobolocksBattleRunnerHandle handle);
 void robolocks_battle_runner_run(RobolocksBattleRunnerHandle handle, uint64_t tick_count);
 
 uint64_t robolocks_battle_runner_tick(RobolocksBattleRunnerHandle handle);
-size_t robolocks_battle_runner_unit_count(RobolocksBattleRunnerHandle handle);
-uint32_t robolocks_battle_runner_unit_id(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_x(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_y(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_hull_heading(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_turret_heading(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_armor(RobolocksBattleRunnerHandle handle, size_t unit_index);
-uint64_t robolocks_battle_runner_unit_weapon_cooldown(RobolocksBattleRunnerHandle handle, size_t unit_index);
-int robolocks_battle_runner_unit_body_shape_type(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_body_radius(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_body_length(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_body_width(RobolocksBattleRunnerHandle handle, size_t unit_index);
-const char* robolocks_battle_runner_unit_modules_json(RobolocksBattleRunnerHandle handle, size_t unit_index);
-int robolocks_battle_runner_unit_mobility_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_mobility_intent_target_x(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_mobility_intent_target_y(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_mobility_intent_remaining(RobolocksBattleRunnerHandle handle, size_t unit_index);
-uint64_t robolocks_battle_runner_unit_mobility_intent_age(RobolocksBattleRunnerHandle handle, size_t unit_index);
-int robolocks_battle_runner_unit_turret_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_turret_intent_target_x(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_turret_intent_target_y(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_turret_intent_error(RobolocksBattleRunnerHandle handle, size_t unit_index);
-uint64_t robolocks_battle_runner_unit_turret_intent_age(RobolocksBattleRunnerHandle handle, size_t unit_index);
-int robolocks_battle_runner_unit_hull_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_hull_intent_target_x(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_hull_intent_target_y(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_hull_intent_error(RobolocksBattleRunnerHandle handle, size_t unit_index);
-uint64_t robolocks_battle_runner_unit_hull_intent_age(RobolocksBattleRunnerHandle handle, size_t unit_index);
-int robolocks_battle_runner_unit_weapon_intent_active(RobolocksBattleRunnerHandle handle, size_t unit_index);
-double robolocks_battle_runner_unit_weapon_intent_min_hit_chance(RobolocksBattleRunnerHandle handle, size_t unit_index);
-uint64_t robolocks_battle_runner_unit_weapon_intent_age(RobolocksBattleRunnerHandle handle, size_t unit_index);
+
+// Returns the current tick as a JSON frame (same schema as a replay frame):
+// units (with name/teamId/modules/intents), projectiles, events, actions and
+// ruleState. The returned string is owned by the runner handle and stays valid
+// until the next frame_json/step/run/destroy call. Returns null on error.
+const char* robolocks_battle_runner_frame_json(RobolocksBattleRunnerHandle handle);
+
 size_t robolocks_battle_runner_obstacle_count(RobolocksBattleRunnerHandle handle);
 const char* robolocks_battle_runner_obstacle_id(RobolocksBattleRunnerHandle handle, size_t obstacle_index);
 double robolocks_battle_runner_obstacle_x(RobolocksBattleRunnerHandle handle, size_t obstacle_index);
@@ -62,71 +42,6 @@ double robolocks_battle_runner_obstacle_y(RobolocksBattleRunnerHandle handle, si
 double robolocks_battle_runner_obstacle_radius(RobolocksBattleRunnerHandle handle, size_t obstacle_index);
 int robolocks_battle_runner_obstacle_blocks_movement(RobolocksBattleRunnerHandle handle, size_t obstacle_index);
 int robolocks_battle_runner_obstacle_blocks_line_of_sight(RobolocksBattleRunnerHandle handle, size_t obstacle_index);
-size_t robolocks_battle_runner_event_count(RobolocksBattleRunnerHandle handle);
-uint64_t robolocks_battle_runner_event_tick(RobolocksBattleRunnerHandle handle, size_t event_index);
-uint32_t robolocks_battle_runner_event_unit_id(RobolocksBattleRunnerHandle handle, size_t event_index);
-const char* robolocks_battle_runner_event_code(RobolocksBattleRunnerHandle handle, size_t event_index);
-const char* robolocks_battle_runner_event_message(RobolocksBattleRunnerHandle handle, size_t event_index);
-uint64_t robolocks_battle_runner_event_projectile_id(RobolocksBattleRunnerHandle handle, size_t event_index);
-uint32_t robolocks_battle_runner_event_source_unit_id(RobolocksBattleRunnerHandle handle, size_t event_index);
-uint32_t robolocks_battle_runner_event_target_unit_id(RobolocksBattleRunnerHandle handle, size_t event_index);
-uint32_t robolocks_battle_runner_event_source_team_id(RobolocksBattleRunnerHandle handle, size_t event_index);
-uint32_t robolocks_battle_runner_event_target_team_id(RobolocksBattleRunnerHandle handle, size_t event_index);
-const char* robolocks_battle_runner_event_damage_type(RobolocksBattleRunnerHandle handle, size_t event_index);
-const char* robolocks_battle_runner_event_armor_facing(RobolocksBattleRunnerHandle handle, size_t event_index);
-double robolocks_battle_runner_event_damage(RobolocksBattleRunnerHandle handle, size_t event_index);
-double robolocks_battle_runner_event_remaining_armor(RobolocksBattleRunnerHandle handle, size_t event_index);
-double robolocks_battle_runner_event_penetration_millimeters(RobolocksBattleRunnerHandle handle, size_t event_index);
-double robolocks_battle_runner_event_armor_millimeters(RobolocksBattleRunnerHandle handle, size_t event_index);
-double robolocks_battle_runner_event_impact_distance_meters(RobolocksBattleRunnerHandle handle, size_t event_index);
-double robolocks_battle_runner_event_blast_radius_meters(RobolocksBattleRunnerHandle handle, size_t event_index);
-size_t robolocks_battle_runner_projectile_count(RobolocksBattleRunnerHandle handle);
-uint64_t robolocks_battle_runner_projectile_id(RobolocksBattleRunnerHandle handle, size_t projectile_index);
-uint32_t robolocks_battle_runner_projectile_owner_unit_id(RobolocksBattleRunnerHandle handle, size_t projectile_index);
-double robolocks_battle_runner_projectile_previous_x(RobolocksBattleRunnerHandle handle, size_t projectile_index);
-double robolocks_battle_runner_projectile_previous_y(RobolocksBattleRunnerHandle handle, size_t projectile_index);
-double robolocks_battle_runner_projectile_x(RobolocksBattleRunnerHandle handle, size_t projectile_index);
-double robolocks_battle_runner_projectile_y(RobolocksBattleRunnerHandle handle, size_t projectile_index);
-double robolocks_battle_runner_projectile_radius(RobolocksBattleRunnerHandle handle, size_t projectile_index);
-double robolocks_battle_runner_projectile_previous_height(RobolocksBattleRunnerHandle handle, size_t projectile_index);
-double robolocks_battle_runner_projectile_height(RobolocksBattleRunnerHandle handle, size_t projectile_index);
-size_t robolocks_battle_runner_action_count(RobolocksBattleRunnerHandle handle);
-uint32_t robolocks_battle_runner_action_unit_id(RobolocksBattleRunnerHandle handle, size_t action_index);
-const char* robolocks_battle_runner_action_type(RobolocksBattleRunnerHandle handle, size_t action_index);
-const char* robolocks_battle_runner_action_channel(RobolocksBattleRunnerHandle handle, size_t action_index);
-int robolocks_battle_runner_action_has_position(RobolocksBattleRunnerHandle handle, size_t action_index);
-double robolocks_battle_runner_action_position_x(RobolocksBattleRunnerHandle handle, size_t action_index);
-double robolocks_battle_runner_action_position_y(RobolocksBattleRunnerHandle handle, size_t action_index);
-int robolocks_battle_runner_action_has_target(RobolocksBattleRunnerHandle handle, size_t action_index);
-double robolocks_battle_runner_action_target_x(RobolocksBattleRunnerHandle handle, size_t action_index);
-double robolocks_battle_runner_action_target_y(RobolocksBattleRunnerHandle handle, size_t action_index);
-int robolocks_battle_runner_action_has_min_hit_chance(RobolocksBattleRunnerHandle handle, size_t action_index);
-double robolocks_battle_runner_action_min_hit_chance(RobolocksBattleRunnerHandle handle, size_t action_index);
-int robolocks_battle_runner_action_has_scan_arc(RobolocksBattleRunnerHandle handle, size_t action_index);
-double robolocks_battle_runner_action_direction(RobolocksBattleRunnerHandle handle, size_t action_index);
-double robolocks_battle_runner_action_width(RobolocksBattleRunnerHandle handle, size_t action_index);
-int robolocks_battle_runner_action_has_range(RobolocksBattleRunnerHandle handle, size_t action_index);
-double robolocks_battle_runner_action_range(RobolocksBattleRunnerHandle handle, size_t action_index);
-size_t robolocks_battle_runner_score_count(RobolocksBattleRunnerHandle handle);
-uint32_t robolocks_battle_runner_score_unit_id(RobolocksBattleRunnerHandle handle, size_t score_index);
-uint32_t robolocks_battle_runner_score_team_id(RobolocksBattleRunnerHandle handle, size_t score_index);
-uint32_t robolocks_battle_runner_score_kills(RobolocksBattleRunnerHandle handle, size_t score_index);
-uint32_t robolocks_battle_runner_score_deaths(RobolocksBattleRunnerHandle handle, size_t score_index);
-double robolocks_battle_runner_score_damage_dealt(RobolocksBattleRunnerHandle handle, size_t score_index);
-size_t robolocks_battle_runner_capture_zone_count(RobolocksBattleRunnerHandle handle);
-const char* robolocks_battle_runner_capture_zone_id(RobolocksBattleRunnerHandle handle, size_t zone_index);
-double robolocks_battle_runner_capture_zone_x(RobolocksBattleRunnerHandle handle, size_t zone_index);
-double robolocks_battle_runner_capture_zone_y(RobolocksBattleRunnerHandle handle, size_t zone_index);
-double robolocks_battle_runner_capture_zone_radius(RobolocksBattleRunnerHandle handle, size_t zone_index);
-uint64_t robolocks_battle_runner_capture_zone_hold_ticks_required(RobolocksBattleRunnerHandle handle, size_t zone_index);
-uint64_t robolocks_battle_runner_capture_zone_held_ticks(RobolocksBattleRunnerHandle handle, size_t zone_index);
-uint32_t robolocks_battle_runner_capture_zone_owner_unit_id(RobolocksBattleRunnerHandle handle, size_t zone_index);
-uint32_t robolocks_battle_runner_capture_zone_owner_team_id(RobolocksBattleRunnerHandle handle, size_t zone_index);
-int robolocks_battle_runner_capture_zone_contested(RobolocksBattleRunnerHandle handle, size_t zone_index);
-int robolocks_battle_runner_outcome_finished(RobolocksBattleRunnerHandle handle);
-const char* robolocks_battle_runner_outcome_reason(RobolocksBattleRunnerHandle handle);
-uint32_t robolocks_battle_runner_outcome_winner_unit_id(RobolocksBattleRunnerHandle handle);
-uint32_t robolocks_battle_runner_outcome_winner_team_id(RobolocksBattleRunnerHandle handle);
 
 #ifdef __cplusplus
 }

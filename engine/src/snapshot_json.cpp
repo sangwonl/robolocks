@@ -340,4 +340,30 @@ nlohmann::ordered_json snapshot_to_json(const WorldSnapshot& snapshot) {
   };
 }
 
+nlohmann::ordered_json frame_to_json(
+  const WorldSnapshot& snapshot,
+  const std::vector<Event>& events,
+  const std::vector<UnitOrders>& orders_by_unit,
+  const BattleRuleState* rule_state
+) {
+  auto frame = snapshot_to_json(snapshot);
+
+  auto events_json = nlohmann::ordered_json::array();
+  for (const auto& event : events) {
+    events_json.push_back(event_to_json(event));
+  }
+  frame["events"] = std::move(events_json);
+
+  auto actions_json = nlohmann::ordered_json::array();
+  for (const auto& unit_orders : orders_by_unit) {
+    for (const auto& order : unit_orders.orders) {
+      actions_json.push_back(action_to_json(unit_orders.unit_id, order));
+    }
+  }
+  frame["actions"] = std::move(actions_json);
+
+  frame["ruleState"] = rule_state_to_json(rule_state);
+  return frame;
+}
+
 }  // namespace robolocks

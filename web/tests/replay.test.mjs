@@ -22,6 +22,8 @@ test("replay parser reads CLI replay JSON frames", () => {
         units: [
           {
             unitId: 1,
+            teamId: 1,
+            name: "Blue",
             position: { x: 6, y: 12 },
             hullHeadingDegrees: 0,
             turretHeadingDegrees: 0,
@@ -55,6 +57,8 @@ test("replay parser reads CLI replay JSON frames", () => {
         units: [
           {
             unitId: 1,
+            teamId: 1,
+            name: "Blue",
             position: { x: 6.2, y: 12 },
             hullHeadingDegrees: 0,
             turretHeadingDegrees: 0,

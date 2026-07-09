@@ -9,6 +9,8 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include <vector>
+
 namespace robolocks {
 
 // Shared per-tick frame serializers. These use nlohmann::ordered_json so the
@@ -26,5 +28,16 @@ nlohmann::ordered_json event_to_json(const Event& event);
 nlohmann::ordered_json action_to_json(UnitId unit_id, const Order& order);
 nlohmann::ordered_json rule_state_to_json(const BattleRuleState* rule_state);
 nlohmann::ordered_json snapshot_to_json(const WorldSnapshot& snapshot);
+
+// Assembles a full per-tick frame from snapshot_to_json, layering on the
+// step-only data (events, actions, rule state) that WorldSnapshot does not
+// carry. Shared by the CLI stream/replay writer and the C API frame endpoint so
+// both emit an identical frame schema.
+nlohmann::ordered_json frame_to_json(
+  const WorldSnapshot& snapshot,
+  const std::vector<Event>& events = {},
+  const std::vector<UnitOrders>& orders_by_unit = {},
+  const BattleRuleState* rule_state = nullptr
+);
 
 }  // namespace robolocks
