@@ -22,7 +22,7 @@ for line in sys.stdin:
     print(json.dumps({
         "orders": [
             {"type": "moveTo", "position": {"x": x, "y": y}},
-            {"type": "aimAt", "target": observation["contacts"][0]["position"]}
+            {"type": "aimAt", "target": observation["contacts"]["units"][0]["position"]}
         ]
     }), flush=True)
 )python";
@@ -34,18 +34,21 @@ for line in sys.stdin:
   observation.tick = 7;
   observation.self_id = robolocks::UnitId{1};
   observation.self = robolocks::UnitSnapshot{
-    robolocks::UnitId{1},
-    robolocks::Vec2{6.0, 12.0},
-    0.0,
-    0.0,
-    100.0,
+    .unit_id = robolocks::UnitId{1},
+    .team_id = 1,
+    .position = robolocks::Vec2{6.0, 12.0},
+    .hull_heading_deg = 0.0,
+    .turret_heading_deg = 0.0,
+    .armor_integrity = 100.0,
   };
-  observation.contacts.push_back(robolocks::ContactObservation{
-    robolocks::UnitId{2},
-    robolocks::Vec2{34.0, 12.0},
-    180.0,
-    180.0,
-    100.0,
+  observation.contacts.units.push_back(robolocks::ContactObservation{
+    .unit_id = robolocks::UnitId{2},
+    .team_id = 2,
+    .is_enemy = true,
+    .position = robolocks::Vec2{34.0, 12.0},
+    .hull_heading_deg = 180.0,
+    .turret_heading_deg = 180.0,
+    .armor_integrity = 100.0,
   });
 
   const auto orders = controller.on_tick(observation);
@@ -86,18 +89,21 @@ run_bot(on_tick)
   observation.tick = 7;
   observation.self_id = robolocks::UnitId{1};
   observation.self = robolocks::UnitSnapshot{
-    robolocks::UnitId{1},
-    robolocks::Vec2{6.0, 12.0},
-    0.0,
-    0.0,
-    100.0,
+    .unit_id = robolocks::UnitId{1},
+    .team_id = 1,
+    .position = robolocks::Vec2{6.0, 12.0},
+    .hull_heading_deg = 0.0,
+    .turret_heading_deg = 0.0,
+    .armor_integrity = 100.0,
   };
-  observation.contacts.push_back(robolocks::ContactObservation{
-    robolocks::UnitId{2},
-    robolocks::Vec2{34.0, 12.0},
-    180.0,
-    180.0,
-    100.0,
+  observation.contacts.units.push_back(robolocks::ContactObservation{
+    .unit_id = robolocks::UnitId{2},
+    .team_id = 2,
+    .is_enemy = true,
+    .position = robolocks::Vec2{34.0, 12.0},
+    .hull_heading_deg = 180.0,
+    .turret_heading_deg = 180.0,
+    .armor_integrity = 100.0,
   });
 
   const auto orders = controller.on_tick(observation);
@@ -108,6 +114,71 @@ run_bot(on_tick)
   REQUIRE(move_to.position.x == Catch::Approx(8.0));
   REQUIRE(move_to.position.y == Catch::Approx(12.0));
   REQUIRE(orders[1].kind == robolocks::OrderKind::AimAt);
+}
+
+TEST_CASE("python bot controller exposes scanned obstacle and projectile contacts through sdk state") {
+  const auto script_path = std::filesystem::temp_directory_path() / "robolocks_python_sdk_contact_test.py";
+  {
+    std::ofstream script(script_path);
+    script << R"python(
+from robolocks import MoveTo, run_bot
+
+def on_tick(state):
+    obstacle_offset = len(state.contacts.obstacles) * 2.0
+    projectile_offset = state.contacts.projectiles[0].projectile_id / 10.0
+    enemy_offset = 1.0 if state.contacts.units[0].is_enemy else 0.0
+    return [MoveTo(state.own_unit.position.offset(x=obstacle_offset + projectile_offset + enemy_offset))]
+
+run_bot(on_tick)
+)python";
+  }
+
+  robolocks::PythonBotController controller(script_path.string());
+
+  robolocks::Observation observation;
+  observation.tick = 7;
+  observation.self_id = robolocks::UnitId{1};
+  observation.self = robolocks::UnitSnapshot{
+    .unit_id = robolocks::UnitId{1},
+    .team_id = 1,
+    .position = robolocks::Vec2{6.0, 12.0},
+    .hull_heading_deg = 0.0,
+    .turret_heading_deg = 0.0,
+    .armor_integrity = 100.0,
+  };
+  observation.contacts.units.push_back(robolocks::ContactObservation{
+    .unit_id = robolocks::UnitId{2},
+    .team_id = 2,
+    .is_enemy = true,
+    .position = robolocks::Vec2{9.0, 12.0},
+    .hull_heading_deg = 180.0,
+    .turret_heading_deg = 180.0,
+    .armor_integrity = 100.0,
+  });
+  observation.contacts.obstacles.push_back(robolocks::StaticObstacle{
+    .id = "visible_cover",
+    .position = robolocks::Vec2{8.0, 12.0},
+    .radius_m = 1.0,
+    .blocks_movement = true,
+    .blocks_line_of_sight = true,
+  });
+  observation.contacts.projectiles.push_back(robolocks::ProjectileSnapshot{
+    .projectile_id = 7,
+    .owner_unit_id = robolocks::UnitId{2},
+    .previous_position = robolocks::Vec2{10.0, 12.0},
+    .position = robolocks::Vec2{11.0, 12.0},
+    .radius_m = 0.08,
+    .previous_height_m = 1.5,
+    .height_m = 1.5,
+  });
+
+  const auto orders = controller.on_tick(observation);
+
+  REQUIRE(orders.size() == 1);
+  REQUIRE(orders[0].kind == robolocks::OrderKind::MoveTo);
+  const auto& move_to = std::get<robolocks::MoveToOrder>(orders[0].payload);
+  REQUIRE(move_to.position.x == Catch::Approx(9.7));
+  REQUIRE(move_to.position.y == Catch::Approx(12.0));
 }
 
 TEST_CASE("python bot controller passes unit spec to sdk on_start hook") {
@@ -160,11 +231,12 @@ run_bot(on_tick, on_start=on_start)
   observation.tick = 1;
   observation.self_id = robolocks::UnitId{1};
   observation.self = robolocks::UnitSnapshot{
-    robolocks::UnitId{1},
-    robolocks::Vec2{3.0, 4.0},
-    0.0,
-    0.0,
-    100.0,
+    .unit_id = robolocks::UnitId{1},
+    .team_id = 1,
+    .position = robolocks::Vec2{3.0, 4.0},
+    .hull_heading_deg = 0.0,
+    .turret_heading_deg = 0.0,
+    .armor_integrity = 100.0,
   };
 
   const auto orders = controller.on_tick(observation);
@@ -195,11 +267,12 @@ for line in sys.stdin:
   observation.tick = 1;
   observation.self_id = robolocks::UnitId{1};
   observation.self = robolocks::UnitSnapshot{
-    robolocks::UnitId{1},
-    robolocks::Vec2{6.0, 12.0},
-    0.0,
-    0.0,
-    100.0,
+    .unit_id = robolocks::UnitId{1},
+    .team_id = 1,
+    .position = robolocks::Vec2{6.0, 12.0},
+    .hull_heading_deg = 0.0,
+    .turret_heading_deg = 0.0,
+    .armor_integrity = 100.0,
   };
 
   REQUIRE_THROWS_AS(controller.on_tick(observation), std::runtime_error);

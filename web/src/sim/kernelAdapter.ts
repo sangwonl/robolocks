@@ -1,4 +1,4 @@
-import type { BattleAction, BattleEvent, BattleFrame, BodyShapeFrame, ProjectileFrame, StaticObstacleFrame, UnitFrame, UnitIntentsFrame, UnitModulesFrame } from "../types/protocol";
+import type { BattleAction, BattleEvent, BattleFrame, BattleRuleStateFrame, BodyShapeFrame, ProjectileFrame, StaticObstacleFrame, UnitFrame, UnitIntentsFrame, UnitModulesFrame } from "../types/protocol";
 import createRobolocksKernel from "../generated/robolocks_wasm.js";
 
 type InternalUnit = UnitFrame & {
@@ -62,6 +62,19 @@ type WasmModule = {
   cwrap(name: "robolocks_battle_runner_event_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_event_code", returnType: "string", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => string;
   cwrap(name: "robolocks_battle_runner_event_message", returnType: "string", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => string;
+  cwrap(name: "robolocks_battle_runner_event_projectile_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_source_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_target_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_source_team_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_target_team_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_damage_type", returnType: "string", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => string;
+  cwrap(name: "robolocks_battle_runner_event_armor_facing", returnType: "string", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => string;
+  cwrap(name: "robolocks_battle_runner_event_damage", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_remaining_armor", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_penetration_millimeters", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_armor_millimeters", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_impact_distance_meters", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_event_blast_radius_meters", returnType: "number", argTypes: ["number", "number"]): (handle: number, eventIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_projectile_count", returnType: "number", argTypes: ["number"]): (handle: number) => number;
   cwrap(name: "robolocks_battle_runner_projectile_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_projectile_owner_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, projectileIndex: number) => number;
@@ -89,6 +102,26 @@ type WasmModule = {
   cwrap(name: "robolocks_battle_runner_action_width", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_has_range", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
   cwrap(name: "robolocks_battle_runner_action_range", returnType: "number", argTypes: ["number", "number"]): (handle: number, actionIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_score_count", returnType: "number", argTypes: ["number"]): (handle: number) => number;
+  cwrap(name: "robolocks_battle_runner_score_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, scoreIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_score_team_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, scoreIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_score_kills", returnType: "number", argTypes: ["number", "number"]): (handle: number, scoreIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_score_deaths", returnType: "number", argTypes: ["number", "number"]): (handle: number, scoreIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_score_damage_dealt", returnType: "number", argTypes: ["number", "number"]): (handle: number, scoreIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_capture_zone_count", returnType: "number", argTypes: ["number"]): (handle: number) => number;
+  cwrap(name: "robolocks_battle_runner_capture_zone_id", returnType: "string", argTypes: ["number", "number"]): (handle: number, zoneIndex: number) => string;
+  cwrap(name: "robolocks_battle_runner_capture_zone_x", returnType: "number", argTypes: ["number", "number"]): (handle: number, zoneIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_capture_zone_y", returnType: "number", argTypes: ["number", "number"]): (handle: number, zoneIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_capture_zone_radius", returnType: "number", argTypes: ["number", "number"]): (handle: number, zoneIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_capture_zone_hold_ticks_required", returnType: "number", argTypes: ["number", "number"]): (handle: number, zoneIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_capture_zone_held_ticks", returnType: "number", argTypes: ["number", "number"]): (handle: number, zoneIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_capture_zone_owner_unit_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, zoneIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_capture_zone_owner_team_id", returnType: "number", argTypes: ["number", "number"]): (handle: number, zoneIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_capture_zone_contested", returnType: "number", argTypes: ["number", "number"]): (handle: number, zoneIndex: number) => number;
+  cwrap(name: "robolocks_battle_runner_outcome_finished", returnType: "number", argTypes: ["number"]): (handle: number) => number;
+  cwrap(name: "robolocks_battle_runner_outcome_reason", returnType: "string", argTypes: ["number"]): (handle: number) => string;
+  cwrap(name: "robolocks_battle_runner_outcome_winner_unit_id", returnType: "number", argTypes: ["number"]): (handle: number) => number;
+  cwrap(name: "robolocks_battle_runner_outcome_winner_team_id", returnType: "number", argTypes: ["number"]): (handle: number) => number;
 };
 
 type WasmFactory = (options: { locateFile(path: string): string }) => Promise<WasmModule>;
@@ -245,6 +278,19 @@ export async function createBattleFromJsonWithWasmFactory(
   const eventUnitId = module.cwrap("robolocks_battle_runner_event_unit_id", "number", ["number", "number"]);
   const eventCode = module.cwrap("robolocks_battle_runner_event_code", "string", ["number", "number"]);
   const eventMessage = module.cwrap("robolocks_battle_runner_event_message", "string", ["number", "number"]);
+  const eventProjectileId = module.cwrap("robolocks_battle_runner_event_projectile_id", "number", ["number", "number"]);
+  const eventSourceUnitId = module.cwrap("robolocks_battle_runner_event_source_unit_id", "number", ["number", "number"]);
+  const eventTargetUnitId = module.cwrap("robolocks_battle_runner_event_target_unit_id", "number", ["number", "number"]);
+  const eventSourceTeamId = module.cwrap("robolocks_battle_runner_event_source_team_id", "number", ["number", "number"]);
+  const eventTargetTeamId = module.cwrap("robolocks_battle_runner_event_target_team_id", "number", ["number", "number"]);
+  const eventDamageType = module.cwrap("robolocks_battle_runner_event_damage_type", "string", ["number", "number"]);
+  const eventArmorFacing = module.cwrap("robolocks_battle_runner_event_armor_facing", "string", ["number", "number"]);
+  const eventDamage = module.cwrap("robolocks_battle_runner_event_damage", "number", ["number", "number"]);
+  const eventRemainingArmor = module.cwrap("robolocks_battle_runner_event_remaining_armor", "number", ["number", "number"]);
+  const eventPenetrationMillimeters = module.cwrap("robolocks_battle_runner_event_penetration_millimeters", "number", ["number", "number"]);
+  const eventArmorMillimeters = module.cwrap("robolocks_battle_runner_event_armor_millimeters", "number", ["number", "number"]);
+  const eventImpactDistanceMeters = module.cwrap("robolocks_battle_runner_event_impact_distance_meters", "number", ["number", "number"]);
+  const eventBlastRadiusMeters = module.cwrap("robolocks_battle_runner_event_blast_radius_meters", "number", ["number", "number"]);
   const projectileCount = module.cwrap("robolocks_battle_runner_projectile_count", "number", ["number"]);
   const projectileId = module.cwrap("robolocks_battle_runner_projectile_id", "number", ["number", "number"]);
   const projectileOwnerUnitId = module.cwrap("robolocks_battle_runner_projectile_owner_unit_id", "number", ["number", "number"]);
@@ -272,6 +318,26 @@ export async function createBattleFromJsonWithWasmFactory(
   const actionWidthDeg = module.cwrap("robolocks_battle_runner_action_width", "number", ["number", "number"]);
   const actionHasRange = module.cwrap("robolocks_battle_runner_action_has_range", "number", ["number", "number"]);
   const actionRange = module.cwrap("robolocks_battle_runner_action_range", "number", ["number", "number"]);
+  const scoreCount = module.cwrap("robolocks_battle_runner_score_count", "number", ["number"]);
+  const scoreUnitId = module.cwrap("robolocks_battle_runner_score_unit_id", "number", ["number", "number"]);
+  const scoreTeamId = module.cwrap("robolocks_battle_runner_score_team_id", "number", ["number", "number"]);
+  const scoreKills = module.cwrap("robolocks_battle_runner_score_kills", "number", ["number", "number"]);
+  const scoreDeaths = module.cwrap("robolocks_battle_runner_score_deaths", "number", ["number", "number"]);
+  const scoreDamageDealt = module.cwrap("robolocks_battle_runner_score_damage_dealt", "number", ["number", "number"]);
+  const captureZoneCount = module.cwrap("robolocks_battle_runner_capture_zone_count", "number", ["number"]);
+  const captureZoneId = module.cwrap("robolocks_battle_runner_capture_zone_id", "string", ["number", "number"]);
+  const captureZoneX = module.cwrap("robolocks_battle_runner_capture_zone_x", "number", ["number", "number"]);
+  const captureZoneY = module.cwrap("robolocks_battle_runner_capture_zone_y", "number", ["number", "number"]);
+  const captureZoneRadius = module.cwrap("robolocks_battle_runner_capture_zone_radius", "number", ["number", "number"]);
+  const captureZoneHoldTicksRequired = module.cwrap("robolocks_battle_runner_capture_zone_hold_ticks_required", "number", ["number", "number"]);
+  const captureZoneHeldTicks = module.cwrap("robolocks_battle_runner_capture_zone_held_ticks", "number", ["number", "number"]);
+  const captureZoneOwnerUnitId = module.cwrap("robolocks_battle_runner_capture_zone_owner_unit_id", "number", ["number", "number"]);
+  const captureZoneOwnerTeamId = module.cwrap("robolocks_battle_runner_capture_zone_owner_team_id", "number", ["number", "number"]);
+  const captureZoneContested = module.cwrap("robolocks_battle_runner_capture_zone_contested", "number", ["number", "number"]);
+  const outcomeFinished = module.cwrap("robolocks_battle_runner_outcome_finished", "number", ["number"]);
+  const outcomeReason = module.cwrap("robolocks_battle_runner_outcome_reason", "string", ["number"]);
+  const outcomeWinnerUnitId = module.cwrap("robolocks_battle_runner_outcome_winner_unit_id", "number", ["number"]);
+  const outcomeWinnerTeamId = module.cwrap("robolocks_battle_runner_outcome_winner_team_id", "number", ["number"]);
   const handle = createRuntime(jsonConfig);
 
   return {
@@ -334,7 +400,27 @@ export async function createBattleFromJsonWithWasmFactory(
         projectilePreviousHeight,
         projectileHeight,
       ),
-      events: readEvents(runtimeHandle, eventCount, eventTick, eventUnitId, eventCode, eventMessage),
+      events: readEvents(
+        runtimeHandle,
+        eventCount,
+        eventTick,
+        eventUnitId,
+        eventCode,
+        eventMessage,
+        eventProjectileId,
+        eventSourceUnitId,
+        eventTargetUnitId,
+        eventSourceTeamId,
+        eventTargetTeamId,
+        eventDamageType,
+        eventArmorFacing,
+        eventDamage,
+        eventRemainingArmor,
+        eventPenetrationMillimeters,
+        eventArmorMillimeters,
+        eventImpactDistanceMeters,
+        eventBlastRadiusMeters,
+      ),
       actions: readActions(
         runtimeHandle,
         actionCount,
@@ -354,6 +440,29 @@ export async function createBattleFromJsonWithWasmFactory(
         actionWidthDeg,
         actionHasRange,
         actionRange,
+      ),
+      ruleState: readRuleState(
+        runtimeHandle,
+        scoreCount,
+        scoreUnitId,
+        scoreTeamId,
+        scoreKills,
+        scoreDeaths,
+        scoreDamageDealt,
+        captureZoneCount,
+        captureZoneId,
+        captureZoneX,
+        captureZoneY,
+        captureZoneRadius,
+        captureZoneHoldTicksRequired,
+        captureZoneHeldTicks,
+        captureZoneOwnerUnitId,
+        captureZoneOwnerTeamId,
+        captureZoneContested,
+        outcomeFinished,
+        outcomeReason,
+        outcomeWinnerUnitId,
+        outcomeWinnerTeamId,
       ),
     };
   }
@@ -403,6 +512,19 @@ function readEvents(
   eventUnitId: (handle: number, eventIndex: number) => number,
   eventCode: (handle: number, eventIndex: number) => string,
   eventMessage: (handle: number, eventIndex: number) => string,
+  eventProjectileId: (handle: number, eventIndex: number) => number,
+  eventSourceUnitId: (handle: number, eventIndex: number) => number,
+  eventTargetUnitId: (handle: number, eventIndex: number) => number,
+  eventSourceTeamId: (handle: number, eventIndex: number) => number,
+  eventTargetTeamId: (handle: number, eventIndex: number) => number,
+  eventDamageType: (handle: number, eventIndex: number) => string,
+  eventArmorFacing: (handle: number, eventIndex: number) => string,
+  eventDamage: (handle: number, eventIndex: number) => number,
+  eventRemainingArmor: (handle: number, eventIndex: number) => number,
+  eventPenetrationMillimeters: (handle: number, eventIndex: number) => number,
+  eventArmorMillimeters: (handle: number, eventIndex: number) => number,
+  eventImpactDistanceMeters: (handle: number, eventIndex: number) => number,
+  eventBlastRadiusMeters: (handle: number, eventIndex: number) => number,
 ): BattleEvent[] {
   const events: BattleEvent[] = [];
   for (let i = 0; i < eventCount(handle); i += 1) {
@@ -411,23 +533,94 @@ function readEvents(
       unitId: eventUnitId(handle, i),
       code: eventCode(handle, i),
       message: eventMessage(handle, i),
-      payload: defaultEventPayload(),
+      payload: {
+        projectileId: eventProjectileId(handle, i),
+        sourceUnitId: eventSourceUnitId(handle, i),
+        targetUnitId: eventTargetUnitId(handle, i),
+        sourceTeamId: eventSourceTeamId(handle, i),
+        targetTeamId: eventTargetTeamId(handle, i),
+        damageType: eventDamageType(handle, i),
+        armorFacing: eventArmorFacing(handle, i),
+        damage: eventDamage(handle, i),
+        remainingArmor: eventRemainingArmor(handle, i),
+        penetrationMillimeters: eventPenetrationMillimeters(handle, i),
+        armorMillimeters: eventArmorMillimeters(handle, i),
+        impactDistanceMeters: eventImpactDistanceMeters(handle, i),
+        blastRadiusMeters: eventBlastRadiusMeters(handle, i),
+      },
     });
   }
   return events;
 }
 
-function defaultEventPayload(): BattleEvent["payload"] {
+function readRuleState(
+  handle: number,
+  scoreCount: (handle: number) => number,
+  scoreUnitId: (handle: number, scoreIndex: number) => number,
+  scoreTeamId: (handle: number, scoreIndex: number) => number,
+  scoreKills: (handle: number, scoreIndex: number) => number,
+  scoreDeaths: (handle: number, scoreIndex: number) => number,
+  scoreDamageDealt: (handle: number, scoreIndex: number) => number,
+  captureZoneCount: (handle: number) => number,
+  captureZoneId: (handle: number, zoneIndex: number) => string,
+  captureZoneX: (handle: number, zoneIndex: number) => number,
+  captureZoneY: (handle: number, zoneIndex: number) => number,
+  captureZoneRadius: (handle: number, zoneIndex: number) => number,
+  captureZoneHoldTicksRequired: (handle: number, zoneIndex: number) => number,
+  captureZoneHeldTicks: (handle: number, zoneIndex: number) => number,
+  captureZoneOwnerUnitId: (handle: number, zoneIndex: number) => number,
+  captureZoneOwnerTeamId: (handle: number, zoneIndex: number) => number,
+  captureZoneContested: (handle: number, zoneIndex: number) => number,
+  outcomeFinished: (handle: number) => number,
+  outcomeReason: (handle: number) => string,
+  outcomeWinnerUnitId: (handle: number) => number,
+  outcomeWinnerTeamId: (handle: number) => number,
+): BattleRuleStateFrame {
+  const scores: BattleRuleStateFrame["scores"] = [];
+  for (let i = 0; i < scoreCount(handle); i += 1) {
+    scores.push({
+      unitId: scoreUnitId(handle, i),
+      teamId: scoreTeamId(handle, i),
+      kills: scoreKills(handle, i),
+      deaths: scoreDeaths(handle, i),
+      damageDealt: scoreDamageDealt(handle, i),
+    });
+  }
+  const captureZones: BattleRuleStateFrame["captureZones"] = [];
+  for (let i = 0; i < captureZoneCount(handle); i += 1) {
+    captureZones.push({
+      id: captureZoneId(handle, i),
+      position: { x: captureZoneX(handle, i), y: captureZoneY(handle, i) },
+      radiusMeters: captureZoneRadius(handle, i),
+      holdTicksRequired: captureZoneHoldTicksRequired(handle, i),
+      heldTicks: captureZoneHeldTicks(handle, i),
+      ownerUnitId: captureZoneOwnerUnitId(handle, i),
+      ownerTeamId: captureZoneOwnerTeamId(handle, i),
+      contested: captureZoneContested(handle, i) !== 0,
+    });
+  }
   return {
-    projectileId: 0,
-    damageType: "",
-    armorFacing: "",
-    damage: 0,
-    remainingArmor: 0,
-    penetrationMillimeters: 0,
-    armorMillimeters: 0,
-    impactDistanceMeters: 0,
-    blastRadiusMeters: 0,
+    scores,
+    captureZones,
+    outcome: {
+      finished: outcomeFinished(handle) !== 0,
+      reason: outcomeReason(handle),
+      winnerUnitId: outcomeWinnerUnitId(handle),
+      winnerTeamId: outcomeWinnerTeamId(handle),
+    },
+  };
+}
+
+function defaultRuleState(): BattleRuleStateFrame {
+  return {
+    scores: [],
+    captureZones: [],
+    outcome: {
+      finished: false,
+      reason: "",
+      winnerUnitId: 0,
+      winnerTeamId: 0,
+    },
   };
 }
 
@@ -676,6 +869,7 @@ export function createFallbackPresetDuel(): KernelBattleRunner {
         projectiles: [],
         events: [],
         actions: [],
+        ruleState: defaultRuleState(),
       };
     },
     step(): BattleFrame {
@@ -700,6 +894,7 @@ export function createFallbackPresetDuel(): KernelBattleRunner {
         projectiles: [],
         events: [],
         actions: [],
+        ruleState: defaultRuleState(),
       };
     },
     destroy(): void {},

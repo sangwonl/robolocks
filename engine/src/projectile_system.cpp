@@ -124,6 +124,43 @@ double hit_chance_for_error(double error_deg, double aim_tolerance_deg) {
   return clamp(kMaxHitChance - (error_deg / aim_tolerance_deg), kMinHitChance, kMaxHitChance);
 }
 
+std::uint32_t team_for_unit(const std::vector<UnitState>& units, UnitId unit_id) {
+  for (const auto& unit : units) {
+    if (unit.unit_id == unit_id) {
+      return unit.team_id;
+    }
+  }
+  return 0;
+}
+
+Event destroyed_event(
+  Tick tick,
+  UnitId source_unit_id,
+  std::uint32_t source_team_id,
+  const UnitState& target
+) {
+  return Event{
+    .tick = tick,
+    .unit_id = target.unit_id,
+    .code = "unit_destroyed",
+    .message = "Unit armor integrity reached zero.",
+    .payload = EventPayload{
+      .source_unit_id = source_unit_id,
+      .target_unit_id = target.unit_id,
+      .source_team_id = source_team_id,
+      .target_team_id = target.team_id,
+      .damage_type = "",
+      .armor_facing = "",
+      .damage = 0.0,
+      .remaining_armor = target.armor.integrity,
+      .penetration_mm = 0.0,
+      .armor_mm = 0.0,
+      .impact_distance_m = 0.0,
+      .blast_radius_m = 0.0,
+    },
+  };
+}
+
 }  // namespace
 
 std::vector<Event> resolve_weapon_fire(
@@ -172,6 +209,7 @@ std::vector<Event> resolve_weapon_fire(
           .unit_id = unit.unit_id,
           .code = "weapon_reloading",
           .message = "Weapon order rejected because the gun is still reloading.",
+          .payload = EventPayload{},
         });
       }
       continue;
@@ -190,6 +228,9 @@ std::vector<Event> resolve_weapon_fire(
       }
       const auto& target = units[j];
       if (target.armor.integrity <= 0.0) {
+        continue;
+      }
+      if (target.invulnerable_until_tick > tick) {
         continue;
       }
       const MuzzleTransform muzzle = muzzle_transform_for_unit(unit);
@@ -219,6 +260,7 @@ std::vector<Event> resolve_weapon_fire(
           .unit_id = unit.unit_id,
           .code = "fire_no_solution",
           .message = "FireIfSolution rejected because no target is inside the weapon solution.",
+          .payload = EventPayload{},
         });
       }
       continue;
@@ -241,6 +283,7 @@ std::vector<Event> resolve_weapon_fire(
           .unit_id = unit.unit_id,
           .code = "fire_solution_rejected",
           .message = "FireIfSolution rejected because hit chance is below the requested threshold.",
+          .payload = EventPayload{},
         });
       }
       continue;
@@ -281,6 +324,7 @@ std::vector<Event> resolve_weapon_fire(
       .unit_id = unit.unit_id,
       .code = "weapon_fired",
       .message = "Weapon fired with a valid direct-fire solution.",
+      .payload = EventPayload{},
     });
   }
   return events;
@@ -343,10 +387,12 @@ std::vector<Event> advance_projectiles(
           if (damage <= 0.0) {
             continue;
           }
+          const double armor_before = target.armor.integrity;
           target.armor.integrity = std::max(0.0, target.armor.integrity - damage);
           if (target.armor.integrity <= 0.0) {
             clear_intents(target);
           }
+          const auto source_team_id = team_for_unit(units, projectile.owner_unit_id);
           events.push_back(Event{
             .tick = tick,
             .unit_id = target.unit_id,
@@ -354,13 +400,23 @@ std::vector<Event> advance_projectiles(
             .message = "Ballistic projectile blast reduced armor integrity.",
             .payload = EventPayload{
               .projectile_id = projectile.projectile_id,
+              .source_unit_id = projectile.owner_unit_id,
+              .target_unit_id = target.unit_id,
+              .source_team_id = source_team_id,
+              .target_team_id = target.team_id,
               .damage_type = "splash",
+              .armor_facing = "",
               .damage = damage,
               .remaining_armor = target.armor.integrity,
+              .penetration_mm = 0.0,
+              .armor_mm = 0.0,
               .impact_distance_m = impact_distance,
               .blast_radius_m = blast_radius,
             },
           });
+          if (armor_before > 0.0 && target.armor.integrity <= 0.0) {
+            events.push_back(destroyed_event(tick, projectile.owner_unit_id, source_team_id, target));
+          }
         }
         continue;
       }
@@ -375,6 +431,9 @@ std::vector<Event> advance_projectiles(
     for (std::size_t i = 0; i < units.size(); i += 1) {
       auto& target = units[i];
       if (target.unit_id == projectile.owner_unit_id || target.armor.integrity <= 0.0) {
+        continue;
+      }
+      if (target.invulnerable_until_tick > tick) {
         continue;
       }
       const double hit_radius = collision_radius_for_shape(target.body.shape) + projectile.radius_m;
@@ -400,20 +459,30 @@ std::vector<Event> advance_projectiles(
           .message = std::string("Projectile failed to penetrate ") + armor_facing_name(facing) + " armor.",
           .payload = EventPayload{
             .projectile_id = projectile.projectile_id,
+            .source_unit_id = projectile.owner_unit_id,
+            .target_unit_id = target.unit_id,
+            .source_team_id = team_for_unit(units, projectile.owner_unit_id),
+            .target_team_id = target.team_id,
             .damage_type = "direct",
             .armor_facing = armor_facing_name(facing),
+            .damage = 0.0,
+            .remaining_armor = target.armor.integrity,
             .penetration_mm = projectile.penetration_mm,
             .armor_mm = armor_mm,
+            .impact_distance_m = 0.0,
+            .blast_radius_m = 0.0,
           },
         });
         continue;
       }
 
       const double damage = direct_damage_after_penetration(projectile.damage, projectile.penetration_mm, armor_mm);
+      const double armor_before = target.armor.integrity;
       target.armor.integrity = std::max(0.0, target.armor.integrity - damage);
       if (target.armor.integrity <= 0.0) {
         clear_intents(target);
       }
+      const auto source_team_id = team_for_unit(units, projectile.owner_unit_id);
       events.push_back(Event{
         .tick = tick,
         .unit_id = target.unit_id,
@@ -421,6 +490,10 @@ std::vector<Event> advance_projectiles(
         .message = std::string("Projectile penetrated ") + armor_facing_name(facing) + " armor.",
         .payload = EventPayload{
           .projectile_id = projectile.projectile_id,
+          .source_unit_id = projectile.owner_unit_id,
+          .target_unit_id = target.unit_id,
+          .source_team_id = source_team_id,
+          .target_team_id = target.team_id,
           .damage_type = "direct",
           .armor_facing = armor_facing_name(facing),
           .damage = damage,
@@ -429,6 +502,9 @@ std::vector<Event> advance_projectiles(
           .armor_mm = armor_mm,
         },
       });
+      if (armor_before > 0.0 && target.armor.integrity <= 0.0) {
+        events.push_back(destroyed_event(tick, projectile.owner_unit_id, source_team_id, target));
+      }
       continue;
     }
 

@@ -86,6 +86,16 @@ test("replay parser reads CLI replay JSON frames", () => {
           { unitId: 1, type: "moveTo", channel: "mobility", position: { x: 12, y: 12 } },
           { unitId: 1, type: "scanArc", channel: "sensor", directionDegrees: 0, widthDegrees: 120 },
         ],
+        ruleState: {
+          scores: [
+            { unitId: 1, teamId: 1, kills: 1, deaths: 0, damageDealt: 37.5 },
+            { unitId: 2, teamId: 2, kills: 0, deaths: 1, damageDealt: 0 },
+          ],
+          captureZones: [
+            { id: "alpha", position: { x: 20, y: 12 }, radiusMeters: 4, holdTicksRequired: 90, heldTicks: 12, ownerUnitId: 1, ownerTeamId: 1, contested: false },
+          ],
+          outcome: { finished: true, reason: "kill_limit", winnerUnitId: 0, winnerTeamId: 1 },
+        },
       },
     ],
   }));
@@ -125,6 +135,12 @@ test("replay parser reads CLI replay JSON frames", () => {
   assert.equal(replay.frames[1].actions[0].type, "moveTo");
   assert.deepEqual(replay.frames[1].actions[0].position, { x: 12, y: 12 });
   assert.equal(replay.frames[1].actions[1].widthDegrees, 120);
+  assert.equal(replay.frames[1].ruleState.scores[0].kills, 1);
+  assert.equal(replay.frames[1].ruleState.scores[1].deaths, 1);
+  assert.equal(replay.frames[1].ruleState.captureZones[0].id, "alpha");
+  assert.equal(replay.frames[1].ruleState.captureZones[0].heldTicks, 12);
+  assert.equal(replay.frames[1].ruleState.outcome.finished, true);
+  assert.equal(replay.frames[1].ruleState.outcome.winnerTeamId, 1);
 });
 
 test("replay parser rejects unsupported replay payloads", () => {

@@ -1,4 +1,4 @@
-import type { BattleAction, BattleEvent, BattleFrame, BodyShapeFrame, ProjectileFrame, StaticObstacleFrame, UnitFrame, UnitIntentsFrame, UnitModulesFrame } from "../types/protocol";
+import type { BattleAction, BattleEvent, BattleFrame, BattleRuleStateFrame, BodyShapeFrame, ProjectileFrame, StaticObstacleFrame, UnitFrame, UnitIntentsFrame, UnitModulesFrame } from "../types/protocol";
 
 export type BattleReplay = {
   type: "robolocks.replay.v1";
@@ -20,6 +20,7 @@ type ReplayFramePayload = {
   projectiles?: unknown;
   events?: unknown;
   actions?: unknown;
+  ruleState?: unknown;
 };
 
 type ReplayUnitPayload = {
@@ -96,6 +97,38 @@ type ReplayModulesPayload = {
   sensor?: unknown;
 };
 
+type ReplayRuleStatePayload = {
+  scores?: unknown;
+  captureZones?: unknown;
+  outcome?: unknown;
+};
+
+type ReplayScorePayload = {
+  unitId?: unknown;
+  teamId?: unknown;
+  kills?: unknown;
+  deaths?: unknown;
+  damageDealt?: unknown;
+};
+
+type ReplayOutcomePayload = {
+  finished?: unknown;
+  reason?: unknown;
+  winnerUnitId?: unknown;
+  winnerTeamId?: unknown;
+};
+
+type ReplayCaptureZonePayload = {
+  id?: unknown;
+  position?: unknown;
+  radiusMeters?: unknown;
+  holdTicksRequired?: unknown;
+  heldTicks?: unknown;
+  ownerUnitId?: unknown;
+  ownerTeamId?: unknown;
+  contested?: unknown;
+};
+
 export function parseBattleReplay(text: string): BattleReplay {
   const payload = JSON.parse(text) as ReplayPayload;
   if (payload.type !== "robolocks.replay.v1") {
@@ -125,6 +158,7 @@ function parseFrame(payload: unknown): BattleFrame {
     projectiles: Array.isArray(frame.projectiles) ? frame.projectiles.map(parseProjectile) : [],
     events: Array.isArray(frame.events) ? frame.events.map(parseEvent) : [],
     actions: Array.isArray(frame.actions) ? frame.actions.map(parseAction) : [],
+    ruleState: parseRuleState(frame.ruleState),
   };
 }
 
@@ -415,6 +449,10 @@ function parseEventPayload(payload: unknown): BattleEvent["payload"] {
   const eventPayload = payload as Partial<Record<string, unknown>>;
   return {
     projectileId: numberField(eventPayload, "projectileId"),
+    sourceUnitId: numberField(eventPayload, "sourceUnitId"),
+    targetUnitId: numberField(eventPayload, "targetUnitId"),
+    sourceTeamId: numberField(eventPayload, "sourceTeamId"),
+    targetTeamId: numberField(eventPayload, "targetTeamId"),
     damageType: stringField(eventPayload, "damageType"),
     armorFacing: stringField(eventPayload, "armorFacing"),
     damage: numberField(eventPayload, "damage"),
@@ -429,6 +467,10 @@ function parseEventPayload(payload: unknown): BattleEvent["payload"] {
 function defaultEventPayload(): BattleEvent["payload"] {
   return {
     projectileId: 0,
+    sourceUnitId: 0,
+    targetUnitId: 0,
+    sourceTeamId: 0,
+    targetTeamId: 0,
     damageType: "",
     armorFacing: "",
     damage: 0,
@@ -437,6 +479,85 @@ function defaultEventPayload(): BattleEvent["payload"] {
     armorMillimeters: 0,
     impactDistanceMeters: 0,
     blastRadiusMeters: 0,
+  };
+}
+
+function parseRuleState(payload: unknown): BattleRuleStateFrame {
+  const state = payload as ReplayRuleStatePayload;
+  if (typeof state !== "object" || state === null) {
+    return defaultRuleState();
+  }
+  return {
+    scores: Array.isArray(state.scores) ? state.scores.map(parseScore) : [],
+    captureZones: Array.isArray(state.captureZones) ? state.captureZones.map(parseCaptureZone) : [],
+    outcome: parseOutcome(state.outcome),
+  };
+}
+
+function parseScore(payload: unknown): BattleRuleStateFrame["scores"][number] {
+  const score = payload as ReplayScorePayload;
+  if (
+    typeof score !== "object" ||
+    score === null ||
+    typeof score.unitId !== "number" ||
+    typeof score.teamId !== "number"
+  ) {
+    throw new Error("Invalid replay score");
+  }
+  return {
+    unitId: score.unitId,
+    teamId: score.teamId,
+    kills: typeof score.kills === "number" ? score.kills : 0,
+    deaths: typeof score.deaths === "number" ? score.deaths : 0,
+    damageDealt: typeof score.damageDealt === "number" ? score.damageDealt : 0,
+  };
+}
+
+function parseOutcome(payload: unknown): BattleRuleStateFrame["outcome"] {
+  const outcome = payload as ReplayOutcomePayload;
+  if (typeof outcome !== "object" || outcome === null) {
+    return defaultRuleState().outcome;
+  }
+  return {
+    finished: typeof outcome.finished === "boolean" ? outcome.finished : false,
+    reason: typeof outcome.reason === "string" ? outcome.reason : "",
+    winnerUnitId: typeof outcome.winnerUnitId === "number" ? outcome.winnerUnitId : 0,
+    winnerTeamId: typeof outcome.winnerTeamId === "number" ? outcome.winnerTeamId : 0,
+  };
+}
+
+function parseCaptureZone(payload: unknown): BattleRuleStateFrame["captureZones"][number] {
+  const zone = payload as ReplayCaptureZonePayload;
+  if (
+    typeof zone !== "object" ||
+    zone === null ||
+    typeof zone.id !== "string" ||
+    typeof zone.radiusMeters !== "number"
+  ) {
+    throw new Error("Invalid replay capture zone");
+  }
+  return {
+    id: zone.id,
+    position: parseVec(zone.position, "Invalid replay capture zone position"),
+    radiusMeters: zone.radiusMeters,
+    holdTicksRequired: typeof zone.holdTicksRequired === "number" ? zone.holdTicksRequired : 0,
+    heldTicks: typeof zone.heldTicks === "number" ? zone.heldTicks : 0,
+    ownerUnitId: typeof zone.ownerUnitId === "number" ? zone.ownerUnitId : 0,
+    ownerTeamId: typeof zone.ownerTeamId === "number" ? zone.ownerTeamId : 0,
+    contested: typeof zone.contested === "boolean" ? zone.contested : false,
+  };
+}
+
+function defaultRuleState(): BattleRuleStateFrame {
+  return {
+    scores: [],
+    captureZones: [],
+    outcome: {
+      finished: false,
+      reason: "",
+      winnerUnitId: 0,
+      winnerTeamId: 0,
+    },
   };
 }
 

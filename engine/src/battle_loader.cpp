@@ -399,6 +399,103 @@ std::vector<StaticObstacle> optional_obstacles(const nlohmann::json& data) {
   return obstacles;
 }
 
+BattleRuleMode rule_mode_from_string(const std::string& mode) {
+  if (mode == "timed_deathmatch") {
+    return BattleRuleMode::TimedDeathmatch;
+  }
+  if (mode == "kill_limit_deathmatch") {
+    return BattleRuleMode::KillLimitDeathmatch;
+  }
+  if (mode == "capture_point") {
+    return BattleRuleMode::CapturePoint;
+  }
+  return BattleRuleMode::None;
+}
+
+BattleTeamMode team_mode_from_string(const std::string& mode) {
+  if (mode == "team") {
+    return BattleTeamMode::Team;
+  }
+  return BattleTeamMode::Solo;
+}
+
+std::vector<SpawnPointSpec> optional_spawn_points(const nlohmann::json& respawn) {
+  std::vector<SpawnPointSpec> spawn_points;
+  if (!respawn.contains("spawnPoints")) {
+    return spawn_points;
+  }
+  if (!respawn.at("spawnPoints").is_array()) {
+    throw std::runtime_error("Expected rule.respawn.spawnPoints array");
+  }
+
+  for (const auto& spawn_point : respawn.at("spawnPoints")) {
+    if (!spawn_point.is_object()) {
+      throw std::runtime_error("Expected spawn point object");
+    }
+    spawn_points.push_back(SpawnPointSpec{
+      .id = required_string(spawn_point, "id"),
+      .team_id = optional_u32(spawn_point, "teamId", 0),
+      .position = required_vec2(spawn_point, "position"),
+      .radius_m = optional_number(spawn_point, "radiusMeters", 0.0),
+      .heading_deg = optional_number(spawn_point, "headingDegrees", 0.0),
+    });
+  }
+  return spawn_points;
+}
+
+std::vector<CaptureZoneSpec> optional_capture_zones(const nlohmann::json& rule_json) {
+  std::vector<CaptureZoneSpec> capture_zones;
+  if (!rule_json.contains("captureZones")) {
+    return capture_zones;
+  }
+  if (!rule_json.at("captureZones").is_array()) {
+    throw std::runtime_error("Expected rule.captureZones array");
+  }
+
+  for (const auto& zone : rule_json.at("captureZones")) {
+    if (!zone.is_object()) {
+      throw std::runtime_error("Expected capture zone object");
+    }
+    capture_zones.push_back(CaptureZoneSpec{
+      .id = required_string(zone, "id"),
+      .position = required_vec2(zone, "position"),
+      .radius_m = optional_number(zone, "radiusMeters", 1.0),
+      .hold_ticks = optional_u32(zone, "holdTicks", 0),
+    });
+  }
+  return capture_zones;
+}
+
+BattleRuleConfig optional_rule(const nlohmann::json& data) {
+  BattleRuleConfig rule;
+  if (!data.contains("rule")) {
+    return rule;
+  }
+  if (!data.at("rule").is_object()) {
+    throw std::runtime_error("Expected rule object");
+  }
+
+  const auto& rule_json = data.at("rule");
+  rule.mode = rule_mode_from_string(optional_string(rule_json, "mode"));
+  rule.team_mode = team_mode_from_string(optional_string(rule_json, "teamMode"));
+  rule.kill_limit = optional_u32(rule_json, "killLimit", rule.kill_limit);
+  rule.time_limit_ticks = optional_u32(rule_json, "timeLimitTicks", rule.time_limit_ticks);
+  rule.capture_zones = optional_capture_zones(rule_json);
+
+  if (rule_json.contains("respawn")) {
+    if (!rule_json.at("respawn").is_object()) {
+      throw std::runtime_error("Expected rule.respawn object");
+    }
+    const auto& respawn_json = rule_json.at("respawn");
+    rule.respawn.enabled = optional_bool(respawn_json, "enabled", rule.respawn.enabled);
+    rule.respawn.cooldown_ticks = optional_u32(respawn_json, "cooldownTicks", rule.respawn.cooldown_ticks);
+    rule.respawn.invulnerable_ticks = optional_u32(respawn_json, "invulnerableTicks", rule.respawn.invulnerable_ticks);
+    rule.respawn.spawn_points = optional_spawn_points(respawn_json);
+  }
+
+  return rule;
+}
+
 const nlohmann::json& required_units_array(const nlohmann::json& data) {
   if (!data.contains("units") || !data.at("units").is_array()) {
     throw std::runtime_error("Expected units array");
@@ -420,13 +517,16 @@ LoadedBattle load_battle_from_json(const nlohmann::json& data, const std::filesy
   loaded.config.tick_dt_sec = 1.0 / tick_rate;
   loaded.config.tick_limit = required_u32(data, "tickLimit");
   loaded.config.obstacles = optional_obstacles(data);
+  loaded.config.rule = optional_rule(data);
   const auto module_catalog = load_module_catalog(base_dir, data);
 
   loaded.config.units.clear();
   for (const auto& unit : required_units_array(data)) {
     const double spawn_heading_deg = optional_spawn_heading_deg(unit);
+    const UnitId unit_id{required_u32(unit, "unitId")};
     loaded.config.units.push_back(UnitSpec{
-      .unit_id = UnitId{required_u32(unit, "unitId")},
+      .unit_id = unit_id,
+      .team_id = optional_u32(unit, "teamId", unit_id.value),
       .name = required_string(unit, "name"),
       .transform = TransformSpec{
         .position = required_vec2(unit, "spawn"),

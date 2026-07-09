@@ -735,6 +735,141 @@ TEST_CASE("battle_simulation applies FireIfSolution through weapon damage and re
   REQUIRE(second.events[0].code == "weapon_reloading");
 }
 
+TEST_CASE("battle_simulation ends kill-limit deathmatch when a team reaches the target kills") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.rule.mode = robolocks::BattleRuleMode::KillLimitDeathmatch;
+  config.rule.team_mode = robolocks::BattleTeamMode::Team;
+  config.rule.kill_limit = 1;
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{10.0, 0.0}, 0.0, 20.0, 180.0, 180.0),
+  };
+  config.units[0].team_id = 1;
+  config.units[0].weapon.damage = 25.0;
+  config.units[1].team_id = 2;
+
+  robolocks::BattleSimulation battle_simulation(config);
+
+  const auto result = battle_simulation.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{10.0, 0.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+
+  REQUIRE(result.snapshot.units[1].armor_integrity == Catch::Approx(0.0));
+  REQUIRE(result.rule_state.scores.size() == 2);
+  REQUIRE(result.rule_state.scores[0].unit_id == robolocks::UnitId{1});
+  REQUIRE(result.rule_state.scores[0].team_id == 1);
+  REQUIRE(result.rule_state.scores[0].kills == 1);
+  REQUIRE(result.rule_state.outcome.finished);
+  REQUIRE(result.rule_state.outcome.reason == "kill_limit");
+  REQUIRE(result.rule_state.outcome.winner_team_id == 1);
+}
+
+TEST_CASE("battle_simulation respawns destroyed units after cooldown without ending deathmatch") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.rule.mode = robolocks::BattleRuleMode::TimedDeathmatch;
+  config.rule.team_mode = robolocks::BattleTeamMode::Team;
+  config.rule.time_limit_ticks = 20;
+  config.rule.respawn.enabled = true;
+  config.rule.respawn.cooldown_ticks = 2;
+  config.rule.respawn.invulnerable_ticks = 1;
+  config.rule.respawn.spawn_points = {
+    robolocks::SpawnPointSpec{
+      .id = "red_spawn",
+      .team_id = 2,
+      .position = robolocks::Vec2{30.0, 5.0},
+      .radius_m = 0.0,
+      .heading_deg = 180.0,
+    },
+  };
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{10.0, 0.0}, 0.0, 20.0, 180.0, 180.0),
+  };
+  config.units[0].team_id = 1;
+  config.units[0].weapon.damage = 25.0;
+  config.units[1].team_id = 2;
+
+  robolocks::BattleSimulation battle_simulation(config);
+
+  const auto killed = battle_simulation.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{10.0, 0.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+  REQUIRE(killed.snapshot.units[1].armor_integrity == Catch::Approx(0.0));
+  REQUIRE(killed.rule_state.outcome.finished == false);
+
+  battle_simulation.step({});
+  const auto respawned = battle_simulation.step({});
+
+  REQUIRE(respawned.snapshot.units[1].armor_integrity == Catch::Approx(20.0));
+  REQUIRE(respawned.snapshot.units[1].position.x == Catch::Approx(30.0));
+  REQUIRE(respawned.snapshot.units[1].position.y == Catch::Approx(5.0));
+  REQUIRE(respawned.snapshot.units[1].hull_heading_deg == Catch::Approx(180.0));
+  REQUIRE(respawned.rule_state.scores[0].kills == 1);
+  REQUIRE(respawned.rule_state.scores[1].deaths == 1);
+}
+
+TEST_CASE("battle_simulation ends capture-point battle after required hold ticks") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.rule.mode = robolocks::BattleRuleMode::CapturePoint;
+  config.rule.team_mode = robolocks::BattleTeamMode::Team;
+  config.rule.capture_zones = {
+    robolocks::CaptureZoneSpec{
+      .id = "alpha",
+      .position = robolocks::Vec2{5.0, 5.0},
+      .radius_m = 2.0,
+      .hold_ticks = 2,
+    },
+  };
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{5.0, 5.0}, 0.0, 100.0, 0.0, 0.0),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{20.0, 20.0}, 0.0, 100.0, 180.0, 180.0),
+  };
+  config.units[0].team_id = 1;
+  config.units[1].team_id = 2;
+
+  robolocks::BattleSimulation battle_simulation(config);
+
+  const auto first = battle_simulation.step({});
+  REQUIRE(first.rule_state.capture_zones.size() == 1);
+  REQUIRE(first.rule_state.capture_zones[0].id == "alpha");
+  REQUIRE(first.rule_state.capture_zones[0].owner_team_id == 1);
+  REQUIRE(first.rule_state.capture_zones[0].held_ticks == 1);
+  REQUIRE(first.rule_state.outcome.finished == false);
+
+  const auto second = battle_simulation.step({});
+  REQUIRE(second.rule_state.capture_zones[0].held_ticks == 2);
+  REQUIRE(second.rule_state.outcome.finished);
+  REQUIRE(second.rule_state.outcome.reason == "capture_point");
+  REQUIRE(second.rule_state.outcome.winner_team_id == 1);
+}
+
 TEST_CASE("battle_simulation advances fired projectiles before applying damage") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;

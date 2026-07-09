@@ -28,6 +28,7 @@ TEST_CASE("battle loader reads preset duel fixture into battle config") {
   REQUIRE(config.units.size() == 2);
 
   REQUIRE(config.units[0].unit_id == robolocks::UnitId{1});
+  REQUIRE(config.units[0].team_id == 1);
   REQUIRE(config.units[0].name == "Blue");
   REQUIRE(config.units[0].transform.position.x == Catch::Approx(6.0));
   REQUIRE(config.units[0].transform.position.y == Catch::Approx(12.0));
@@ -51,6 +52,7 @@ TEST_CASE("battle loader reads preset duel fixture into battle config") {
   REQUIRE(config.units[0].sensor.refresh_ticks == 1);
 
   REQUIRE(config.units[1].unit_id == robolocks::UnitId{2});
+  REQUIRE(config.units[1].team_id == 2);
   REQUIRE(config.units[1].name == "Red");
   REQUIRE(config.units[1].transform.position.x == Catch::Approx(34.0));
   REQUIRE(config.units[1].transform.position.y == Catch::Approx(12.0));
@@ -99,6 +101,63 @@ TEST_CASE("battle loader reads python controller paths") {
   REQUIRE(loaded.controllers[1].type == "python");
   REQUIRE(loaded.controllers[1].path == "../../examples/bots/hold_line_blue.py");
   REQUIRE(loaded.controllers[1].resolved_path.ends_with("examples/bots/hold_line_blue.py"));
+}
+
+TEST_CASE("battle loader reads deathmatch rule and respawn spawn points") {
+  const auto fixture_path = std::filesystem::temp_directory_path() / "robolocks_rule_config_test.json";
+  {
+    std::ofstream fixture(fixture_path);
+    fixture << R"json({
+  "battleId": "rule_schema_test",
+  "seed": 1,
+  "tickRate": 30,
+  "tickLimit": 9000,
+  "rule": {
+    "mode": "kill_limit_deathmatch",
+    "teamMode": "team",
+    "killLimit": 10,
+    "timeLimitTicks": 9000,
+    "captureZones": [
+      {"id": "alpha", "position": {"x": 20, "y": 12}, "radiusMeters": 4, "holdTicks": 300}
+    ],
+    "respawn": {
+      "enabled": true,
+      "cooldownTicks": 150,
+      "invulnerableTicks": 60,
+      "spawnPoints": [
+        {"id": "blue_base", "teamId": 1, "position": {"x": 4, "y": 12}, "radiusMeters": 3, "headingDegrees": 0}
+      ]
+    }
+  },
+  "units": [
+    {"unitId": 1, "teamId": 1, "name": "Blue", "spawn": {"x": 0, "y": 0, "headingDeg": 0}, "modules": {}}
+  ],
+  "controllers": [
+    {"unitId": 1, "type": "json_callback"}
+  ]
+})json";
+  }
+
+  const auto loaded = robolocks::load_battle_from_file(fixture_path.string());
+
+  REQUIRE(loaded.config.rule.mode == robolocks::BattleRuleMode::KillLimitDeathmatch);
+  REQUIRE(loaded.config.rule.team_mode == robolocks::BattleTeamMode::Team);
+  REQUIRE(loaded.config.rule.kill_limit == 10);
+  REQUIRE(loaded.config.rule.time_limit_ticks == 9000);
+  REQUIRE(loaded.config.rule.capture_zones.size() == 1);
+  REQUIRE(loaded.config.rule.capture_zones[0].id == "alpha");
+  REQUIRE(loaded.config.rule.capture_zones[0].position.x == Catch::Approx(20.0));
+  REQUIRE(loaded.config.rule.capture_zones[0].radius_m == Catch::Approx(4.0));
+  REQUIRE(loaded.config.rule.capture_zones[0].hold_ticks == 300);
+  REQUIRE(loaded.config.rule.respawn.enabled);
+  REQUIRE(loaded.config.rule.respawn.cooldown_ticks == 150);
+  REQUIRE(loaded.config.rule.respawn.invulnerable_ticks == 60);
+  REQUIRE(loaded.config.rule.respawn.spawn_points.size() == 1);
+  REQUIRE(loaded.config.rule.respawn.spawn_points[0].id == "blue_base");
+  REQUIRE(loaded.config.rule.respawn.spawn_points[0].team_id == 1);
+  REQUIRE(loaded.config.rule.respawn.spawn_points[0].position.x == Catch::Approx(4.0));
+  REQUIRE(loaded.config.rule.respawn.spawn_points[0].radius_m == Catch::Approx(3.0));
+  REQUIRE(loaded.config.rule.respawn.spawn_points[0].heading_deg == Catch::Approx(0.0));
 }
 
 TEST_CASE("battle loader accepts units as the battle unit list") {

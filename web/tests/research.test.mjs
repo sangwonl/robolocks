@@ -1,15 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DEFAULT_RESEARCH_BOT_SOURCE, runResearchInBrowser } from "../src/research/research.ts";
+import { DEFAULT_RESEARCH_BOT_SOURCE, createResearchBattleConfigJson, runResearchInBrowser } from "../src/research/research.ts";
 
 test("browser research run drives a WASM runner with a browser bot runtime", async () => {
   const observedBotSources = [];
   const onTickCalls = [];
   let destroyedRuntime = false;
   let destroyedRunner = false;
+  let receivedBattleConfigJson = "";
+  const battleConfigJson = createResearchBattleConfigJson({
+    battlePresetId: "open_range",
+    unitPresetId: "ballistic_test",
+  });
 
   const result = await runResearchInBrowser({
+    battleConfigJson,
     botSource: DEFAULT_RESEARCH_BOT_SOURCE,
     tickCount: 2,
     createBotRuntime: async (botSource) => {
@@ -31,7 +37,8 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
         },
       };
     },
-    createRunner: async ({ onTick }) => {
+    createRunner: async ({ battleConfigJson: runnerBattleConfigJson, onTick }) => {
+      receivedBattleConfigJson = runnerBattleConfigJson;
       let tick = 0;
       return {
         staticObstacles() {
@@ -50,7 +57,7 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
         },
         step() {
           tick += 1;
-          onTick({ selfId: 1, tick, contacts: [] });
+          onTick({ selfId: 1, tick, contacts: { units: [], obstacles: [], projectiles: [] } });
           return frame(tick);
         },
         destroy() {
@@ -61,8 +68,13 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
   });
 
   const replay = result.replay;
+  const receivedConfig = JSON.parse(receivedBattleConfigJson);
   assert.equal(observedBotSources.length, 1);
   assert.match(observedBotSources[0], /def on_tick/);
+  assert.equal(receivedConfig.battleId, "research_open_range_ballistic_test");
+  assert.equal(receivedConfig.obstacles.length, 0);
+  assert.equal(receivedConfig.units[0].modules.weapon.fireMode, "ballistic");
+  assert.equal(receivedConfig.units[0].modules.weapon.blastRadiusMeters, 2.5);
   assert.equal(replay.type, "robolocks.replay.v1");
   assert.equal(replay.tickRate, 30);
   assert.equal(replay.obstacles[0].id, "research_cover");

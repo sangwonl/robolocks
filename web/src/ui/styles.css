@@ -315,11 +315,12 @@ input {
 }
 
 .field-control-inline {
-  grid-template-columns: auto minmax(72px, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
 }
 
-.field-control input {
+.field-control input,
+.field-control select {
   width: 100%;
   border: 1px solid #343a32;
   border-radius: 6px;
@@ -327,15 +328,29 @@ input {
   color: #d9dfd1;
 }
 
-.field-control input {
+.field-control input,
+.field-control select {
   padding: 4px 6px;
 }
 
+.field-control select {
+  height: 27px;
+  min-width: 0;
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, #9fa998 50%) calc(100% - 12px) 50% / 5px 5px no-repeat,
+    linear-gradient(135deg, #9fa998 50%, transparent 50%) calc(100% - 7px) 50% / 5px 5px no-repeat,
+    #111410;
+  padding-right: 20px;
+  font-size: 10px;
+  font-weight: 650;
+}
+
 .research-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 78px;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  align-items: end;
+  min-width: 0;
 }
 
 .research-toolbar button {
@@ -343,6 +358,44 @@ input {
   height: 27px;
   border-radius: 6px;
   padding: 4px 6px;
+}
+
+.preset-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  align-items: end;
+  min-width: 0;
+}
+
+.preset-controls > .field-control {
+  flex: 1 1 116px;
+  min-width: 0;
+}
+
+.preset-controls > .field-control-inline {
+  flex: 0 0 92px;
+}
+
+.preset-controls > button {
+  flex: 0 0 58px;
+}
+
+.preset-description {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: #8f9988;
+  font-size: 9px;
+  font-weight: 550;
+  line-height: 1.25;
+}
+
+.preset-description span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .code-editor {
@@ -538,6 +591,145 @@ pre {
 
 .state-section-content .console-panel {
   overflow: visible;
+}
+
+.rule-summary {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rule-summary-empty {
+  border: 1px dashed #3d453b;
+  padding: 7px;
+  color: #9fa998;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.rule-outcome {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 8px;
+  padding: 7px;
+  border: 1px solid #343a32;
+  border-radius: 7px;
+  background: #11140f;
+}
+
+.rule-outcome[data-finished="true"] {
+  border-color: rgba(212, 225, 100, 0.42);
+  background: rgba(212, 225, 100, 0.08);
+}
+
+.rule-outcome span {
+  color: #9fa998;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.rule-outcome strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #edf0ea;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.rule-outcome em {
+  grid-column: 1 / -1;
+  color: #d4e164;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.score-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid #343a32;
+  border-radius: 7px;
+  background: #10130f;
+}
+
+.score-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 0.7fr 0.7fr 1fr;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-top: 1px solid #252b24;
+  color: #d9dfd1;
+  font-size: 10px;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-row:first-child {
+  border-top: 0;
+}
+
+.score-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-row-head {
+  color: #9fa998;
+  font-size: 9px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.capture-zone-list {
+  display: grid;
+  gap: 4px;
+}
+
+.capture-zone-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  padding: 6px;
+  border: 1px solid #343a32;
+  border-radius: 7px;
+  background: #10130f;
+}
+
+.capture-zone-row[data-contested="true"] {
+  border-color: rgba(255, 154, 143, 0.38);
+}
+
+.capture-zone-row span,
+.capture-zone-row em {
+  min-width: 0;
+  overflow: hidden;
+  color: #9fa998;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 650;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.capture-zone-row strong {
+  color: #edf0ea;
+  font-size: 10.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.capture-zone-row em {
+  grid-column: 1 / -1;
+  color: #d4e164;
 }
 
 table {

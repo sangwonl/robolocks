@@ -122,6 +122,10 @@ export type BattleEvent = {
 
 export type BattleEventPayload = {
   projectileId: number;
+  sourceUnitId: number;
+  targetUnitId: number;
+  sourceTeamId: number;
+  targetTeamId: number;
   damageType: string;
   armorFacing: string;
   damage: number;
@@ -130,6 +134,38 @@ export type BattleEventPayload = {
   armorMillimeters: number;
   impactDistanceMeters: number;
   blastRadiusMeters: number;
+};
+
+export type BattleScoreFrame = {
+  unitId: number;
+  teamId: number;
+  kills: number;
+  deaths: number;
+  damageDealt: number;
+};
+
+export type BattleOutcomeFrame = {
+  finished: boolean;
+  reason: string;
+  winnerUnitId: number;
+  winnerTeamId: number;
+};
+
+export type CaptureZoneFrame = {
+  id: string;
+  position: Vec2;
+  radiusMeters: number;
+  holdTicksRequired: number;
+  heldTicks: number;
+  ownerUnitId: number;
+  ownerTeamId: number;
+  contested: boolean;
+};
+
+export type BattleRuleStateFrame = {
+  scores: BattleScoreFrame[];
+  captureZones: CaptureZoneFrame[];
+  outcome: BattleOutcomeFrame;
 };
 
 export type BattleAction = {
@@ -160,6 +196,7 @@ export type BattleFrame = {
   projectiles: ProjectileFrame[];
   events: BattleEvent[];
   actions: BattleAction[];
+  ruleState: BattleRuleStateFrame;
 };
 
 export type SimWorkerRequest =

@@ -8,6 +8,8 @@ namespace robolocks {
 
 struct ContactObservation {
   UnitId unit_id;
+  std::uint32_t team_id = 0;
+  bool is_enemy = true;
   Vec2 position;
   double hull_heading_deg = 0.0;
   double turret_heading_deg = 0.0;
@@ -19,11 +21,17 @@ struct ContactObservation {
   double body_width_m = 2.8;
 };
 
+struct ContactSetObservation {
+  std::vector<ContactObservation> units;
+  std::vector<StaticObstacle> obstacles;
+  std::vector<ProjectileSnapshot> projectiles;
+};
+
 struct Observation {
   Tick tick = 0;
   UnitId self_id;
   UnitSnapshot self;
-  std::vector<ContactObservation> contacts;
+  ContactSetObservation contacts;
   std::vector<StaticObstacle> obstacles;
 };
 

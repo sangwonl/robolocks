@@ -35,6 +35,10 @@ function enqueue(task: () => Promise<void>): void {
         projectiles: [],
         events: [{ tick: 0, unitId: 0, code: "worker_error", message, payload: {
           projectileId: 0,
+          sourceUnitId: 0,
+          targetUnitId: 0,
+          sourceTeamId: 0,
+          targetTeamId: 0,
           damageType: "",
           armorFacing: "",
           damage: 0,
@@ -45,6 +49,16 @@ function enqueue(task: () => Promise<void>): void {
           blastRadiusMeters: 0,
         } }],
         actions: [],
+        ruleState: {
+          scores: [],
+          captureZones: [],
+          outcome: {
+            finished: false,
+            reason: "",
+            winnerUnitId: 0,
+            winnerTeamId: 0,
+          },
+        },
       },
     });
   });

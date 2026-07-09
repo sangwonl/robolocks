@@ -170,7 +170,7 @@ TEST_CASE("battle runner calls bot controllers with per-unit observations") {
   REQUIRE(raw_controller->last_observation.tick == 0);
   REQUIRE(raw_controller->last_observation.self_id == robolocks::UnitId{1});
   REQUIRE(raw_controller->last_observation.self.unit_id == robolocks::UnitId{1});
-  REQUIRE(raw_controller->last_observation.contacts.empty());
+  REQUIRE(raw_controller->last_observation.contacts.units.empty());
 }
 
 TEST_CASE("battle runner limits bot observations through unit sensor specs") {
@@ -205,7 +205,7 @@ TEST_CASE("battle runner limits bot observations through unit sensor specs") {
   runner.step_once();  // issues ScanArc, applied for next tick
   runner.step_once();  // observation with ScanArc applied
 
-  REQUIRE(raw_controller->last_observation.contacts.empty());
+  REQUIRE(raw_controller->last_observation.contacts.units.empty());
 }
 
 TEST_CASE("battle runner applies scan arc orders to the next sensor observation") {
@@ -240,7 +240,7 @@ TEST_CASE("battle runner applies scan arc orders to the next sensor observation"
   runner.step_once();
 
   REQUIRE(raw_controller->observations.size() == 2);
-  REQUIRE(raw_controller->observations[0].contacts.empty());
-  REQUIRE(raw_controller->observations[1].contacts.size() == 1);
-  REQUIRE(raw_controller->observations[1].contacts[0].unit_id == robolocks::UnitId{2});
+  REQUIRE(raw_controller->observations[0].contacts.units.empty());
+  REQUIRE(raw_controller->observations[1].contacts.units.size() == 1);
+  REQUIRE(raw_controller->observations[1].contacts.units[0].unit_id == robolocks::UnitId{2});
 }

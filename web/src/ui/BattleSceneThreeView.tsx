@@ -13,7 +13,15 @@ export type BattleSceneThreeViewProps = {
 };
 
 const ARENA_CENTER = new THREE.Vector3(20, 0, 12);
-const VIEW_HEIGHT = 28;
+const ARENA_FIT_BOUNDS = {
+  minX: 0,
+  maxX: 40,
+  minY: 0,
+  maxY: 8,
+  minZ: 0,
+  maxZ: 24,
+};
+const FIT_PADDING = 1.12;
 const ISO_ELEVATION_DEG = 35.264;
 const ISO_POLAR_ANGLE = THREE.MathUtils.degToRad(90 - ISO_ELEVATION_DEG);
 
@@ -23,7 +31,13 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const [cameraMode, setCameraMode] = useState<CameraMode>("top");
+  const aspectRef = useRef(1);
+  const cameraModeRef = useRef<CameraMode>("iso");
+  const [cameraMode, setCameraMode] = useState<CameraMode>("iso");
+
+  useEffect(() => {
+    cameraModeRef.current = cameraMode;
+  }, [cameraMode]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -38,7 +52,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
     host.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    const camera = new THREE.OrthographicCamera(-20, 20, 13, -13, 0.1, 140);
+    const camera = new THREE.OrthographicCamera(-20, 20, 13, -13, 0.1, 220);
     cameraRef.current = camera;
 
     const renderCurrentScene = () => {
@@ -64,7 +78,7 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
       ONE: THREE.TOUCH.ROTATE,
       TWO: THREE.TOUCH.DOLLY_PAN,
     };
-    applyCameraMode(camera, controls, cameraMode);
+    applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current);
     controls.addEventListener("change", () => {
       renderCurrentScene();
     });
@@ -74,13 +88,8 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
     const resize = () => {
       const width = Math.max(1, host.clientWidth);
       const height = Math.max(1, host.clientHeight);
-      const aspect = width / height;
-      const viewWidth = VIEW_HEIGHT * aspect;
-      camera.left = -viewWidth / 2;
-      camera.right = viewWidth / 2;
-      camera.top = VIEW_HEIGHT / 2;
-      camera.bottom = -VIEW_HEIGHT / 2;
-      camera.updateProjectionMatrix();
+      aspectRef.current = width / height;
+      applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current);
       renderer.setSize(width, height, false);
       renderCurrentScene();
     };
@@ -108,7 +117,8 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
     if (!camera || !controls) {
       return;
     }
-    applyCameraMode(camera, controls, cameraMode);
+    cameraModeRef.current = cameraMode;
+    applyCameraMode(camera, controls, cameraMode, aspectRef.current);
     if (renderer && scene) {
       renderer.render(scene, camera);
     }
@@ -155,11 +165,12 @@ function applyCameraMode(
   camera: THREE.OrthographicCamera,
   controls: OrbitControls,
   mode: CameraMode,
+  aspect: number,
 ): void {
   controls.target.copy(ARENA_CENTER);
 
   if (mode === "iso") {
-    const distance = 54;
+    const distance = 64;
     const horizontal = distance * Math.cos(THREE.MathUtils.degToRad(ISO_ELEVATION_DEG));
     const height = distance * Math.sin(THREE.MathUtils.degToRad(ISO_ELEVATION_DEG));
     const diagonal = horizontal / Math.sqrt(2);
@@ -177,8 +188,47 @@ function applyCameraMode(
   }
 
   camera.lookAt(ARENA_CENTER);
+  camera.updateMatrixWorld(true);
+  fitCameraToArena(camera, aspect);
   camera.updateProjectionMatrix();
   controls.update();
+}
+
+function fitCameraToArena(camera: THREE.OrthographicCamera, aspect: number): void {
+  const inverseCameraMatrix = camera.matrixWorldInverse;
+  const corners = [
+    new THREE.Vector3(ARENA_FIT_BOUNDS.minX, ARENA_FIT_BOUNDS.minY, ARENA_FIT_BOUNDS.minZ),
+    new THREE.Vector3(ARENA_FIT_BOUNDS.minX, ARENA_FIT_BOUNDS.minY, ARENA_FIT_BOUNDS.maxZ),
+    new THREE.Vector3(ARENA_FIT_BOUNDS.maxX, ARENA_FIT_BOUNDS.minY, ARENA_FIT_BOUNDS.minZ),
+    new THREE.Vector3(ARENA_FIT_BOUNDS.maxX, ARENA_FIT_BOUNDS.minY, ARENA_FIT_BOUNDS.maxZ),
+    new THREE.Vector3(ARENA_FIT_BOUNDS.minX, ARENA_FIT_BOUNDS.maxY, ARENA_FIT_BOUNDS.minZ),
+    new THREE.Vector3(ARENA_FIT_BOUNDS.minX, ARENA_FIT_BOUNDS.maxY, ARENA_FIT_BOUNDS.maxZ),
+    new THREE.Vector3(ARENA_FIT_BOUNDS.maxX, ARENA_FIT_BOUNDS.maxY, ARENA_FIT_BOUNDS.minZ),
+    new THREE.Vector3(ARENA_FIT_BOUNDS.maxX, ARENA_FIT_BOUNDS.maxY, ARENA_FIT_BOUNDS.maxZ),
+  ];
+
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const corner of corners) {
+    const local = corner.clone().applyMatrix4(inverseCameraMatrix);
+    minX = Math.min(minX, local.x);
+    maxX = Math.max(maxX, local.x);
+    minY = Math.min(minY, local.y);
+    maxY = Math.max(maxY, local.y);
+  }
+
+  const projectedWidth = Math.max(1, Math.max(Math.abs(minX), Math.abs(maxX)) * 2) * FIT_PADDING;
+  const projectedHeight = Math.max(1, Math.max(Math.abs(minY), Math.abs(maxY)) * 2) * FIT_PADDING;
+  const viewHeight = Math.max(projectedHeight, projectedWidth / Math.max(aspect, 0.01));
+  const viewWidth = viewHeight * Math.max(aspect, 0.01);
+
+  camera.left = -viewWidth / 2;
+  camera.right = viewWidth / 2;
+  camera.top = viewHeight / 2;
+  camera.bottom = -viewHeight / 2;
 }
 
 function disposeScene(scene: THREE.Scene): void {

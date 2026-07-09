@@ -81,6 +81,8 @@ class UnitState:
            weapon_cooldown (simulation ticks)
     """
     unit_id: int
+    team_id: int
+    is_enemy: bool
     name: str
     position: Vec2
     hull_heading: float
@@ -93,6 +95,8 @@ class UnitState:
     def from_json(cls, data: Mapping[str, Any]) -> "UnitState":
         return cls(
             unit_id=int(data["unitId"]),
+            team_id=int(data.get("teamId", 0)),
+            is_enemy=bool(data.get("isEnemy", False)),
             name=str(data.get("name", "")),
             position=Vec2.from_json(data["position"]),
             hull_heading=float(data["hullHeadingDegrees"]),
@@ -116,10 +120,17 @@ class UnitState:
 class ContactSet:
     """Contact list sorted by distance from self (closest first)."""
     units: tuple[UnitState, ...]
+    obstacles: tuple[Obstacle, ...]
+    projectiles: tuple[ProjectileContact, ...]
 
     @classmethod
-    def from_json(cls, data: list[Mapping[str, Any]] | None) -> "ContactSet":
-        return cls(tuple(UnitState.from_json(item) for item in data or []))
+    def from_json(cls, data: Mapping[str, Any] | None) -> "ContactSet":
+        data = data or {}
+        return cls(
+            units=tuple(UnitState.from_json(item) for item in data.get("units", [])),
+            obstacles=tuple(Obstacle.from_json(item) for item in data.get("obstacles", [])),
+            projectiles=tuple(ProjectileContact.from_json(item) for item in data.get("projectiles", [])),
+        )
 
     def __iter__(self):
         return iter(self.units)
@@ -128,7 +139,10 @@ class ContactSet:
         return len(self.units)
 
     def closest_enemy(self) -> UnitState | None:
-        return self.units[0] if self.units else None
+        for unit in self.units:
+            if unit.is_enemy:
+                return unit
+        return None
 
 
 @dataclass(frozen=True)
@@ -151,6 +165,33 @@ class Obstacle:
             radius=float(data.get("radiusMeters", 1.0)),
             blocks_movement=bool(data.get("blocksMovement", True)),
             blocks_line_of_sight=bool(data.get("blocksLineOfSight", True)),
+        )
+
+
+@dataclass(frozen=True)
+class ProjectileContact:
+    """Observed projectile contact.
+
+    Units: position/previous_position (meters), radius/height (meters)
+    """
+    projectile_id: int
+    owner_unit_id: int
+    previous_position: Vec2
+    position: Vec2
+    radius: float
+    previous_height: float
+    height: float
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any]) -> "ProjectileContact":
+        return cls(
+            projectile_id=int(data["projectileId"]),
+            owner_unit_id=int(data["ownerUnitId"]),
+            previous_position=Vec2.from_json(data["previousPosition"]),
+            position=Vec2.from_json(data["position"]),
+            radius=float(data.get("radiusMeters", 0.0)),
+            previous_height=float(data.get("previousHeightMeters", 0.0)),
+            height=float(data.get("heightMeters", 0.0)),
         )
 
 

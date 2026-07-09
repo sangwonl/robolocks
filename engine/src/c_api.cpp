@@ -57,12 +57,36 @@ const robolocks::Event* event_at(RobolocksBattleRunnerHandle handle, size_t even
   return &runner->last_result.events[event_index];
 }
 
+const robolocks::EventPayload* event_payload_at(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* event = event_at(handle, event_index);
+  if (event == nullptr) {
+    return nullptr;
+  }
+  return &event->payload;
+}
+
 const robolocks::ProjectileSnapshot* projectile_at(RobolocksBattleRunnerHandle handle, size_t projectile_index) {
   const auto* runner = as_runner(handle);
   if (runner == nullptr || projectile_index >= runner->snapshot.projectiles.size()) {
     return nullptr;
   }
   return &runner->snapshot.projectiles[projectile_index];
+}
+
+const robolocks::BattleScore* score_at(RobolocksBattleRunnerHandle handle, size_t score_index) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr || score_index >= runner->last_result.rule_state.scores.size()) {
+    return nullptr;
+  }
+  return &runner->last_result.rule_state.scores[score_index];
+}
+
+const robolocks::CaptureZoneState* capture_zone_at(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr || zone_index >= runner->last_result.rule_state.capture_zones.size()) {
+    return nullptr;
+  }
+  return &runner->last_result.rule_state.capture_zones[zone_index];
 }
 
 struct ActionRef {
@@ -530,6 +554,71 @@ const char* robolocks_battle_runner_event_message(RobolocksBattleRunnerHandle ha
   return event->message.c_str();
 }
 
+uint64_t robolocks_battle_runner_event_projectile_id(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0 : payload->projectile_id;
+}
+
+uint32_t robolocks_battle_runner_event_source_unit_id(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0 : payload->source_unit_id.value;
+}
+
+uint32_t robolocks_battle_runner_event_target_unit_id(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0 : payload->target_unit_id.value;
+}
+
+uint32_t robolocks_battle_runner_event_source_team_id(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0 : payload->source_team_id;
+}
+
+uint32_t robolocks_battle_runner_event_target_team_id(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0 : payload->target_team_id;
+}
+
+const char* robolocks_battle_runner_event_damage_type(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? "" : payload->damage_type.c_str();
+}
+
+const char* robolocks_battle_runner_event_armor_facing(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? "" : payload->armor_facing.c_str();
+}
+
+double robolocks_battle_runner_event_damage(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0.0 : payload->damage;
+}
+
+double robolocks_battle_runner_event_remaining_armor(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0.0 : payload->remaining_armor;
+}
+
+double robolocks_battle_runner_event_penetration_millimeters(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0.0 : payload->penetration_mm;
+}
+
+double robolocks_battle_runner_event_armor_millimeters(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0.0 : payload->armor_mm;
+}
+
+double robolocks_battle_runner_event_impact_distance_meters(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0.0 : payload->impact_distance_m;
+}
+
+double robolocks_battle_runner_event_blast_radius_meters(RobolocksBattleRunnerHandle handle, size_t event_index) {
+  const auto* payload = event_payload_at(handle, event_index);
+  return payload == nullptr ? 0.0 : payload->blast_radius_m;
+}
+
 size_t robolocks_battle_runner_projectile_count(RobolocksBattleRunnerHandle handle) {
   const auto* runner = as_runner(handle);
   if (runner == nullptr) {
@@ -777,6 +866,121 @@ double robolocks_battle_runner_action_range(RobolocksBattleRunnerHandle handle, 
   }
   const auto* payload = std::get_if<robolocks::ScanArcOrder>(&action.order->payload);
   return payload == nullptr ? 0.0 : payload->range_m;
+}
+
+size_t robolocks_battle_runner_score_count(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
+    return 0;
+  }
+  return runner->last_result.rule_state.scores.size();
+}
+
+uint32_t robolocks_battle_runner_score_unit_id(RobolocksBattleRunnerHandle handle, size_t score_index) {
+  const auto* score = score_at(handle, score_index);
+  return score == nullptr ? 0 : score->unit_id.value;
+}
+
+uint32_t robolocks_battle_runner_score_team_id(RobolocksBattleRunnerHandle handle, size_t score_index) {
+  const auto* score = score_at(handle, score_index);
+  return score == nullptr ? 0 : score->team_id;
+}
+
+uint32_t robolocks_battle_runner_score_kills(RobolocksBattleRunnerHandle handle, size_t score_index) {
+  const auto* score = score_at(handle, score_index);
+  return score == nullptr ? 0 : score->kills;
+}
+
+uint32_t robolocks_battle_runner_score_deaths(RobolocksBattleRunnerHandle handle, size_t score_index) {
+  const auto* score = score_at(handle, score_index);
+  return score == nullptr ? 0 : score->deaths;
+}
+
+double robolocks_battle_runner_score_damage_dealt(RobolocksBattleRunnerHandle handle, size_t score_index) {
+  const auto* score = score_at(handle, score_index);
+  return score == nullptr ? 0.0 : score->damage_dealt;
+}
+
+size_t robolocks_battle_runner_capture_zone_count(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
+    return 0;
+  }
+  return runner->last_result.rule_state.capture_zones.size();
+}
+
+const char* robolocks_battle_runner_capture_zone_id(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* zone = capture_zone_at(handle, zone_index);
+  return zone == nullptr ? "" : zone->id.c_str();
+}
+
+double robolocks_battle_runner_capture_zone_x(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* zone = capture_zone_at(handle, zone_index);
+  return zone == nullptr ? 0.0 : zone->position.x;
+}
+
+double robolocks_battle_runner_capture_zone_y(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* zone = capture_zone_at(handle, zone_index);
+  return zone == nullptr ? 0.0 : zone->position.y;
+}
+
+double robolocks_battle_runner_capture_zone_radius(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* zone = capture_zone_at(handle, zone_index);
+  return zone == nullptr ? 0.0 : zone->radius_m;
+}
+
+uint64_t robolocks_battle_runner_capture_zone_hold_ticks_required(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* zone = capture_zone_at(handle, zone_index);
+  return zone == nullptr ? 0 : zone->hold_ticks_required;
+}
+
+uint64_t robolocks_battle_runner_capture_zone_held_ticks(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* zone = capture_zone_at(handle, zone_index);
+  return zone == nullptr ? 0 : zone->held_ticks;
+}
+
+uint32_t robolocks_battle_runner_capture_zone_owner_unit_id(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* zone = capture_zone_at(handle, zone_index);
+  return zone == nullptr ? 0 : zone->owner_unit_id.value;
+}
+
+uint32_t robolocks_battle_runner_capture_zone_owner_team_id(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* zone = capture_zone_at(handle, zone_index);
+  return zone == nullptr ? 0 : zone->owner_team_id;
+}
+
+int robolocks_battle_runner_capture_zone_contested(RobolocksBattleRunnerHandle handle, size_t zone_index) {
+  const auto* zone = capture_zone_at(handle, zone_index);
+  return zone != nullptr && zone->contested ? 1 : 0;
+}
+
+int robolocks_battle_runner_outcome_finished(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  return runner != nullptr && runner->last_result.rule_state.outcome.finished ? 1 : 0;
+}
+
+const char* robolocks_battle_runner_outcome_reason(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
+    return "";
+  }
+  return runner->last_result.rule_state.outcome.reason.c_str();
+}
+
+uint32_t robolocks_battle_runner_outcome_winner_unit_id(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
+    return 0;
+  }
+  return runner->last_result.rule_state.outcome.winner_unit_id.value;
+}
+
+uint32_t robolocks_battle_runner_outcome_winner_team_id(RobolocksBattleRunnerHandle handle) {
+  const auto* runner = as_runner(handle);
+  if (runner == nullptr) {
+    return 0;
+  }
+  return runner->last_result.rule_state.outcome.winner_team_id;
 }
 
 }

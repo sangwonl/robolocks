@@ -220,6 +220,7 @@ class UnitModulesSpec:
 @dataclass(frozen=True)
 class UnitSpec:
     unit_id: int
+    team_id: int
     name: str
     position: Vec2
     hull_heading: float
@@ -230,6 +231,7 @@ class UnitSpec:
         transform = data.get("transform", {})
         return cls(
             unit_id=int(data.get("unitId", 0)),
+            team_id=int(data.get("teamId", 0)),
             name=str(data.get("name", "")),
             position=Vec2.from_json(transform.get("position", {"x": 0.0, "y": 0.0})),
             hull_heading=float(transform.get("hullHeadingDegrees", 0.0)),

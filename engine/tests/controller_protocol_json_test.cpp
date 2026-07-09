@@ -11,6 +11,7 @@ TEST_CASE("controller protocol serializes observation for external bots") {
   observation.self_id = robolocks::UnitId{1};
   observation.self = robolocks::UnitSnapshot{
     .unit_id = robolocks::UnitId{1},
+    .team_id = 10,
     .position = robolocks::Vec2{6.0, 12.0},
     .hull_heading_deg = 15.0,
     .turret_heading_deg = 20.0,
@@ -29,8 +30,10 @@ TEST_CASE("controller protocol serializes observation for external bots") {
     .weapon_intent_min_hit_chance = 0.6,
     .weapon_intent_age_ticks = 3,
   };
-  observation.contacts.push_back(robolocks::ContactObservation{
+  observation.contacts.units.push_back(robolocks::ContactObservation{
     .unit_id = robolocks::UnitId{2},
+    .team_id = 20,
+    .is_enemy = true,
     .position = robolocks::Vec2{34.0, 12.0},
     .hull_heading_deg = 180.0,
     .turret_heading_deg = 175.0,
@@ -45,12 +48,29 @@ TEST_CASE("controller protocol serializes observation for external bots") {
     .blocks_movement = true,
     .blocks_line_of_sight = true,
   });
+  observation.contacts.obstacles.push_back(robolocks::StaticObstacle{
+    .id = "visible_cover",
+    .position = robolocks::Vec2{12.0, 8.0},
+    .radius_m = 1.25,
+    .blocks_movement = true,
+    .blocks_line_of_sight = true,
+  });
+  observation.contacts.projectiles.push_back(robolocks::ProjectileSnapshot{
+    .projectile_id = 7,
+    .owner_unit_id = robolocks::UnitId{2},
+    .previous_position = robolocks::Vec2{14.0, 12.0},
+    .position = robolocks::Vec2{16.0, 12.0},
+    .radius_m = 0.08,
+    .previous_height_m = 1.5,
+    .height_m = 1.5,
+  });
 
   const auto json = robolocks::observation_to_json(observation);
 
   REQUIRE(json.at("tick") == 42);
   REQUIRE(json.at("selfId") == 1);
   REQUIRE(json.at("self").at("unitId") == 1);
+  REQUIRE(json.at("self").at("teamId") == 10);
   REQUIRE(json.at("self").at("position").at("x") == Catch::Approx(6.0));
   REQUIRE(json.at("self").at("position").at("y") == Catch::Approx(12.0));
   REQUIRE(json.at("self").at("hullHeadingDegrees") == Catch::Approx(15.0));
@@ -73,15 +93,29 @@ TEST_CASE("controller protocol serializes observation for external bots") {
   REQUIRE(json.at("self").at("intents").at("weapon").at("minHitChance") == Catch::Approx(0.6));
   REQUIRE(json.at("self").at("intents").at("weapon").at("ageTicks") == 3);
 
-  REQUIRE(json.at("contacts").size() == 1);
-  REQUIRE(json.at("contacts").at(0).at("unitId") == 2);
-  REQUIRE(json.at("contacts").at(0).at("position").at("x") == Catch::Approx(34.0));
-  REQUIRE(json.at("contacts").at(0).at("position").at("y") == Catch::Approx(12.0));
-  REQUIRE(json.at("contacts").at(0).at("weaponCooldownTicks") == 3);
-  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("type") == "box");
-  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("radiusMeters") == Catch::Approx(1.0));
-  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("lengthMeters") == Catch::Approx(5.6));
-  REQUIRE(json.at("contacts").at(0).at("bodyShape").at("widthMeters") == Catch::Approx(2.8));
+  REQUIRE(json.at("contacts").at("units").size() == 1);
+  REQUIRE(json.at("contacts").at("units").at(0).at("unitId") == 2);
+  REQUIRE(json.at("contacts").at("units").at(0).at("teamId") == 20);
+  REQUIRE(json.at("contacts").at("units").at(0).at("isEnemy") == true);
+  REQUIRE(json.at("contacts").at("units").at(0).at("position").at("x") == Catch::Approx(34.0));
+  REQUIRE(json.at("contacts").at("units").at(0).at("position").at("y") == Catch::Approx(12.0));
+  REQUIRE(json.at("contacts").at("units").at(0).at("weaponCooldownTicks") == 3);
+  REQUIRE(json.at("contacts").at("units").at(0).at("bodyShape").at("type") == "box");
+  REQUIRE(json.at("contacts").at("units").at(0).at("bodyShape").at("radiusMeters") == Catch::Approx(1.0));
+  REQUIRE(json.at("contacts").at("units").at(0).at("bodyShape").at("lengthMeters") == Catch::Approx(5.6));
+  REQUIRE(json.at("contacts").at("units").at(0).at("bodyShape").at("widthMeters") == Catch::Approx(2.8));
+  REQUIRE(json.at("contacts").at("obstacles").size() == 1);
+  REQUIRE(json.at("contacts").at("obstacles").at(0).at("id") == "visible_cover");
+  REQUIRE(json.at("contacts").at("obstacles").at(0).at("position").at("x") == Catch::Approx(12.0));
+  REQUIRE(json.at("contacts").at("obstacles").at(0).at("radiusMeters") == Catch::Approx(1.25));
+  REQUIRE(json.at("contacts").at("projectiles").size() == 1);
+  REQUIRE(json.at("contacts").at("projectiles").at(0).at("projectileId") == 7);
+  REQUIRE(json.at("contacts").at("projectiles").at(0).at("ownerUnitId") == 2);
+  REQUIRE(json.at("contacts").at("projectiles").at(0).at("previousPosition").at("x") == Catch::Approx(14.0));
+  REQUIRE(json.at("contacts").at("projectiles").at(0).at("position").at("x") == Catch::Approx(16.0));
+  REQUIRE(json.at("contacts").at("projectiles").at(0).at("radiusMeters") == Catch::Approx(0.08));
+  REQUIRE(json.at("contacts").at("projectiles").at(0).at("previousHeightMeters") == Catch::Approx(1.5));
+  REQUIRE(json.at("contacts").at("projectiles").at(0).at("heightMeters") == Catch::Approx(1.5));
   REQUIRE(json.at("map").at("obstacles").size() == 1);
   REQUIRE(json.at("map").at("obstacles").at(0).at("id") == "north_cover");
   REQUIRE(json.at("map").at("obstacles").at(0).at("position").at("x") == Catch::Approx(20.0));

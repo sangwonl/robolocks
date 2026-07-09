@@ -5,7 +5,14 @@ import { Pause, Play, RotateCcw, SkipBack, SkipForward } from "lucide-react";
 import type { BattleAction, BattleEvent, BattleFrame, UnitFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
-import { DEFAULT_RESEARCH_BOT_SOURCE, runResearchInBrowser, type BotLogEntry } from "../research/research.ts";
+import {
+  DEFAULT_RESEARCH_BOT_SOURCE,
+  RESEARCH_BATTLE_PRESETS,
+  RESEARCH_UNIT_PRESETS,
+  createResearchBattleConfigJson,
+  runResearchInBrowser,
+  type BotLogEntry,
+} from "../research/research.ts";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
@@ -42,6 +49,8 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [workbenchMode, setWorkbenchMode] = useState<"replay" | "research">("research");
+  const [researchBattlePresetId, setResearchBattlePresetId] = useState(RESEARCH_BATTLE_PRESETS[0]?.id ?? "");
+  const [researchUnitPresetId, setResearchUnitPresetId] = useState(RESEARCH_UNIT_PRESETS[0]?.id ?? "");
   const [researchBotSource, setResearchBotSource] = useState(DEFAULT_RESEARCH_BOT_SOURCE);
   const [researchTickCount, setResearchTickCount] = useState(180);
   const [botLogs, setBotLogs] = useState<BotLogEntry[]>([]);
@@ -58,6 +67,15 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const canStepForward = Boolean(loadedReplay && replayIndex < loadedReplay.frames.length - 1);
   const canPlay = Boolean(loadedReplay && loadedReplay.frames.length > 1);
   const frameCount = loadedReplay?.frames.length ?? 0;
+  const researchBattlePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === researchBattlePresetId) ?? RESEARCH_BATTLE_PRESETS[0];
+  const researchUnitPreset = RESEARCH_UNIT_PRESETS.find((preset) => preset.id === researchUnitPresetId) ?? RESEARCH_UNIT_PRESETS[0];
+  const researchBattleConfigJson = useMemo(
+    () => createResearchBattleConfigJson({
+      battlePresetId: researchBattlePresetId,
+      unitPresetId: researchUnitPresetId,
+    }),
+    [researchBattlePresetId, researchUnitPresetId],
+  );
 
   const statusText = useMemo(() => {
     if (!loadedReplay || !frame) {
@@ -143,6 +161,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     setStatus("Running research");
     try {
       const result = await runResearchInBrowser({
+        battleConfigJson: researchBattleConfigJson,
         botSource: researchBotSource,
         tickCount: researchTickCount,
       });
@@ -221,21 +240,57 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
           <TabsContent value="research" className="tab-content research-tab">
             <div className="research-panel">
               <div className="research-toolbar">
-                <div className="field-control field-control-inline">
-                  <Label htmlFor="research-ticks">Ticks</Label>
-                  <Input
-                    id="research-ticks"
-                    type="number"
-                    min={1}
-                    max={900}
-                    value={researchTickCount}
-                    disabled={isLoading}
-                    onChange={(event) => setResearchTickCount(Number(event.currentTarget.value))}
-                  />
+                <div className="preset-controls" aria-label="Research presets">
+                  <div className="field-control">
+                    <Label htmlFor="research-battle-preset">Battle</Label>
+                    <select
+                      id="research-battle-preset"
+                      value={researchBattlePresetId}
+                      disabled={isLoading}
+                      onChange={(event) => setResearchBattlePresetId(event.currentTarget.value)}
+                    >
+                      {RESEARCH_BATTLE_PRESETS.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field-control">
+                    <Label htmlFor="research-unit-preset">Unit</Label>
+                    <select
+                      id="research-unit-preset"
+                      value={researchUnitPresetId}
+                      disabled={isLoading}
+                      onChange={(event) => setResearchUnitPresetId(event.currentTarget.value)}
+                    >
+                      {RESEARCH_UNIT_PRESETS.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field-control field-control-inline">
+                    <Label htmlFor="research-ticks">Ticks</Label>
+                    <Input
+                      id="research-ticks"
+                      type="number"
+                      min={1}
+                      max={900}
+                      value={researchTickCount}
+                      disabled={isLoading}
+                      onChange={(event) => setResearchTickCount(Number(event.currentTarget.value))}
+                    />
+                  </div>
+                  <Button type="button" disabled={isLoading} onClick={() => void runResearch()}>
+                    Run
+                  </Button>
+                  <div className="preset-description">
+                    <span>{researchBattlePreset?.description ?? ""}</span>
+                    <span>{researchUnitPreset?.description ?? ""}</span>
+                  </div>
                 </div>
-                <Button type="button" disabled={isLoading} onClick={() => void runResearch()}>
-                  Run
-                </Button>
               </div>
               <Suspense fallback={<div className="code-editor-loading">Loading editor</div>}>
                 <CodeEditor
@@ -279,7 +334,13 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
           <h1>Bot State</h1>
           <span>{frame ? `tick ${frame.tick}` : "No Frame"}</span>
         </div>
-        <Accordion type="multiple" defaultValue={["units"]} className="state-panel-sections">
+        <Accordion type="multiple" defaultValue={["rules", "units"]} className="state-panel-sections">
+          <AccordionItem value="rules" className="state-section state-section-rules">
+            <AccordionTrigger className="state-section-trigger">Rules</AccordionTrigger>
+            <AccordionContent className="state-section-content">
+              <RuleSummary frame={frame} />
+            </AccordionContent>
+          </AccordionItem>
           <AccordionItem value="units" className="state-section state-section-units">
             <AccordionTrigger className="state-section-trigger">Units</AccordionTrigger>
             <AccordionContent className="state-section-content">
@@ -295,6 +356,68 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
         </Accordion>
       </aside>
     </section>
+  );
+}
+
+function RuleSummary({ frame }: { frame: BattleFrame | null }) {
+  if (!frame) {
+    return <div className="rule-summary rule-summary-empty">No rule state.</div>;
+  }
+  const { outcome, scores } = frame.ruleState;
+  return (
+    <div className="rule-summary">
+      <div className="rule-outcome" data-finished={outcome.finished}>
+        <span>{outcome.finished ? "Finished" : "Running"}</span>
+        <strong>{outcome.reason || "active"}</strong>
+        {(outcome.winnerTeamId > 0 || outcome.winnerUnitId > 0) && (
+          <em>
+            {outcome.winnerTeamId > 0 ? `team ${outcome.winnerTeamId}` : ""}
+            {outcome.winnerUnitId > 0 ? ` unit ${outcome.winnerUnitId}` : ""}
+          </em>
+        )}
+      </div>
+      {scores.length === 0 ? (
+        <div className="rule-summary-empty">No scores.</div>
+      ) : (
+        <div className="score-table" role="table" aria-label="Battle scores">
+          <div className="score-row score-row-head" role="row">
+            <span>Unit</span>
+            <span>Team</span>
+            <span>K</span>
+            <span>D</span>
+            <span>Dmg</span>
+          </div>
+          {scores.map((score) => (
+            <div key={`${score.unitId}-${score.teamId}`} className="score-row" role="row">
+              <span>{score.unitId}</span>
+              <span>{score.teamId}</span>
+              <span>{score.kills}</span>
+              <span>{score.deaths}</span>
+              <span>{score.damageDealt.toFixed(0)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {frame.ruleState.captureZones.length > 0 && (
+        <div className="capture-zone-list">
+          {frame.ruleState.captureZones.map((zone) => (
+            <div key={zone.id} className="capture-zone-row" data-contested={zone.contested}>
+              <span>{zone.id}</span>
+              <strong>
+                {zone.heldTicks}/{zone.holdTicksRequired}
+              </strong>
+              <em>
+                {zone.contested
+                  ? "contested"
+                  : zone.ownerTeamId > 0
+                    ? `team ${zone.ownerTeamId}`
+                    : "neutral"}
+              </em>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

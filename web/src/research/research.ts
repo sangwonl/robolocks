@@ -80,6 +80,31 @@ export type ResearchRunnerFactory = (options: {
   onTick: JsonBotTick;
 }) => Promise<KernelBattleRunner>;
 
+export type ResearchBattlePreset = {
+  id: string;
+  label: string;
+  description: string;
+  obstacles: unknown[];
+  blueSpawn: { x: number; y: number; headingDeg: number };
+  targetSpawn: { x: number; y: number; headingDeg: number };
+};
+
+export type ResearchUnitPreset = {
+  id: string;
+  label: string;
+  description: string;
+  modules: ResearchUnitModulesConfig;
+};
+
+type ResearchUnitModulesConfig = {
+  mobility: Record<string, unknown>;
+  turret: Record<string, unknown>;
+  weapon: Record<string, unknown>;
+  armor: Record<string, unknown>;
+  body: Record<string, unknown>;
+  sensor: Record<string, unknown>;
+};
+
 export async function runResearchInBrowser(options: ResearchRunOptions): Promise<ResearchRunResult> {
   const tickCount = normalizeTickCount(options.tickCount);
   const battleConfigJson = options.battleConfigJson ?? DEFAULT_RESEARCH_BATTLE_CONFIG_JSON;
@@ -134,6 +159,7 @@ export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
   units: [
     {
       unitId: 1,
+      teamId: 1,
       name: "Blue",
       spawn: { x: 4, y: 5, headingDeg: 35 },
       modules: {
@@ -147,6 +173,7 @@ export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
     },
     {
       unitId: 2,
+      teamId: 2,
       name: "Target",
       spawn: { x: 34, y: 18, headingDeg: 215 },
       modules: {
@@ -162,7 +189,188 @@ export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
   controllers: [
     { unitId: 1, type: "json_callback" },
   ],
+  rule: {
+    mode: "kill_limit_deathmatch",
+    teamMode: "team",
+    killLimit: 3,
+    timeLimitTicks: 9000,
+    respawn: {
+      enabled: true,
+      cooldownTicks: 90,
+      invulnerableTicks: 30,
+      spawnPoints: [
+        { id: "blue_research_spawn", teamId: 1, position: { x: 4, y: 5 }, radiusMeters: 2.5, headingDegrees: 35 },
+        { id: "target_research_spawn", teamId: 2, position: { x: 34, y: 18 }, radiusMeters: 2.5, headingDegrees: 215 },
+      ],
+    },
+  },
 });
+
+const STANDARD_MODULES: ResearchUnitModulesConfig = {
+  mobility: { id: "tracked_chassis_mk1", maxSpeedMetersPerSecond: 6.0, maxHullTurnDegreesPerSecond: 120.0 },
+  turret: { id: "light_turret_mk1", maxTurnDegreesPerSecond: 180.0 },
+  weapon: { id: "slow_cannon_test", damage: 25.0, penetrationMillimeters: 80.0, rangeMeters: 80.0, muzzleVelocityMetersPerSecond: 20.0, muzzleOffsetMeters: { x: 3.6, y: 0.0, z: 1.65 }, projectileRadiusMeters: 0.08, reloadTicks: 90 },
+  armor: { id: "rolled_armor_mk1", integrity: 100.0, frontMillimeters: 100.0, sideMillimeters: 70.0, rearMillimeters: 45.0 },
+  body: { id: "medium_hull_mk1", massKilograms: 30000.0, shape: { type: "box", radiusMeters: 1.2, lengthMeters: 5.6, widthMeters: 2.8 } },
+  sensor: { id: "visual_optic_mk1", rangeMeters: 60.0, fovDegrees: 120.0, refreshTicks: 1 },
+};
+
+const FIXED_TARGET_MODULES: ResearchUnitModulesConfig = {
+  ...STANDARD_MODULES,
+  mobility: { id: "fixed_target_chassis", maxSpeedMetersPerSecond: 0.0, maxHullTurnDegreesPerSecond: 60.0 },
+};
+
+export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
+  {
+    id: "covered_duel",
+    label: "Covered Duel",
+    description: "One line-of-sight blocker between a mobile unit and a fixed target.",
+    obstacles: [
+      {
+        id: "research_cover",
+        position: { x: 20, y: 6 },
+        radiusMeters: 1.5,
+        blocksMovement: true,
+        blocksLineOfSight: true,
+      },
+    ],
+    blueSpawn: { x: 4, y: 5, headingDeg: 35 },
+    targetSpawn: { x: 34, y: 18, headingDeg: 215 },
+  },
+  {
+    id: "open_range",
+    label: "Open Range",
+    description: "No cover, useful for weapon timing and sensor checks.",
+    obstacles: [],
+    blueSpawn: { x: 5, y: 12, headingDeg: 0 },
+    targetSpawn: { x: 34, y: 12, headingDeg: 180 },
+  },
+  {
+    id: "close_cover",
+    label: "Close Cover",
+    description: "Shorter spawn distance with central cover pressure.",
+    obstacles: [
+      {
+        id: "center_cover",
+        position: { x: 19, y: 12 },
+        radiusMeters: 2.0,
+        blocksMovement: true,
+        blocksLineOfSight: true,
+      },
+    ],
+    blueSpawn: { x: 9, y: 9, headingDeg: 20 },
+    targetSpawn: { x: 29, y: 16, headingDeg: 210 },
+  },
+];
+
+export const RESEARCH_UNIT_PRESETS: ResearchUnitPreset[] = [
+  {
+    id: "standard_tank",
+    label: "Standard Tank",
+    description: "Balanced speed, armor, and direct-fire cannon.",
+    modules: STANDARD_MODULES,
+  },
+  {
+    id: "heavy_gunner",
+    label: "Heavy Gunner",
+    description: "Slower hull with stronger armor and higher penetration.",
+    modules: {
+      ...STANDARD_MODULES,
+      mobility: { id: "heavy_tracks_v0", maxSpeedMetersPerSecond: 3.2, maxHullTurnDegreesPerSecond: 70.0 },
+      weapon: { ...STANDARD_MODULES.weapon, id: "heavy_cannon_v0", damage: 42.0, penetrationMillimeters: 150.0, muzzleVelocityMetersPerSecond: 28.0, reloadTicks: 120 },
+      armor: { id: "heavy_armor_v0", integrity: 150.0, frontMillimeters: 160.0, sideMillimeters: 95.0, rearMillimeters: 60.0 },
+      body: { id: "heavy_hull_v0", massKilograms: 47000.0, shape: { type: "box", radiusMeters: 1.45, lengthMeters: 6.4, widthMeters: 3.2 } },
+    },
+  },
+  {
+    id: "ballistic_test",
+    label: "Ballistic Test",
+    description: "Slow indirect projectile with blast radius and visible arc.",
+    modules: {
+      ...STANDARD_MODULES,
+      mobility: { id: "slow_chassis_test", maxSpeedMetersPerSecond: 3.0, maxHullTurnDegreesPerSecond: 60.0 },
+      weapon: { id: "howitzer_test", fireMode: "ballistic", damage: 30.0, penetrationMillimeters: 65.0, rangeMeters: 95.0, muzzleVelocityMetersPerSecond: 36.0, muzzleOffsetMeters: { x: 3.3, y: 0.0, z: 1.8 }, launchAngleDegrees: 45.0, gravityMetersPerSecondSquared: 9.81, blastRadiusMeters: 2.5, projectileRadiusMeters: 0.12, aimToleranceDegrees: 8.0, reloadTicks: 105 },
+    },
+  },
+  {
+    id: "scout_optics",
+    label: "Scout Optics",
+    description: "Fast chassis and wider sensor cone with lighter armor.",
+    modules: {
+      ...STANDARD_MODULES,
+      mobility: { id: "scout_tracks_v0", maxSpeedMetersPerSecond: 8.5, maxHullTurnDegreesPerSecond: 165.0 },
+      armor: { id: "light_armor_v0", integrity: 72.0, frontMillimeters: 60.0, sideMillimeters: 40.0, rearMillimeters: 30.0 },
+      sensor: { id: "wide_optic_v0", rangeMeters: 75.0, fovDegrees: 170.0, refreshTicks: 1 },
+      body: { id: "light_hull_v0", massKilograms: 18000.0, shape: { type: "box", radiusMeters: 1.0, lengthMeters: 4.8, widthMeters: 2.4 } },
+    },
+  },
+];
+
+export function createResearchBattleConfigJson(options: {
+  battlePresetId: string;
+  unitPresetId: string;
+}): string {
+  const battlePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === options.battlePresetId) ?? RESEARCH_BATTLE_PRESETS[0];
+  const unitPreset = RESEARCH_UNIT_PRESETS.find((preset) => preset.id === options.unitPresetId) ?? RESEARCH_UNIT_PRESETS[0];
+
+  return JSON.stringify({
+    battleId: `research_${battlePreset.id}_${unitPreset.id}`,
+    seed: 1,
+    tickRate: 30,
+    tickLimit: 9000,
+    obstacles: cloneJson(battlePreset.obstacles),
+    units: [
+      {
+        unitId: 1,
+        teamId: 1,
+        name: "Blue",
+        spawn: battlePreset.blueSpawn,
+        modules: cloneJson(unitPreset.modules),
+      },
+      {
+        unitId: 2,
+        teamId: 2,
+        name: "Target",
+        spawn: battlePreset.targetSpawn,
+        modules: cloneJson(FIXED_TARGET_MODULES),
+      },
+    ],
+    controllers: [
+      { unitId: 1, type: "json_callback" },
+    ],
+    rule: {
+      mode: "kill_limit_deathmatch",
+      teamMode: "team",
+      killLimit: 3,
+      timeLimitTicks: 9000,
+      respawn: {
+        enabled: true,
+        cooldownTicks: 90,
+        invulnerableTicks: 30,
+        spawnPoints: [
+          {
+            id: "blue_research_spawn",
+            teamId: 1,
+            position: { x: battlePreset.blueSpawn.x, y: battlePreset.blueSpawn.y },
+            radiusMeters: 2.5,
+            headingDegrees: battlePreset.blueSpawn.headingDeg,
+          },
+          {
+            id: "target_research_spawn",
+            teamId: 2,
+            position: { x: battlePreset.targetSpawn.x, y: battlePreset.targetSpawn.y },
+            radiusMeters: 2.5,
+            headingDegrees: battlePreset.targetSpawn.headingDeg,
+          },
+        ],
+      },
+    },
+  });
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
 
 function normalizeTickCount(value: number): number {
   if (!Number.isFinite(value)) {
@@ -310,12 +518,12 @@ const PYTHON_SDK_FILES: Record<string, string> = {
 from .orders import AimAt, FaceArmorToward, FireIfSolution, MoveTo, Order, OrderLike, OrderList, ScanArc
 from .runtime import LifecycleHook, OnTick, run_bot
 from .spec import ArmorSpec, BodyShapeSpec, BodySpec, MobilitySpec, SensorSpec, TurretSpec, UnitModulesSpec, UnitSpec, Vec3, WeaponSpec
-from .state import BattleMap, BattleState, ContactSet, IntentState, UnitState, WeaponIntentState
+from .state import BattleMap, BattleState, ContactSet, IntentState, Obstacle, ProjectileContact, UnitState, WeaponIntentState
 
 __all__ = [
     "AimAt", "BattleMap", "BattleState", "ContactSet", "FaceArmorToward",
     "FireIfSolution", "IntentState", "LifecycleHook", "MoveTo", "OnTick",
-    "Order", "OrderLike", "OrderList", "ScanArc", "ArmorSpec", "BodyShapeSpec", "BodySpec",
+    "Order", "OrderLike", "OrderList", "Obstacle", "ProjectileContact", "ScanArc", "ArmorSpec", "BodyShapeSpec", "BodySpec",
     "MobilitySpec", "SensorSpec", "TurretSpec", "UnitModulesSpec", "UnitSpec",
     "UnitState", "Vec2", "Vec3", "WeaponSpec", "WeaponIntentState", "distance", "run_bot",
 ]
@@ -611,6 +819,7 @@ class UnitModulesSpec:
 @dataclass(frozen=True)
 class UnitSpec:
     unit_id: int
+    team_id: int
     name: str
     position: Vec2
     hull_heading: float
@@ -621,6 +830,7 @@ class UnitSpec:
         transform = data.get("transform", {})
         return cls(
             unit_id=int(data.get("unitId", 0)),
+            team_id=int(data.get("teamId", 0)),
             name=str(data.get("name", "")),
             position=Vec2.from_json(transform.get("position", {"x": 0.0, "y": 0.0})),
             hull_heading=float(transform.get("hullHeadingDegrees", 0.0)),
@@ -697,6 +907,8 @@ class UnitIntents:
 @dataclass(frozen=True)
 class UnitState:
     unit_id: int
+    team_id: int
+    is_enemy: bool
     name: str
     position: Vec2
     hull_heading: float
@@ -709,6 +921,8 @@ class UnitState:
     def from_json(cls, data: Mapping[str, Any]) -> "UnitState":
         return cls(
             unit_id=int(data["unitId"]),
+            team_id=int(data.get("teamId", 0)),
+            is_enemy=bool(data.get("isEnemy", False)),
             name=str(data.get("name", "")),
             position=Vec2.from_json(data["position"]),
             hull_heading=float(data["hullHeadingDegrees"]),
@@ -731,10 +945,17 @@ class UnitState:
 @dataclass(frozen=True)
 class ContactSet:
     units: tuple[UnitState, ...]
+    obstacles: tuple[Obstacle, ...]
+    projectiles: tuple[ProjectileContact, ...]
 
     @classmethod
-    def from_json(cls, data: list[Mapping[str, Any]] | None) -> "ContactSet":
-        return cls(tuple(UnitState.from_json(item) for item in data or []))
+    def from_json(cls, data: Mapping[str, Any] | None) -> "ContactSet":
+        data = data or {}
+        return cls(
+            units=tuple(UnitState.from_json(item) for item in data.get("units", [])),
+            obstacles=tuple(Obstacle.from_json(item) for item in data.get("obstacles", [])),
+            projectiles=tuple(ProjectileContact.from_json(item) for item in data.get("projectiles", [])),
+        )
 
     def __iter__(self):
         return iter(self.units)
@@ -743,7 +964,10 @@ class ContactSet:
         return len(self.units)
 
     def closest_enemy(self) -> UnitState | None:
-        return self.units[0] if self.units else None
+        for unit in self.units:
+            if unit.is_enemy:
+                return unit
+        return None
 
 
 @dataclass(frozen=True)
@@ -762,6 +986,29 @@ class Obstacle:
             radius=float(data.get("radiusMeters", 1.0)),
             blocks_movement=bool(data.get("blocksMovement", True)),
             blocks_line_of_sight=bool(data.get("blocksLineOfSight", True)),
+        )
+
+
+@dataclass(frozen=True)
+class ProjectileContact:
+    projectile_id: int
+    owner_unit_id: int
+    previous_position: Vec2
+    position: Vec2
+    radius: float
+    previous_height: float
+    height: float
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any]) -> "ProjectileContact":
+        return cls(
+            projectile_id=int(data["projectileId"]),
+            owner_unit_id=int(data["ownerUnitId"]),
+            previous_position=Vec2.from_json(data["previousPosition"]),
+            position=Vec2.from_json(data["position"]),
+            radius=float(data.get("radiusMeters", 0.0)),
+            previous_height=float(data.get("previousHeightMeters", 0.0)),
+            height=float(data.get("heightMeters", 0.0)),
         )
 
 

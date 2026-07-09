@@ -9,6 +9,8 @@ namespace robolocks {
 
 struct UnitState {
   UnitId unit_id;
+  std::uint32_t team_id = 0;
+  TransformSpec spawn_transform;
   TransformSpec transform;
   MobilitySpec mobility;
   TurretSpec turret;
@@ -17,6 +19,8 @@ struct UnitState {
   BodySpec body;
   SensorSpec sensor;
   UnitModulesSnapshot module_specs;
+  double max_armor_integrity = 100.0;
+  Tick invulnerable_until_tick = 0;
   Tick weapon_cooldown_ticks = 0;
   bool mobility_intent_active = false;
   Vec2 mobility_intent_target;

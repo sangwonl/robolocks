@@ -20,6 +20,7 @@ struct UnitModulesSnapshot {
 
 struct UnitSnapshot {
   UnitId unit_id;
+  std::uint32_t team_id = 0;
   Vec2 position;
   double hull_heading_deg = 0.0;
   double turret_heading_deg = 0.0;
@@ -30,6 +31,7 @@ struct UnitSnapshot {
   double body_length_m = 5.6;
   double body_width_m = 2.8;
   UnitModulesSnapshot modules;
+  Tick invulnerable_until_tick = 0;
   bool mobility_intent_active = false;
   Vec2 mobility_intent_target;
   double mobility_intent_remaining_m = 0.0;
@@ -59,6 +61,10 @@ struct ProjectileSnapshot {
 
 struct EventPayload {
   std::uint64_t projectile_id = 0;
+  UnitId source_unit_id;
+  UnitId target_unit_id;
+  std::uint32_t source_team_id = 0;
+  std::uint32_t target_team_id = 0;
   std::string damage_type;
   std::string armor_facing;
   double damage = 0.0;

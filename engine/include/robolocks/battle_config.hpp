@@ -92,8 +92,52 @@ struct StaticObstacle {
   bool blocks_line_of_sight = true;
 };
 
+enum class BattleRuleMode {
+  None,
+  TimedDeathmatch,
+  KillLimitDeathmatch,
+  CapturePoint,
+};
+
+enum class BattleTeamMode {
+  Solo,
+  Team,
+};
+
+struct SpawnPointSpec {
+  std::string id;
+  std::uint32_t team_id = 0;
+  Vec2 position;
+  double radius_m = 0.0;
+  double heading_deg = 0.0;
+};
+
+struct CaptureZoneSpec {
+  std::string id;
+  Vec2 position;
+  double radius_m = 1.0;
+  Tick hold_ticks = 0;
+};
+
+struct RespawnRuleConfig {
+  bool enabled = false;
+  Tick cooldown_ticks = 0;
+  Tick invulnerable_ticks = 0;
+  std::vector<SpawnPointSpec> spawn_points;
+};
+
+struct BattleRuleConfig {
+  BattleRuleMode mode = BattleRuleMode::None;
+  BattleTeamMode team_mode = BattleTeamMode::Solo;
+  Tick time_limit_ticks = 0;
+  std::uint32_t kill_limit = 0;
+  RespawnRuleConfig respawn;
+  std::vector<CaptureZoneSpec> capture_zones;
+};
+
 struct UnitSpec {
   UnitId unit_id;
+  std::uint32_t team_id = 0;
   std::string name;
   TransformSpec transform;
   MobilitySpec mobility;
@@ -112,6 +156,7 @@ struct BattleConfig {
   BattleBounds bounds;
   std::vector<StaticObstacle> obstacles;
   std::vector<UnitSpec> units;
+  BattleRuleConfig rule;
 };
 
 }  // namespace robolocks

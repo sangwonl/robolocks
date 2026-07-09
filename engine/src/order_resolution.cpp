@@ -12,6 +12,7 @@ Event diagnostic_event(Tick tick, UnitId unit_id, std::string code, std::string 
     .unit_id = unit_id,
     .code = std::move(code),
     .message = std::move(message),
+    .payload = EventPayload{},
   };
 }
 

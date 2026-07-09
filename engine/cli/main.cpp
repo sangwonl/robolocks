@@ -80,6 +80,7 @@ void print_vec_json(const robolocks::Vec2& vec, std::ostream& out);
 void print_vec3_json(const robolocks::Vec3& vec, std::ostream& out);
 void print_projectiles_json_compact(const std::vector<robolocks::ProjectileSnapshot>& projectiles, std::ostream& out);
 void print_event_payload_json_compact(const robolocks::EventPayload& payload, std::ostream& out);
+void print_rule_state_json_compact(const robolocks::BattleRuleState* rule_state, std::ostream& out);
 
 void print_snapshot_json(const robolocks::WorldSnapshot& snapshot, std::ostream& out) {
   out << std::setprecision(15);
@@ -135,6 +136,10 @@ void print_events_json_compact(const std::vector<robolocks::Event>& events, std:
 void print_event_payload_json_compact(const robolocks::EventPayload& payload, std::ostream& out) {
   out << "{";
   out << "\"projectileId\":" << payload.projectile_id << ",";
+  out << "\"sourceUnitId\":" << payload.source_unit_id.value << ",";
+  out << "\"targetUnitId\":" << payload.target_unit_id.value << ",";
+  out << "\"sourceTeamId\":" << payload.source_team_id << ",";
+  out << "\"targetTeamId\":" << payload.target_team_id << ",";
   out << "\"damageType\":\"" << payload.damage_type << "\",";
   out << "\"armorFacing\":\"" << payload.armor_facing << "\",";
   out << "\"damage\":" << payload.damage << ",";
@@ -361,7 +366,8 @@ void print_snapshot_json_compact(
   const robolocks::WorldSnapshot& snapshot,
   std::ostream& out,
   const std::vector<robolocks::Event>& events = {},
-  const std::vector<robolocks::UnitOrders>& orders_by_unit = {}
+  const std::vector<robolocks::UnitOrders>& orders_by_unit = {},
+  const robolocks::BattleRuleState* rule_state = nullptr
 ) {
   out << std::setprecision(15);
   out << "{\"tick\":" << snapshot.tick << ",\"units\":[";
@@ -391,7 +397,55 @@ void print_snapshot_json_compact(
   print_events_json_compact(events, out);
   out << ",\"actions\":";
   print_actions_json_compact(orders_by_unit, out);
+  out << ",\"ruleState\":";
+  print_rule_state_json_compact(rule_state, out);
   out << "}";
+}
+
+void print_rule_state_json_compact(const robolocks::BattleRuleState* rule_state, std::ostream& out) {
+  if (rule_state == nullptr) {
+    out << "{\"scores\":[],\"captureZones\":[],\"outcome\":{\"finished\":false,\"reason\":\"\",\"winnerUnitId\":0,\"winnerTeamId\":0}}";
+    return;
+  }
+
+  out << "{\"scores\":[";
+  for (std::size_t i = 0; i < rule_state->scores.size(); i += 1) {
+    const auto& score = rule_state->scores[i];
+    out << "{";
+    out << "\"unitId\":" << score.unit_id.value << ",";
+    out << "\"teamId\":" << score.team_id << ",";
+    out << "\"kills\":" << score.kills << ",";
+    out << "\"deaths\":" << score.deaths << ",";
+    out << "\"damageDealt\":" << score.damage_dealt;
+    out << "}";
+    if (i + 1 < rule_state->scores.size()) {
+      out << ",";
+    }
+  }
+  out << "],\"captureZones\":[";
+  for (std::size_t i = 0; i < rule_state->capture_zones.size(); i += 1) {
+    const auto& zone = rule_state->capture_zones[i];
+    out << "{";
+    out << "\"id\":\"" << zone.id << "\",";
+    out << "\"position\":";
+    print_vec_json(zone.position, out);
+    out << ",\"radiusMeters\":" << zone.radius_m << ",";
+    out << "\"holdTicksRequired\":" << zone.hold_ticks_required << ",";
+    out << "\"heldTicks\":" << zone.held_ticks << ",";
+    out << "\"ownerUnitId\":" << zone.owner_unit_id.value << ",";
+    out << "\"ownerTeamId\":" << zone.owner_team_id << ",";
+    out << "\"contested\":" << (zone.contested ? "true" : "false");
+    out << "}";
+    if (i + 1 < rule_state->capture_zones.size()) {
+      out << ",";
+    }
+  }
+  out << "],\"outcome\":{";
+  out << "\"finished\":" << (rule_state->outcome.finished ? "true" : "false") << ",";
+  out << "\"reason\":\"" << rule_state->outcome.reason << "\",";
+  out << "\"winnerUnitId\":" << rule_state->outcome.winner_unit_id.value << ",";
+  out << "\"winnerTeamId\":" << rule_state->outcome.winner_team_id;
+  out << "}}";
 }
 
 void print_obstacles_json_compact(const std::vector<robolocks::StaticObstacle>& obstacles, std::ostream& out) {
@@ -454,7 +508,7 @@ void write_replay_json(
   for (robolocks::Tick tick = 0; tick < ticks; tick += 1) {
     const auto result = runtime.step_once();
     out << ",";
-    print_snapshot_json_compact(result.snapshot, out, result.events, result.orders_by_unit);
+    print_snapshot_json_compact(result.snapshot, out, result.events, result.orders_by_unit, &result.rule_state);
   }
   out << "]}\n";
 }

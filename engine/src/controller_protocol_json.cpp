@@ -40,6 +40,7 @@ nlohmann::json body_shape_to_json(
 nlohmann::json unit_snapshot_to_json(const UnitSnapshot& unit) {
   return nlohmann::json{
     {"unitId", unit.unit_id.value},
+    {"teamId", unit.team_id},
     {"position", vec2_to_json(unit.position)},
     {"hullHeadingDegrees", unit.hull_heading_deg},
     {"turretHeadingDegrees", unit.turret_heading_deg},
@@ -82,6 +83,8 @@ nlohmann::json unit_snapshot_to_json(const UnitSnapshot& unit) {
 nlohmann::json contact_to_json(const ContactObservation& contact) {
   return nlohmann::json{
     {"unitId", contact.unit_id.value},
+    {"teamId", contact.team_id},
+    {"isEnemy", contact.is_enemy},
     {"position", vec2_to_json(contact.position)},
     {"hullHeadingDegrees", contact.hull_heading_deg},
     {"turretHeadingDegrees", contact.turret_heading_deg},
@@ -103,6 +106,18 @@ nlohmann::json obstacle_to_json(const StaticObstacle& obstacle) {
     {"radiusMeters", obstacle.radius_m},
     {"blocksMovement", obstacle.blocks_movement},
     {"blocksLineOfSight", obstacle.blocks_line_of_sight},
+  };
+}
+
+nlohmann::json projectile_to_json(const ProjectileSnapshot& projectile) {
+  return nlohmann::json{
+    {"projectileId", projectile.projectile_id},
+    {"ownerUnitId", projectile.owner_unit_id.value},
+    {"previousPosition", vec2_to_json(projectile.previous_position)},
+    {"position", vec2_to_json(projectile.position)},
+    {"radiusMeters", projectile.radius_m},
+    {"previousHeightMeters", projectile.previous_height_m},
+    {"heightMeters", projectile.height_m},
   };
 }
 
@@ -275,8 +290,16 @@ Order order_from_json(const nlohmann::json& json) {
 
 nlohmann::json observation_to_json(const Observation& observation) {
   nlohmann::json contacts = nlohmann::json::array();
-  for (const auto& contact : observation.contacts) {
+  for (const auto& contact : observation.contacts.units) {
     contacts.push_back(contact_to_json(contact));
+  }
+  nlohmann::json obstacle_contacts = nlohmann::json::array();
+  for (const auto& obstacle : observation.contacts.obstacles) {
+    obstacle_contacts.push_back(obstacle_to_json(obstacle));
+  }
+  nlohmann::json projectile_contacts = nlohmann::json::array();
+  for (const auto& projectile : observation.contacts.projectiles) {
+    projectile_contacts.push_back(projectile_to_json(projectile));
   }
   nlohmann::json obstacles = nlohmann::json::array();
   for (const auto& obstacle : observation.obstacles) {
@@ -287,7 +310,11 @@ nlohmann::json observation_to_json(const Observation& observation) {
     {"tick", observation.tick},
     {"selfId", observation.self_id.value},
     {"self", unit_snapshot_to_json(observation.self)},
-    {"contacts", std::move(contacts)},
+    {"contacts", {
+      {"units", std::move(contacts)},
+      {"obstacles", std::move(obstacle_contacts)},
+      {"projectiles", std::move(projectile_contacts)},
+    }},
     {"map", {
       {"obstacles", std::move(obstacles)},
     }},
@@ -297,6 +324,7 @@ nlohmann::json observation_to_json(const Observation& observation) {
 nlohmann::json unit_spec_to_json(const UnitSpec& spec) {
   return nlohmann::json{
     {"unitId", spec.unit_id.value},
+    {"teamId", spec.team_id == 0 ? spec.unit_id.value : spec.team_id},
     {"name", spec.name},
     {"transform", {
       {"position", vec2_to_json(spec.transform.position)},

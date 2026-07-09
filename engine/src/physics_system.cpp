@@ -265,6 +265,7 @@ void resolve_obstacles(
       .unit_id = body.unit_id,
       .code = "obstacle_collision",
       .message = "Collided with obstacle " + obstacle.id + ".",
+      .payload = EventPayload{},
     });
   }
 
@@ -459,12 +460,14 @@ std::vector<Event> jolt_resolve(
         .unit_id = bodies[i].unit_id,
         .code = "unit_collision",
         .message = "Collided with unit " + std::to_string(bodies[j].unit_id.value) + ".",
+        .payload = EventPayload{},
       });
       events.push_back(Event{
         .tick = tick,
         .unit_id = bodies[j].unit_id,
         .code = "unit_collision",
         .message = "Collided with unit " + std::to_string(bodies[i].unit_id.value) + ".",
+        .payload = EventPayload{},
       });
     }
   }
@@ -550,12 +553,14 @@ std::vector<Event> PhysicsSystem::resolve(Tick tick, std::vector<PhysicsBody>& b
         .unit_id = a.unit_id,
         .code = "unit_collision",
         .message = "Collided with unit " + std::to_string(b.unit_id.value) + ".",
+        .payload = EventPayload{},
       });
       events.push_back(Event{
         .tick = tick,
         .unit_id = b.unit_id,
         .code = "unit_collision",
         .message = "Collided with unit " + std::to_string(a.unit_id.value) + ".",
+        .payload = EventPayload{},
       });
     }
   }
