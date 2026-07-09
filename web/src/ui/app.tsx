@@ -5,6 +5,7 @@ import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
 import { RESEARCH_BATTLE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
+import type { ResearchProgress } from "../research/researchWorkerProtocol.ts";
 import { deriveStatusText } from "./statusText.ts";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion.tsx";
 import { Button } from "../components/ui/button.tsx";
@@ -63,7 +64,6 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const research = useResearchRun({
     applyReplay,
     setStatus,
-    setIsLoading,
     pause: playback.pause,
   });
   const { leftPanelWidth, rightPanelWidth, beginPanelResize, stepPanelWidth } = usePanelResize();
@@ -277,7 +277,11 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
                       }}
                     />
                   </div>
-                  <Button type="button" disabled={isLoading} onClick={() => void research.runResearch()}>
+                  <Button
+                    type="button"
+                    disabled={isLoading || research.isResearchRunning}
+                    onClick={() => research.runResearch()}
+                  >
                     Run
                   </Button>
                   <div className="preset-description">
@@ -289,7 +293,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
               <Suspense fallback={<div className="code-editor-loading u-label">Loading editor</div>}>
                 <CodeEditor
                   disabled={isLoading}
-                  onRun={() => void research.runResearch()}
+                  onRun={() => research.runResearch()}
                   onValueChange={research.setResearchBotSource}
                   value={research.researchBotSource}
                 />
@@ -309,6 +313,9 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       />
       <section className="battle-scene">
         <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? NO_OBSTACLES} />
+        {research.isResearchRunning ? (
+          <ResearchRunOverlay progress={research.researchProgress} onCancel={research.cancelResearch} />
+        ) : null}
         <PlaybackControls
           canPlay={canPlay}
           canStepBackward={canStepBackward}
@@ -367,6 +374,43 @@ async function fetchTextFromUrl(url: string): Promise<string> {
     throw new Error(`${response.status} ${response.statusText}`.trim());
   }
   return response.text();
+}
+
+const RESEARCH_STAGE_LABELS: Record<ResearchProgress["stage"], string> = {
+  "loading-python": "Loading Python runtime",
+  "installing-sdk": "Installing SDK",
+  simulating: "Simulating battle",
+};
+
+// Lightweight overlay shown over the battle viewport while a research run is in
+// flight. It covers only the scene (the Monaco editor and side panels stay
+// interactive) and offers a cancel affordance that terminates the worker.
+function ResearchRunOverlay({
+  progress,
+  onCancel,
+}: {
+  progress: ResearchProgress | null;
+  onCancel: () => void;
+}) {
+  const stage = progress?.stage ?? "loading-python";
+  const stageLabel = RESEARCH_STAGE_LABELS[stage];
+  const showTicks = stage === "simulating" && typeof progress?.totalTicks === "number";
+  return (
+    <div className="research-overlay" role="status" aria-live="polite">
+      <div className="research-overlay-card">
+        <span className="research-overlay-spinner" aria-hidden="true" />
+        <span className="research-overlay-stage">{stageLabel}</span>
+        {showTicks ? (
+          <span className="research-overlay-ticks u-label">
+            tick {progress?.tick ?? 0} / {progress?.totalTicks}
+          </span>
+        ) : null}
+        <Button type="button" variant="secondary" onClick={onCancel} className="research-overlay-cancel">
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function ReplaySummary({

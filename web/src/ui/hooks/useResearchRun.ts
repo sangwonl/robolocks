@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { BattleReplay } from "../../replay/replay";
 import {
@@ -6,14 +6,17 @@ import {
   RESEARCH_BATTLE_PRESETS,
   RESEARCH_UNIT_PRESETS,
   createResearchBattleConfigJson,
-  runResearchInBrowser,
   type BotLogEntry,
 } from "../../research/research.ts";
+import {
+  parseWorkerMessage,
+  runRequest,
+  type ResearchProgress,
+} from "../../research/researchWorkerProtocol.ts";
 
 export type UseResearchRunDeps = {
   applyReplay: (replay: BattleReplay, autoplay: boolean) => void;
   setStatus: (status: string, options?: { isError?: boolean }) => void;
-  setIsLoading: (isLoading: boolean) => void;
   pause: () => void;
 };
 
@@ -31,7 +34,10 @@ export type UseResearchRunResult = {
   researchBattlePreset: (typeof RESEARCH_BATTLE_PRESETS)[number] | undefined;
   researchUnitPreset: (typeof RESEARCH_UNIT_PRESETS)[number] | undefined;
   researchBattleConfigJson: string;
-  runResearch: () => Promise<void>;
+  isResearchRunning: boolean;
+  researchProgress: ResearchProgress | null;
+  runResearch: () => void;
+  cancelResearch: () => void;
 };
 
 export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
@@ -40,6 +46,9 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
   const [researchBotSource, setResearchBotSource] = useState(DEFAULT_RESEARCH_BOT_SOURCE);
   const [researchTickCount, setResearchTickCount] = useState(180);
   const [botLogs, setBotLogs] = useState<BotLogEntry[]>([]);
+  const [isResearchRunning, setIsResearchRunning] = useState(false);
+  const [researchProgress, setResearchProgress] = useState<ResearchProgress | null>(null);
+  const workerRef = useRef<Worker | null>(null);
 
   const researchBattlePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === researchBattlePresetId) ?? RESEARCH_BATTLE_PRESETS[0];
   const researchUnitPreset = RESEARCH_UNIT_PRESETS.find((preset) => preset.id === researchUnitPresetId) ?? RESEARCH_UNIT_PRESETS[0];
@@ -51,24 +60,66 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     [researchBattlePresetId, researchUnitPresetId],
   );
 
-  async function runResearch(): Promise<void> {
-    deps.pause();
-    deps.setIsLoading(true);
-    deps.setStatus("Running research");
-    try {
-      const result = await runResearchInBrowser({
-        battleConfigJson: researchBattleConfigJson,
-        botSource: researchBotSource,
-        tickCount: researchTickCount,
-      });
-      setBotLogs(result.logs);
-      deps.applyReplay(result.replay, true);
-      deps.setStatus(`Research run loaded - ${result.replay.frames.length} frames`);
-    } catch (error: unknown) {
-      deps.setStatus(`Research run failed: ${errorMessage(error)}`, { isError: true });
-    } finally {
-      deps.setIsLoading(false);
+  // Tear down the worker on unmount so a run in flight never outlives the app.
+  useEffect(() => () => teardownWorker(workerRef), []);
+
+  function finishRun(): void {
+    teardownWorker(workerRef);
+    setIsResearchRunning(false);
+    setResearchProgress(null);
+  }
+
+  function runResearch(): void {
+    if (workerRef.current) {
+      return;
     }
+    deps.pause();
+    setBotLogs([]);
+    setIsResearchRunning(true);
+    setResearchProgress({ stage: "loading-python" });
+    deps.setStatus("Running research");
+
+    const worker = new Worker(new URL("../../research/researchWorker.ts", import.meta.url), { type: "module" });
+    workerRef.current = worker;
+
+    worker.onmessage = (event: MessageEvent) => {
+      const message = parseWorkerMessage(event.data);
+      if (!message) {
+        return;
+      }
+      if (message.type === "progress") {
+        setResearchProgress({ stage: message.stage, tick: message.tick, totalTicks: message.totalTicks });
+        return;
+      }
+      if (message.type === "done") {
+        finishRun();
+        setBotLogs(message.logs);
+        deps.applyReplay(message.replay, true);
+        deps.setStatus(`Research run loaded - ${message.replay.frames.length} frames`);
+        return;
+      }
+      finishRun();
+      deps.setStatus(`Research run failed: ${message.message}`, { isError: true });
+    };
+
+    worker.onerror = (event: ErrorEvent) => {
+      finishRun();
+      deps.setStatus(`Research run failed: ${event.message || "worker error"}`, { isError: true });
+    };
+
+    worker.postMessage(runRequest({
+      botSource: researchBotSource,
+      battleConfigJson: researchBattleConfigJson,
+      tickCount: researchTickCount,
+    }));
+  }
+
+  function cancelResearch(): void {
+    if (!workerRef.current) {
+      return;
+    }
+    finishRun();
+    deps.setStatus("Research run cancelled");
   }
 
   return {
@@ -85,10 +136,16 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     researchBattlePreset,
     researchUnitPreset,
     researchBattleConfigJson,
+    isResearchRunning,
+    researchProgress,
     runResearch,
+    cancelResearch,
   };
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function teardownWorker(workerRef: { current: Worker | null }): void {
+  if (workerRef.current) {
+    workerRef.current.terminate();
+    workerRef.current = null;
+  }
 }

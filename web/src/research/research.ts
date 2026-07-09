@@ -1,6 +1,7 @@
 import type { BattleReplay } from "../replay/replay";
 import { createResearchDuelWithJsonBotFromWasmFactory, type JsonBotTick, type KernelBattleRunner } from "../sim/kernelAdapter.ts";
 import { PYTHON_SDK_FILES } from "./pythonSdkFiles.generated.ts";
+import type { ResearchProgress } from "./researchWorkerProtocol.ts";
 
 export const DEFAULT_RESEARCH_BOT_SOURCE = `from robolocks import (
     AimAt,
@@ -53,7 +54,12 @@ export type ResearchRunOptions = {
   tickCount: number;
   createBotRuntime?: BrowserBotRuntimeFactory;
   createRunner?: ResearchRunnerFactory;
+  onProgress?: (progress: ResearchProgress) => void;
 };
+
+// Emit a `simulating` progress event at most this often so a long run does not
+// flood postMessage; the final tick is always reported.
+const SIMULATION_PROGRESS_INTERVAL = 10;
 
 export type BotLogEntry = {
   tick: number;
@@ -109,7 +115,9 @@ type ResearchUnitModulesConfig = {
 export async function runResearchInBrowser(options: ResearchRunOptions): Promise<ResearchRunResult> {
   const tickCount = normalizeTickCount(options.tickCount);
   const battleConfigJson = options.battleConfigJson ?? DEFAULT_RESEARCH_BATTLE_CONFIG_JSON;
-  const botRuntime = await (options.createBotRuntime ?? createPyodideBotRuntime)(options.botSource);
+  const onProgress = options.onProgress ?? (() => {});
+  const createBotRuntime = options.createBotRuntime ?? ((botSource) => createPyodideBotRuntime(botSource, onProgress));
+  const botRuntime = await createBotRuntime(options.botSource);
   const createRunner = options.createRunner ?? ((runnerOptions) => createResearchDuelWithJsonBotFromWasmFactory(runnerOptions));
   const runner = await createRunner({
     botId: 1,
@@ -120,11 +128,16 @@ export async function runResearchInBrowser(options: ResearchRunOptions): Promise
   try {
     const frames = [runner.snapshot()];
     const logs: BotLogEntry[] = [];
+    onProgress({ stage: "simulating", tick: 0, totalTicks: tickCount });
     for (let i = 0; i < tickCount; i += 1) {
       const frame = runner.step();
       frames.push(frame);
       for (const log of botRuntime.drainLogs?.() ?? []) {
         logs.push({ ...log, tick: frame.tick, unitId: 1 });
+      }
+      const completed = i + 1;
+      if (completed === tickCount || completed % SIMULATION_PROGRESS_INTERVAL === 0) {
+        onProgress({ stage: "simulating", tick: completed, totalTicks: tickCount });
       }
     }
 
@@ -380,8 +393,13 @@ function normalizeTickCount(value: number): number {
   return Math.max(1, Math.min(900, Math.floor(value)));
 }
 
-async function createPyodideBotRuntime(botSource: string): Promise<BrowserBotRuntime> {
+async function createPyodideBotRuntime(
+  botSource: string,
+  onProgress: (progress: ResearchProgress) => void = () => {},
+): Promise<BrowserBotRuntime> {
+  onProgress({ stage: "loading-python" });
   const pyodide = await loadPyodideRuntime();
+  onProgress({ stage: "installing-sdk" });
   installPythonSdk(pyodide);
   pyodide.runPython(`
 import sys
@@ -460,15 +478,14 @@ type PyodideRuntime = {
   runPython(code: string): unknown;
 };
 
-type LoadPyodide = (options: { indexURL: string }) => Promise<PyodideRuntime>;
-
-declare global {
-  interface Window {
-    loadPyodide?: LoadPyodide;
-  }
-}
-
-const PYODIDE_VERSION = "0.26.4";
+// Pyodide is vendored via the npm `pyodide` package (pinned to match
+// PYODIDE_LOCATION below). The runtime assets (pyodide.asm.js/.wasm,
+// python_stdlib.zip, pyodide-lock.json) are copied into /pyodide/ at
+// dev/build time by scripts/copy-pyodide.mjs — mirroring how the WASM kernel
+// is served from /wasm/. The dynamic import keeps the ~1.2 MB loader out of
+// the main bundle: it only resolves inside the worker chunk on first run, so
+// there are no CDN requests and the app works fully offline.
+const PYODIDE_INDEX_URL = "/pyodide/";
 let pyodidePromise: Promise<PyodideRuntime> | null = null;
 let sdkInstalled = false;
 
@@ -478,28 +495,11 @@ async function loadPyodideRuntime(): Promise<PyodideRuntime> {
   }
 
   pyodidePromise = (async () => {
-    const indexURL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
-    if (!window.loadPyodide) {
-      await loadScript(`${indexURL}pyodide.js`);
-    }
-    if (!window.loadPyodide) {
-      throw new Error("Pyodide loader did not initialize");
-    }
-    return window.loadPyodide({ indexURL });
+    const { loadPyodide } = await import("pyodide");
+    return (await loadPyodide({ indexURL: PYODIDE_INDEX_URL })) as unknown as PyodideRuntime;
   })();
 
   return pyodidePromise;
-}
-
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.append(script);
-  });
 }
 
 function installPythonSdk(pyodide: PyodideRuntime): void {

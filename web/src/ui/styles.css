@@ -1006,6 +1006,71 @@ th {
   box-shadow: 0 14px 42px var(--shadow);
 }
 
+/*
+ * Research run overlay. Covers only the battle viewport (its positioning
+ * context is .battle-scene) so the Monaco editor and side panels stay live
+ * while a run executes in the worker. z-index sits above the scene but below
+ * nothing else it needs to block.
+ */
+.research-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay);
+  backdrop-filter: blur(6px);
+}
+
+.research-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 28px;
+  border: 1px solid var(--brand-border);
+  border-radius: 12px;
+  background: var(--overlay-strong);
+  box-shadow: 0 14px 42px var(--shadow);
+  text-align: center;
+}
+
+.research-overlay-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--brand-border);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: research-overlay-spin 0.8s linear infinite;
+}
+
+@keyframes research-overlay-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .research-overlay-spinner {
+    animation: none;
+  }
+}
+
+.research-overlay-stage {
+  font-size: var(--font-size-heading);
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.research-overlay-ticks {
+  color: var(--text-muted);
+}
+
+.research-overlay-cancel {
+  margin-top: 4px;
+}
+
 .playback-buttons {
   display: flex;
   gap: 3px;

@@ -6,6 +6,15 @@ export default defineConfig({
       "@": new URL("./src", import.meta.url).pathname,
     },
   },
+  // Pyodide's ESM loader references Node built-ins behind runtime guards; let
+  // Vite bundle it as-is (into the lazy worker chunk) instead of pre-bundling
+  // it as a dependency, which otherwise trips esbuild over those built-ins.
+  optimizeDeps: {
+    exclude: ["pyodide"],
+  },
+  worker: {
+    format: "es",
+  },
   build: {
     chunkSizeWarningLimit: 700,
     rollupOptions: {
