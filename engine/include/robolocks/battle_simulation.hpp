@@ -30,6 +30,10 @@ class BattleSimulation {
   std::vector<UnitState> units_;
   std::vector<ProjectileState> projectiles_;
 
+  void apply_unit_orders(const std::vector<UnitOrders>& orders_by_unit, std::vector<Event>& events);
+  void run_projectile_phase(const std::vector<UnitOrders>& orders_by_unit, std::vector<Event>& events);
+  void run_physics_phase(std::vector<Event>& events);
+  std::vector<UnitOrders> filter_visible_orders(const std::vector<UnitOrders>& orders_by_unit) const;
   void apply_rule_events(const std::vector<Event>& events);
   void process_respawns(std::vector<Event>& events);
   void update_capture_zones();

@@ -152,7 +152,19 @@ StepResult BattleSimulation::step(const std::vector<UnitOrders>& orders_by_unit)
   tick_ += 1;
   std::vector<Event> events;
   process_respawns(events);
+  apply_unit_orders(orders_by_unit, events);
+  run_projectile_phase(orders_by_unit, events);
+  apply_rule_events(events);
+  run_physics_phase(events);
+  update_capture_zones();
+  evaluate_outcome();
+  return StepResult{snapshot(), events, filter_visible_orders(orders_by_unit), rule_state_};
+}
 
+void BattleSimulation::apply_unit_orders(
+  const std::vector<UnitOrders>& orders_by_unit,
+  std::vector<Event>& events
+) {
   for (auto& unit : units_) {
     if (unit.armor.integrity <= 0.0) {
       clear_intents(unit);
@@ -164,7 +176,12 @@ StepResult BattleSimulation::step(const std::vector<UnitOrders>& orders_by_unit)
     apply_resolved_orders_to_intents(unit, resolved_orders, tick_);
     advance_unit_actuators(unit, tick_dt_sec_);
   }
+}
 
+void BattleSimulation::run_projectile_phase(
+  const std::vector<UnitOrders>& orders_by_unit,
+  std::vector<Event>& events
+) {
   auto weapon_events = resolve_weapon_fire(
     tick_,
     tick_dt_sec_,
@@ -177,8 +194,9 @@ StepResult BattleSimulation::step(const std::vector<UnitOrders>& orders_by_unit)
 
   auto projectile_events = advance_projectiles(tick_, tick_dt_sec_, units_, projectiles_);
   events.insert(events.end(), projectile_events.begin(), projectile_events.end());
-  apply_rule_events(events);
+}
 
+void BattleSimulation::run_physics_phase(std::vector<Event>& events) {
   std::vector<PhysicsBody> physics_bodies;
   physics_bodies.reserve(units_.size());
   std::vector<double> pre_physics_move_remaining;
@@ -209,9 +227,11 @@ StepResult BattleSimulation::step(const std::vector<UnitOrders>& orders_by_unit)
       }
     }
   }
-  update_capture_zones();
-  evaluate_outcome();
+}
 
+std::vector<UnitOrders> BattleSimulation::filter_visible_orders(
+  const std::vector<UnitOrders>& orders_by_unit
+) const {
   std::vector<UnitOrders> visible_orders_by_unit;
   visible_orders_by_unit.reserve(orders_by_unit.size());
   for (const auto& unit_orders : orders_by_unit) {
@@ -222,8 +242,7 @@ StepResult BattleSimulation::step(const std::vector<UnitOrders>& orders_by_unit)
       visible_orders_by_unit.push_back(unit_orders);
     }
   }
-
-  return StepResult{snapshot(), events, visible_orders_by_unit, rule_state_};
+  return visible_orders_by_unit;
 }
 
 void BattleSimulation::apply_rule_events(const std::vector<Event>& events) {
