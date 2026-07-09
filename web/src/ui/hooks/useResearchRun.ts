@@ -12,7 +12,7 @@ import {
 
 export type UseResearchRunDeps = {
   applyReplay: (replay: BattleReplay, autoplay: boolean) => void;
-  setStatus: (status: string) => void;
+  setStatus: (status: string, options?: { isError?: boolean }) => void;
   setIsLoading: (isLoading: boolean) => void;
   pause: () => void;
 };
@@ -65,7 +65,7 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
       deps.applyReplay(result.replay, true);
       deps.setStatus(`Research run loaded - ${result.replay.frames.length} frames`);
     } catch (error: unknown) {
-      deps.setStatus(`Research run failed: ${errorMessage(error)}`);
+      deps.setStatus(`Research run failed: ${errorMessage(error)}`, { isError: true });
     } finally {
       deps.setIsLoading(false);
     }

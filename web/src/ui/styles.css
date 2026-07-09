@@ -72,16 +72,37 @@
   /* status */
   --status-contested-border: rgba(255, 154, 143, 0.38);
 
+  /* danger (error status treatment) */
+  --danger: var(--text-error);
+  --danger-border: rgba(255, 154, 143, 0.4);
+  --danger-tint: rgba(255, 154, 143, 0.12);
+
   /* overlays / shadows */
   --overlay-strong: rgba(17, 20, 16, 0.82);
   --overlay: rgba(17, 20, 16, 0.78);
   --shadow: rgba(0, 0, 0, 0.24);
   --highlight-soft: rgba(255, 255, 255, 0.03);
   --highlight-faint: rgba(255, 255, 255, 0.02);
+
+  /*
+   * Type scale. Content text has an 11px floor, primary/emphasized values
+   * sit at 12px, and micro-labels (.u-label and other uppercase/caption
+   * text) floor at 10px. Headings keep their own tier since they were
+   * already >= 11px before this pass.
+   */
+  --font-size-micro: 10px;
+  --font-size-body: 11px;
+  --font-size-value: 12px;
+  --font-size-heading: 13px;
+
+  /* shared tightening applied alongside the bump above to keep rows dense */
+  --line-height-tight: 1.15;
+  --letter-spacing-tight: -0.01em;
 }
 
 .u-label {
   color: var(--text-muted);
+  font-size: var(--font-size-micro);
   font-weight: 650;
   line-height: 1.1;
   text-transform: uppercase;
@@ -191,11 +212,11 @@ input {
 
 .panel-right .panel-title h1 {
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: var(--font-size-value);
 }
 
 .panel-right .panel-title span {
-  font-size: 8.5px;
+  font-size: var(--font-size-micro);
 }
 
 .panel-resize-handle {
@@ -230,13 +251,13 @@ input {
 
 .panel-title h1 {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: var(--font-size-heading);
   font-weight: 650;
   line-height: 1.1;
 }
 
 .panel-title span {
-  font-size: 8.5px;
+  font-size: var(--font-size-micro);
 }
 
 .mode-switch {
@@ -294,7 +315,7 @@ input {
 .control-title {
   margin-top: 12px;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 650;
   line-height: 1.1;
   text-transform: uppercase;
@@ -305,7 +326,7 @@ input {
   gap: 5px;
   margin-top: 8px;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 
@@ -336,7 +357,7 @@ input {
 .summary-empty {
   display: block;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 
@@ -345,13 +366,14 @@ input {
 }
 
 .summary dt {
-  font-size: 9px;
+  font-size: var(--font-size-micro);
 }
 
 .summary dd {
   margin: 2px 0 0;
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: var(--font-size-value);
+  line-height: var(--line-height-tight);
   font-variant-numeric: tabular-nums;
 }
 
@@ -368,7 +390,7 @@ input {
   display: grid;
   gap: 5px;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 
@@ -400,7 +422,7 @@ input {
     linear-gradient(135deg, var(--text-muted) 50%, transparent 50%) calc(100% - 7px) 50% / 5px 5px no-repeat,
     var(--surface-inset);
   padding-right: 20px;
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 650;
 }
 
@@ -445,9 +467,9 @@ input {
   gap: 2px;
   min-width: 0;
   color: var(--text-faint);
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 550;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .preset-description span {
@@ -473,7 +495,7 @@ input {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-inset);
-  font-size: 10px;
+  font-size: var(--font-size-micro);
 }
 
 .code-editor-head,
@@ -485,7 +507,7 @@ input {
   min-width: 0;
   padding: 4px 7px;
   border-bottom: 1px solid var(--line);
-  font-size: 9px;
+  font-size: var(--font-size-micro);
 }
 
 .code-editor-tools {
@@ -501,7 +523,7 @@ input {
   background: transparent;
   color: var(--text-dim);
   padding: 2px 6px;
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 650;
   line-height: 1.1;
 }
@@ -545,14 +567,28 @@ input {
   border-radius: 8px;
   background: var(--surface-sunken);
   color: var(--text-soft);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.status[data-variant="error"] {
+  border-color: var(--danger-border);
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.status[data-variant="error"]::before {
+  margin-right: 5px;
+  content: "\26A0";
+  color: var(--danger);
 }
 
 pre {
   overflow: auto;
   max-height: 220px;
-  font-size: 11px;
+  font-size: var(--font-size-body);
   color: var(--text-dim);
 }
 
@@ -566,7 +602,7 @@ pre {
   border: 1px dashed var(--line-dashed);
   padding: 10px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 
@@ -577,7 +613,7 @@ pre {
 .debug-title {
   margin-bottom: 6px;
   color: var(--text-heading);
-  font-size: 9.5px;
+  font-size: var(--font-size-micro);
   font-weight: 650;
   line-height: 1.1;
   text-transform: uppercase;
@@ -609,7 +645,7 @@ pre {
   background: transparent;
   color: var(--text-heading);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 650;
   line-height: 1.1;
   list-style: none;
@@ -653,7 +689,7 @@ pre {
   border: 1px dashed var(--line-dashed);
   padding: 7px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 
@@ -674,22 +710,23 @@ pre {
 }
 
 .rule-outcome span {
-  font-size: 9px;
+  font-size: var(--font-size-micro);
 }
 
 .rule-outcome strong {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-size-value);
   font-weight: 650;
-  line-height: 1.2;
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-tight);
 }
 
 .rule-outcome em {
   grid-column: 1 / -1;
   color: var(--brand);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-style: normal;
   font-weight: 650;
 }
@@ -710,8 +747,8 @@ pre {
   padding: 4px 6px;
   border-top: 1px solid var(--line-subtle);
   color: var(--text-soft);
-  font-size: 10px;
-  line-height: 1.25;
+  font-size: var(--font-size-body);
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 
@@ -728,7 +765,7 @@ pre {
 
 .score-row-head {
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 650;
   text-transform: uppercase;
 }
@@ -756,7 +793,7 @@ pre {
 .capture-zone-row em {
   min-width: 0;
   overflow: hidden;
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -764,7 +801,9 @@ pre {
 
 .capture-zone-row strong {
   color: var(--text);
-  font-size: 10.5px;
+  font-size: var(--font-size-value);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-tight);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -777,7 +816,7 @@ pre {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 10.5px;
+  font-size: var(--font-size-body);
   color: var(--text-soft);
 }
 
@@ -791,7 +830,7 @@ td {
 
 th {
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 650;
   line-height: 1.1;
   text-transform: uppercase;
@@ -862,14 +901,15 @@ th {
 
 .unit-card-title strong {
   color: var(--text);
-  font-size: 10px;
+  font-size: var(--font-size-value);
   font-weight: 650;
   line-height: 1.1;
+  letter-spacing: var(--letter-spacing-tight);
 }
 
 .unit-card-title > span,
 .unit-subtitle {
-  font-size: 9px;
+  font-size: var(--font-size-micro);
 }
 
 .unit-subtitle {
@@ -892,14 +932,15 @@ th {
 }
 
 .unit-stats dt {
-  font-size: 9px;
+  font-size: var(--font-size-micro);
 }
 
 .unit-stats dd {
   margin: 1px 0 0;
   overflow-wrap: anywhere;
   color: var(--text-soft);
-  font-size: 10.5px;
+  font-size: var(--font-size-value);
+  line-height: var(--line-height-tight);
   font-variant-numeric: tabular-nums;
 }
 
@@ -911,8 +952,8 @@ th {
   padding: 0;
   list-style: none;
   color: var(--text-soft);
-  font-size: 10px;
-  line-height: 1.32;
+  font-size: var(--font-size-body);
+  line-height: 1.22;
 }
 
 .action-list:last-child,
@@ -965,7 +1006,7 @@ th {
   min-width: 28px;
   border-radius: 7px;
   padding: 0;
-  font-size: 11px;
+  font-size: var(--font-size-body);
 }
 
 .playback-buttons svg {
@@ -979,7 +1020,7 @@ th {
   align-items: center;
   gap: 8px;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -991,7 +1032,7 @@ th {
   align-items: center;
   gap: 8px;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 650;
 }
 
@@ -1001,7 +1042,7 @@ th {
   border-radius: 6px;
   background: var(--surface-well);
   color: var(--text-soft);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   padding: 3px 4px;
@@ -1020,7 +1061,7 @@ th {
   border: 1px dashed var(--line-dashed);
   padding: 8px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 
@@ -1034,7 +1075,9 @@ th {
   border-radius: 7px;
   background: var(--surface-well);
   color: var(--text-soft);
-  font: 10.5px/1.42 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: var(--font-size-body);
+  line-height: 1.32;
   list-style: none;
 }
 
@@ -1102,7 +1145,7 @@ th {
   background: transparent;
   color: var(--text-dim);
   padding: 7px 0;
-  font-size: 10px;
+  font-size: var(--font-size-micro);
   font-weight: 650;
   line-height: 1.1;
 }
@@ -1113,9 +1156,16 @@ th {
 }
 
 @media (max-width: 960px) {
+  /*
+   * Rows previously summed to 114vh inside an overflow:hidden 100%-height
+   * grid, clipping the bottom panel with no way to reach it. The left/right
+   * panels are capped (and already scroll via .panel's overflow: auto), and
+   * the scene gets the flexible middle row so the three regions always fit
+   * within the viewport with no unreachable content.
+   */
   .workbench {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 34vh) minmax(0, 44vh) minmax(0, 36vh);
+    grid-template-rows: minmax(0, 38vh) minmax(140px, 1fr) minmax(0, 30vh);
   }
 
   .panel-resize-handle {
@@ -1124,6 +1174,7 @@ th {
 
   .panel-left {
     order: 1;
+    max-height: 38vh;
     min-height: 0;
     border-right: 0;
     border-bottom: 1px solid var(--line-strong);
@@ -1131,17 +1182,18 @@ th {
 
   .battle-scene {
     order: 2;
-    min-height: 0;
+    min-height: 140px;
   }
 
   .panel-right {
     order: 3;
+    max-height: 30vh;
     min-height: 0;
     border-top: 1px solid var(--line-strong);
     border-left: 0;
   }
 
   .code-editor-monaco {
-    min-height: 240px;
+    min-height: 180px;
   }
 }

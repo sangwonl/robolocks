@@ -1,5 +1,5 @@
 import { createRoot, type Root } from "react-dom/client";
-import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
@@ -50,7 +50,12 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
 
 function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const [loadedReplay, setLoadedReplay] = useState<BattleReplay | null>(null);
-  const [status, setStatus] = useState("Ready");
+  const [status, setStatusText] = useState("Ready");
+  const [statusIsError, setStatusIsError] = useState(false);
+  const setStatus = useCallback((message: string, options?: { isError?: boolean }) => {
+    setStatusText(message);
+    setStatusIsError(Boolean(options?.isError));
+  }, []);
   const [isLoading, setIsLoading] = useState(false);
   const [workbenchMode, setWorkbenchMode] = useState<"replay" | "research">("research");
   const playback = useReplayPlayback(loadedReplay);
@@ -96,7 +101,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       applyReplayText(await fetchText(url), autoplay);
     } catch (error: unknown) {
       setLoadedReplay(null);
-      setStatus(`Replay load failed: ${errorMessage(error)}`);
+      setStatus(`Replay load failed: ${errorMessage(error)}`, { isError: true });
     } finally {
       setIsLoading(false);
     }
@@ -125,7 +130,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       applyReplayText(await file.text(), false);
     } catch (error: unknown) {
       setLoadedReplay(null);
-      setStatus(`Replay load failed: ${errorMessage(error)}`);
+      setStatus(`Replay load failed: ${errorMessage(error)}`, { isError: true });
     } finally {
       setIsLoading(false);
     }
@@ -244,7 +249,9 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
             </div>
           </TabsContent>
         </Tabs>
-        <div className="status">{statusText}</div>
+        <div className="status" role="status" data-variant={statusIsError ? "error" : "info"}>
+          {statusText}
+        </div>
       </aside>
       <PanelResizeHandle side="left" onResizeStart={(pointerX) => beginPanelResize("left", pointerX)} />
       <section className="battle-scene">
