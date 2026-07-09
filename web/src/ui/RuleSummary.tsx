@@ -12,7 +12,7 @@ export function RuleSummary({ frame }: RuleSummaryProps) {
   return (
     <div className="rule-summary">
       <div className="rule-outcome" data-finished={outcome.finished}>
-        <span>{outcome.finished ? "Finished" : "Running"}</span>
+        <span className="u-label">{outcome.finished ? "Finished" : "Running"}</span>
         <strong>{outcome.reason || "active"}</strong>
         {(outcome.winnerTeamId > 0 || outcome.winnerUnitId > 0) && (
           <em>
@@ -47,11 +47,11 @@ export function RuleSummary({ frame }: RuleSummaryProps) {
         <div className="capture-zone-list">
           {frame.ruleState.captureZones.map((zone) => (
             <div key={zone.id} className="capture-zone-row" data-contested={zone.contested}>
-              <span>{zone.id}</span>
+              <span className="u-label">{zone.id}</span>
               <strong>
                 {zone.heldTicks}/{zone.holdTicksRequired}
               </strong>
-              <em>
+              <em className="u-label">
                 {zone.contested
                   ? "contested"
                   : zone.ownerTeamId > 0

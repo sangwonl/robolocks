@@ -39,7 +39,7 @@ export function UnitCard({ unit, actions, events }: UnitCardProps) {
         <AccordionTrigger className="unit-card-head">
           <span className="unit-card-title">
             <strong>{unit.name}</strong>
-            <span>unit {unit.unitId}</span>
+            <span className="u-label">unit {unit.unitId}</span>
           </span>
         </AccordionTrigger>
         <AccordionContent>
@@ -71,7 +71,7 @@ export type StatProps = {
 export function Stat({ label, value }: StatProps) {
   return (
     <div>
-      <dt>{label}</dt>
+      <dt className="u-label">{label}</dt>
       <dd>{value}</dd>
     </div>
   );
@@ -85,7 +85,7 @@ export type UnitSectionProps = {
 export function UnitSection({ title, items }: UnitSectionProps) {
   return (
     <>
-      <div className="unit-subtitle">{title}</div>
+      <div className="unit-subtitle u-label">{title}</div>
       <ul className="action-list">
         {items.map((item, index) => (
           <li key={`${item.label}-${index}`}>

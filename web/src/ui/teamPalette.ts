@@ -35,3 +35,16 @@ const TEAM_COLORS: Record<number, TeamColors> = {
 export function teamColor(teamId: number): TeamColors {
   return TEAM_COLORS[teamId] ?? NEUTRAL_TEAM;
 }
+
+/**
+ * CSS custom properties for the team palette, keyed by the variable name
+ * styles.css expects (e.g. `--team-1-accent`). This is the single source of
+ * truth for team colors: apply the result once at the app root (see
+ * app.tsx) so styles.css never hardcodes a team hex directly.
+ */
+export function teamCssVariables(): Record<string, string> {
+  return {
+    "--team-1-accent": BLUE_TEAM.css,
+    "--team-2-accent": RED_TEAM.css,
+  };
+}

@@ -129,7 +129,7 @@ export function CodeEditor({ disabled, onRun, onValueChange, value }: CodeEditor
 
   return (
     <div className="code-editor">
-      <div className="code-editor-head">
+      <div className="code-editor-head u-label">
         <span>Bot code</span>
         <div className="code-editor-tools">
           <span>Python</span>
@@ -144,7 +144,7 @@ export function CodeEditor({ disabled, onRun, onValueChange, value }: CodeEditor
         </div>
       </div>
       <div ref={containerRef} className="code-editor-monaco" aria-label="Bot Python code" />
-      <div className="code-editor-status">
+      <div className="code-editor-status u-label">
         <span>{lineCount} lines</span>
         <div ref={statusRef} className="code-editor-vim-status" />
         <span>Cmd/Ctrl+Enter run</span>

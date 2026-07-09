@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { teamColor } from "../src/ui/teamPalette.ts";
+import { teamColor, teamCssVariables } from "../src/ui/teamPalette.ts";
 
 test("team 1 maps to the current blue palette", () => {
   const colors = teamColor(1);
@@ -28,4 +28,15 @@ test("unknown teams fall back to the neutral gray palette", () => {
   assert.equal(zero.body, 0x788470);
   assert.equal(zero.arc, 0x788470);
   assert.deepEqual(zero, three);
+});
+
+test("css variables match the TS palette so styles.css has a single source of truth", () => {
+  const vars = teamCssVariables();
+
+  assert.equal(vars["--team-1-accent"], teamColor(1).css);
+  assert.equal(vars["--team-2-accent"], teamColor(2).css);
+  assert.deepEqual(vars, {
+    "--team-1-accent": "#5f9ee6",
+    "--team-2-accent": "#df645b",
+  });
 });

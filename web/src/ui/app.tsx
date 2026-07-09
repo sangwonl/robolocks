@@ -15,6 +15,7 @@ import { BotConsole } from "./BotConsole.tsx";
 import { Inspector, Stat } from "./Inspector.tsx";
 import { PlaybackControls } from "./PlaybackControls.tsx";
 import { RuleSummary } from "./RuleSummary.tsx";
+import { teamCssVariables } from "./teamPalette.ts";
 import { usePanelResize } from "./hooks/usePanelResize.ts";
 import { useReplayPlayback } from "./hooks/useReplayPlayback.ts";
 import { useResearchRun } from "./hooks/useResearchRun.ts";
@@ -32,6 +33,10 @@ const reactRoots = new WeakMap<HTMLElement, Root>();
 // Stable empty-obstacle reference so the battle scene is not rebuilt every render
 // while no replay is loaded (scene lifetime keys on the obstacles identity).
 const NO_OBSTACLES: StaticObstacleFrame[] = [];
+
+// Team colors are sourced once from teamPalette.ts and applied at the app
+// root as CSS custom properties, so styles.css never hardcodes a team hex.
+const TEAM_CSS_VARIABLES = teamCssVariables();
 
 export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): void {
   const existing = reactRoots.get(root);
@@ -130,6 +135,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     <section
       className="workbench"
       style={{
+        ...TEAM_CSS_VARIABLES,
         "--left-panel-width": `${leftPanelWidth}px`,
         "--right-panel-width": `${rightPanelWidth}px`,
       } as CSSProperties}
@@ -137,7 +143,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       <aside className="panel panel-left">
         <div className="panel-title">
           <h1>Robolocks</h1>
-          <span>{workbenchMode === "research" ? "Unit Research" : "Replay Workbench"}</span>
+          <span className="u-label">{workbenchMode === "research" ? "Unit Research" : "Replay Workbench"}</span>
         </div>
         <Tabs
           value={workbenchMode}
@@ -227,7 +233,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
                   </div>
                 </div>
               </div>
-              <Suspense fallback={<div className="code-editor-loading">Loading editor</div>}>
+              <Suspense fallback={<div className="code-editor-loading u-label">Loading editor</div>}>
                 <CodeEditor
                   disabled={isLoading}
                   onRun={() => void research.runResearch()}
@@ -263,7 +269,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       <aside className="panel panel-right">
         <div className="panel-title">
           <h1>Bot State</h1>
-          <span>{frame ? `tick ${frame.tick}` : "No Frame"}</span>
+          <span className="u-label">{frame ? `tick ${frame.tick}` : "No Frame"}</span>
         </div>
         <Accordion type="multiple" defaultValue={["rules", "units"]} className="state-panel-sections">
           <AccordionItem value="rules" className="state-section state-section-rules">
