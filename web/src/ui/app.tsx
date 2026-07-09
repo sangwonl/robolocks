@@ -1,5 +1,22 @@
 import { createRoot, type Root } from "react-dom/client";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FunctionComponent,
+} from "react";
+import {
+  DockviewReact,
+  type DockviewReadyEvent,
+  type IDockviewPanelProps,
+} from "dockview-react";
+import "dockview-react/dist/styles/dockview.css";
 
 import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
@@ -7,18 +24,15 @@ import { parseBattleReplay } from "../replay/replay.ts";
 import { RESEARCH_BATTLE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
 import type { ResearchProgress } from "../research/researchWorkerProtocol.ts";
 import { deriveStatusText } from "./statusText.ts";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
 import { Label } from "../components/ui/label.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs.tsx";
 import { BattleSceneThreeView } from "./BattleSceneThreeView.tsx";
 import { BotConsole } from "./BotConsole.tsx";
 import { Inspector, Stat } from "./Inspector.tsx";
 import { PlaybackControls } from "./PlaybackControls.tsx";
 import { RuleSummary } from "./RuleSummary.tsx";
 import { teamCssVariables } from "./teamPalette.ts";
-import { PANEL_WIDTH_KEYBOARD_STEP, PANEL_WIDTH_MAX, PANEL_WIDTH_MIN, usePanelResize } from "./hooks/usePanelResize.ts";
 import { shortcutAction, useReplayPlayback } from "./hooks/useReplayPlayback.ts";
 import { useResearchRun } from "./hooks/useResearchRun.ts";
 
@@ -40,6 +54,37 @@ const NO_OBSTACLES: StaticObstacleFrame[] = [];
 // root as CSS custom properties, so styles.css never hardcodes a team hex.
 const TEAM_CSS_VARIABLES = teamCssVariables();
 
+type PlaybackState = ReturnType<typeof useReplayPlayback>;
+type ResearchState = ReturnType<typeof useResearchRun>;
+
+type WorkbenchPanelContextValue = {
+  canPlay: boolean;
+  canStepBackward: boolean;
+  canStepForward: boolean;
+  frame: BattleFrame | null;
+  frameCount: number;
+  isLoading: boolean;
+  isPlaying: boolean;
+  loadReplayFile: (file: File) => Promise<void>;
+  loadedReplay: BattleReplay | null;
+  playback: PlaybackState;
+  replayIndex: number;
+  research: ResearchState;
+  statusIsError: boolean;
+  statusText: string;
+};
+
+const WorkbenchPanelContext = createContext<WorkbenchPanelContextValue | null>(null);
+
+const DOCKVIEW_COMPONENTS: Record<string, FunctionComponent<IDockviewPanelProps>> = {
+  battle: BattleDockPanel,
+  research: ResearchDockPanel,
+  replay: ReplayDockPanel,
+  rules: RulesDockPanel,
+  units: UnitsDockPanel,
+  console: ConsoleDockPanel,
+};
+
 export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): void {
   const existing = reactRoots.get(root);
   if (existing) {
@@ -59,14 +104,12 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     setStatusIsError(Boolean(options?.isError));
   }, []);
   const [isLoading, setIsLoading] = useState(false);
-  const [workbenchMode, setWorkbenchMode] = useState<"replay" | "research">("research");
   const playback = useReplayPlayback(loadedReplay);
   const research = useResearchRun({
     applyReplay,
     setStatus,
     pause: playback.pause,
   });
-  const { leftPanelWidth, rightPanelWidth, beginPanelResize, stepPanelWidth } = usePanelResize();
 
   const fetchText = options.fetchText ?? fetchTextFromUrl;
   const defaultReplayUrl = options.defaultReplayUrl === undefined ? null : options.defaultReplayUrl;
@@ -184,186 +227,98 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     }
   }
 
+  const panelContext = useMemo<WorkbenchPanelContextValue>(() => ({
+    canPlay,
+    canStepBackward,
+    canStepForward,
+    frame,
+    frameCount,
+    isLoading,
+    isPlaying,
+    loadReplayFile,
+    loadedReplay,
+    playback,
+    replayIndex,
+    research,
+    statusIsError,
+    statusText,
+  }), [
+    canPlay,
+    canStepBackward,
+    canStepForward,
+    frame,
+    frameCount,
+    isLoading,
+    isPlaying,
+    loadedReplay,
+    playback,
+    replayIndex,
+    research,
+    statusIsError,
+    statusText,
+  ]);
+
+  const handleDockReady = useCallback((event: DockviewReadyEvent) => {
+    event.api.addPanel({
+      id: "battle-scene",
+      component: "battle",
+      title: "Battle Scene",
+    });
+    event.api.addPanel({
+      id: "research",
+      component: "research",
+      title: "Research",
+      position: { referencePanel: "battle-scene", direction: "left" },
+      initialWidth: 420,
+    });
+    event.api.addPanel({
+      id: "replay",
+      component: "replay",
+      title: "Replay",
+      inactive: true,
+      position: { referencePanel: "research", direction: "within" },
+    });
+    event.api.addPanel({
+      id: "units",
+      component: "units",
+      title: "Units",
+      position: { referencePanel: "battle-scene", direction: "right" },
+      initialWidth: 360,
+    });
+    event.api.addPanel({
+      id: "rules",
+      component: "rules",
+      title: "Rules",
+      inactive: true,
+      position: { referencePanel: "units", direction: "within" },
+    });
+    event.api.addPanel({
+      id: "console",
+      component: "console",
+      title: "Console",
+      position: { referencePanel: "units", direction: "below" },
+      initialHeight: 220,
+    });
+  }, []);
+
   return (
     <section
       className="workbench"
       style={{
         ...TEAM_CSS_VARIABLES,
-        "--left-panel-width": `${leftPanelWidth}px`,
-        "--right-panel-width": `${rightPanelWidth}px`,
       } as CSSProperties}
     >
-      <aside className="panel panel-left">
-        <div className="panel-title">
-          <h1>Robolocks</h1>
-          <span className="u-label">{workbenchMode === "research" ? "Unit Research" : "Replay Workbench"}</span>
-        </div>
-        <Tabs
-          value={workbenchMode}
-          onValueChange={(value) => setWorkbenchMode(value as "replay" | "research")}
-          className="workbench-tabs"
-        >
-          <TabsList className="mode-switch" aria-label="Workbench mode">
-            <TabsTrigger value="research">Research</TabsTrigger>
-            <TabsTrigger value="replay">Replay</TabsTrigger>
-          </TabsList>
-          <TabsContent value="replay" className="tab-content">
-            <div className="file-control">
-              <Label htmlFor="replay-file">Replay JSON</Label>
-              <Input
-                id="replay-file"
-                type="file"
-                accept="application/json,.json"
-                disabled={isLoading}
-                onChange={(event) => {
-                  const file = event.currentTarget.files?.[0];
-                  event.currentTarget.value = "";
-                  if (file) {
-                    void loadReplayFile(file);
-                  }
-                }}
-              />
-              <ReplaySummary replay={loadedReplay} frame={frame} replayIndex={replayIndex} />
-            </div>
-          </TabsContent>
-          <TabsContent value="research" className="tab-content research-tab">
-            <div className="research-panel">
-              <div className="research-toolbar">
-                <div className="preset-controls" aria-label="Research presets">
-                  <div className="field-control">
-                    <Label htmlFor="research-battle-preset">Battle</Label>
-                    <select
-                      id="research-battle-preset"
-                      value={research.researchBattlePresetId}
-                      disabled={isLoading}
-                      onChange={(event) => research.setResearchBattlePresetId(event.currentTarget.value)}
-                    >
-                      {RESEARCH_BATTLE_PRESETS.map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field-control">
-                    <Label htmlFor="research-unit-preset">Unit</Label>
-                    <select
-                      id="research-unit-preset"
-                      value={research.researchUnitPresetId}
-                      disabled={isLoading}
-                      onChange={(event) => research.setResearchUnitPresetId(event.currentTarget.value)}
-                    >
-                      {RESEARCH_UNIT_PRESETS.map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field-control field-control-inline">
-                    <Label htmlFor="research-ticks">Ticks</Label>
-                    <Input
-                      id="research-ticks"
-                      type="number"
-                      min={1}
-                      max={900}
-                      value={research.researchTickCount}
-                      disabled={isLoading}
-                      onChange={(event) => {
-                        const nextTickCount = event.currentTarget.valueAsNumber;
-                        if (!Number.isNaN(nextTickCount)) {
-                          research.setResearchTickCount(nextTickCount);
-                        }
-                      }}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    disabled={isLoading || research.isResearchRunning}
-                    onClick={() => research.runResearch()}
-                  >
-                    Run
-                  </Button>
-                  <div className="preset-description">
-                    <span>{research.researchBattlePreset?.description ?? ""}</span>
-                    <span>{research.researchUnitPreset?.description ?? ""}</span>
-                  </div>
-                </div>
-              </div>
-              <Suspense fallback={<div className="code-editor-loading u-label">Loading editor</div>}>
-                <CodeEditor
-                  disabled={isLoading}
-                  onRun={() => research.runResearch()}
-                  onValueChange={research.setResearchBotSource}
-                  value={research.researchBotSource}
-                />
-              </Suspense>
-            </div>
-          </TabsContent>
-        </Tabs>
-        <div className="status" role="status" data-variant={statusIsError ? "error" : "info"}>
-          {statusText}
-        </div>
-      </aside>
-      <PanelResizeHandle
-        side="left"
-        width={leftPanelWidth}
-        onResizeStart={(pointerX) => beginPanelResize("left", pointerX)}
-        onStep={(deltaPx) => stepPanelWidth("left", deltaPx)}
-      />
-      <section className="battle-scene">
-        <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? NO_OBSTACLES} />
-        {research.isResearchRunning ? (
-          <ResearchRunOverlay progress={research.researchProgress} onCancel={research.cancelResearch} />
-        ) : null}
-        <PlaybackControls
-          canPlay={canPlay}
-          canStepBackward={canStepBackward}
-          canStepForward={canStepForward}
-          currentIndex={replayIndex}
-          frameCount={frameCount}
-          isPlaying={isPlaying}
-          onNext={() => playback.stepTo(Math.min(frameCount - 1, replayIndex + 1))}
-          onPlayPause={() => (isPlaying ? playback.pause() : playback.play())}
-          onPrev={() => playback.stepTo(Math.max(0, replayIndex - 1))}
-          onReset={() => playback.seek(0)}
-          onSeek={(index) => playback.seek(index)}
-          speed={playback.speed}
-          onSpeedChange={playback.setSpeed}
+      <WorkbenchPanelContext.Provider value={panelContext}>
+        <DockviewReact
+          className="dockview-workbench dockview-theme-dark"
+          components={DOCKVIEW_COMPONENTS}
+          onReady={handleDockReady}
         />
-      </section>
-      <PanelResizeHandle
-        side="right"
-        width={rightPanelWidth}
-        onResizeStart={(pointerX) => beginPanelResize("right", pointerX)}
-        onStep={(deltaPx) => stepPanelWidth("right", deltaPx)}
-      />
-      <aside className="panel panel-right">
-        <div className="panel-title">
-          <h1>Bot State</h1>
-          <span className="u-label">{frame ? `tick ${frame.tick}` : "No Frame"}</span>
-        </div>
-        <Accordion type="multiple" defaultValue={["rules", "units"]} className="state-panel-sections">
-          <AccordionItem value="rules" className="state-section state-section-rules">
-            <AccordionTrigger className="state-section-trigger">Rules</AccordionTrigger>
-            <AccordionContent className="state-section-content">
-              <RuleSummary frame={frame} />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="units" className="state-section state-section-units">
-            <AccordionTrigger className="state-section-trigger">Units</AccordionTrigger>
-            <AccordionContent className="state-section-content">
-              <Inspector frame={frame} />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="console" className="state-section state-section-console">
-            <AccordionTrigger className="state-section-trigger">Console</AccordionTrigger>
-            <AccordionContent className="state-section-content">
-              <BotConsole logs={research.botLogs} currentTick={frame?.tick ?? 0} />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </aside>
+      </WorkbenchPanelContext.Provider>
+      <div className="workbench-statusbar" role="status" data-variant={statusIsError ? "error" : "info"}>
+        <span>Robolocks</span>
+        <strong>{statusText}</strong>
+      </div>
     </section>
   );
 }
@@ -381,6 +336,184 @@ const RESEARCH_STAGE_LABELS: Record<ResearchProgress["stage"], string> = {
   "installing-sdk": "Installing SDK",
   simulating: "Simulating battle",
 };
+
+function useWorkbenchPanel(): WorkbenchPanelContextValue {
+  const context = useContext(WorkbenchPanelContext);
+  if (!context) {
+    throw new Error("Workbench panel context is missing");
+  }
+  return context;
+}
+
+function BattleDockPanel() {
+  const {
+    canPlay,
+    canStepBackward,
+    canStepForward,
+    frame,
+    frameCount,
+    isPlaying,
+    loadedReplay,
+    playback,
+    replayIndex,
+    research,
+  } = useWorkbenchPanel();
+  return (
+    <section className="battle-scene">
+      <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? NO_OBSTACLES} />
+      {research.isResearchRunning ? (
+        <ResearchRunOverlay progress={research.researchProgress} onCancel={research.cancelResearch} />
+      ) : null}
+      <PlaybackControls
+        canPlay={canPlay}
+        canStepBackward={canStepBackward}
+        canStepForward={canStepForward}
+        currentIndex={replayIndex}
+        frameCount={frameCount}
+        isPlaying={isPlaying}
+        onNext={() => playback.stepTo(Math.min(frameCount - 1, replayIndex + 1))}
+        onPlayPause={() => (isPlaying ? playback.pause() : playback.play())}
+        onPrev={() => playback.stepTo(Math.max(0, replayIndex - 1))}
+        onReset={() => playback.seek(0)}
+        onSeek={(index) => playback.seek(index)}
+        speed={playback.speed}
+        onSpeedChange={playback.setSpeed}
+      />
+    </section>
+  );
+}
+
+function ResearchDockPanel() {
+  const { isLoading, research } = useWorkbenchPanel();
+  return (
+    <section className="dock-panel dock-panel-research">
+      <div className="research-panel">
+        <div className="research-toolbar">
+          <div className="preset-controls" aria-label="Research presets">
+            <div className="field-control">
+              <Label htmlFor="research-battle-preset">Battle</Label>
+              <select
+                id="research-battle-preset"
+                value={research.researchBattlePresetId}
+                disabled={isLoading}
+                onChange={(event) => research.setResearchBattlePresetId(event.currentTarget.value)}
+              >
+                {RESEARCH_BATTLE_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field-control">
+              <Label htmlFor="research-unit-preset">Unit</Label>
+              <select
+                id="research-unit-preset"
+                value={research.researchUnitPresetId}
+                disabled={isLoading}
+                onChange={(event) => research.setResearchUnitPresetId(event.currentTarget.value)}
+              >
+                {RESEARCH_UNIT_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field-control field-control-inline">
+              <Label htmlFor="research-ticks">Ticks</Label>
+              <Input
+                id="research-ticks"
+                type="number"
+                min={1}
+                max={900}
+                value={research.researchTickCount}
+                disabled={isLoading}
+                onChange={(event) => {
+                  const nextTickCount = event.currentTarget.valueAsNumber;
+                  if (!Number.isNaN(nextTickCount)) {
+                    research.setResearchTickCount(nextTickCount);
+                  }
+                }}
+              />
+            </div>
+            <Button
+              type="button"
+              disabled={isLoading || research.isResearchRunning}
+              onClick={() => research.runResearch()}
+            >
+              Run
+            </Button>
+            <div className="preset-description">
+              <span>{research.researchBattlePreset?.description ?? ""}</span>
+              <span>{research.researchUnitPreset?.description ?? ""}</span>
+            </div>
+          </div>
+        </div>
+        <Suspense fallback={<div className="code-editor-loading u-label">Loading editor</div>}>
+          <CodeEditor
+            disabled={isLoading}
+            onRun={() => research.runResearch()}
+            onValueChange={research.setResearchBotSource}
+            value={research.researchBotSource}
+          />
+        </Suspense>
+      </div>
+    </section>
+  );
+}
+
+function ReplayDockPanel() {
+  const { frame, isLoading, loadReplayFile, loadedReplay, replayIndex } = useWorkbenchPanel();
+  return (
+    <section className="dock-panel">
+      <div className="file-control">
+        <Label htmlFor="replay-file">Replay JSON</Label>
+        <Input
+          id="replay-file"
+          type="file"
+          accept="application/json,.json"
+          disabled={isLoading}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = "";
+            if (file) {
+              void loadReplayFile(file);
+            }
+          }}
+        />
+        <ReplaySummary replay={loadedReplay} frame={frame} replayIndex={replayIndex} />
+      </div>
+    </section>
+  );
+}
+
+function UnitsDockPanel() {
+  const { frame } = useWorkbenchPanel();
+  return (
+    <section className="dock-panel dock-panel-state">
+      <Inspector frame={frame} />
+    </section>
+  );
+}
+
+function RulesDockPanel() {
+  const { frame } = useWorkbenchPanel();
+  return (
+    <section className="dock-panel dock-panel-state">
+      <RuleSummary frame={frame} />
+    </section>
+  );
+}
+
+function ConsoleDockPanel() {
+  const { frame, research } = useWorkbenchPanel();
+  return (
+    <section className="dock-panel dock-panel-state">
+      <BotConsole logs={research.botLogs} currentTick={frame?.tick ?? 0} />
+    </section>
+  );
+}
 
 // Lightweight overlay shown over the battle viewport while a research run is in
 // flight. It covers only the scene (the Monaco editor and side panels stay
@@ -434,46 +567,6 @@ function ReplaySummary({
       <Stat label="Current" value={`${replayIndex + 1}/${replay.frames.length}`} />
       <Stat label="Tick" value={String(frame?.tick ?? 0)} />
     </dl>
-  );
-}
-
-function PanelResizeHandle({
-  onResizeStart,
-  onStep,
-  side,
-  width,
-}: {
-  onResizeStart: (pointerX: number) => void;
-  onStep: (deltaPx: number) => void;
-  side: "left" | "right";
-  width: number;
-}) {
-  return (
-    <div
-      className={`panel-resize-handle panel-resize-handle-${side}`}
-      role="separator"
-      aria-label={`${side} panel resize handle`}
-      aria-orientation="vertical"
-      aria-valuenow={width}
-      aria-valuemin={PANEL_WIDTH_MIN}
-      aria-valuemax={PANEL_WIDTH_MAX}
-      tabIndex={0}
-      onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId);
-        onResizeStart(event.clientX);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowRight") {
-          event.preventDefault();
-          event.stopPropagation();
-          onStep(PANEL_WIDTH_KEYBOARD_STEP);
-        } else if (event.key === "ArrowLeft") {
-          event.preventDefault();
-          event.stopPropagation();
-          onStep(-PANEL_WIDTH_KEYBOARD_STEP);
-        }
-      }}
-    />
   );
 }
 
