@@ -1,6 +1,7 @@
 import { Pause, Play, RotateCcw, SkipBack, SkipForward } from "lucide-react";
 
 import { Button } from "../components/ui/button.tsx";
+import { PLAYBACK_SPEEDS, type PlaybackSpeed } from "./hooks/useReplayPlayback.ts";
 
 export type PlaybackControlsProps = {
   canPlay: boolean;
@@ -14,6 +15,8 @@ export type PlaybackControlsProps = {
   onPrev: () => void;
   onReset: () => void;
   onSeek: (index: number) => void;
+  speed: PlaybackSpeed;
+  onSpeedChange: (speed: PlaybackSpeed) => void;
 };
 
 export function PlaybackControls({
@@ -28,6 +31,8 @@ export function PlaybackControls({
   onPrev,
   onReset,
   onSeek,
+  speed,
+  onSpeedChange,
 }: PlaybackControlsProps) {
   const maxIndex = Math.max(0, frameCount - 1);
   return (
@@ -88,6 +93,20 @@ export function PlaybackControls({
           disabled={frameCount <= 1}
           onChange={(event) => onSeek(Number(event.currentTarget.value))}
         />
+      </label>
+      <label className="playback-speed" aria-label="Playback speed">
+        <span>Speed</span>
+        <select
+          value={String(speed)}
+          disabled={!canPlay}
+          onChange={(event) => onSpeedChange(Number(event.currentTarget.value) as PlaybackSpeed)}
+        >
+          {PLAYBACK_SPEEDS.map((option) => (
+            <option key={option} value={option}>
+              {option}x
+            </option>
+          ))}
+        </select>
       </label>
     </div>
   );

@@ -1,17 +1,10 @@
 import { createRoot, type Root } from "react-dom/client";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import type { BattleFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
-import {
-  DEFAULT_RESEARCH_BOT_SOURCE,
-  RESEARCH_BATTLE_PRESETS,
-  RESEARCH_UNIT_PRESETS,
-  createResearchBattleConfigJson,
-  runResearchInBrowser,
-  type BotLogEntry,
-} from "../research/research.ts";
+import { RESEARCH_BATTLE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
@@ -22,10 +15,11 @@ import { BotConsole } from "./BotConsole.tsx";
 import { Inspector, Stat } from "./Inspector.tsx";
 import { PlaybackControls } from "./PlaybackControls.tsx";
 import { RuleSummary } from "./RuleSummary.tsx";
+import { usePanelResize } from "./hooks/usePanelResize.ts";
+import { useReplayPlayback } from "./hooks/useReplayPlayback.ts";
+import { useResearchRun } from "./hooks/useResearchRun.ts";
 
 const CodeEditor = lazy(() => import("./CodeEditor.tsx").then((module) => ({ default: module.CodeEditor })));
-const MIN_PANEL_WIDTH = 240;
-const MAX_PANEL_WIDTH = 640;
 
 export type RenderAppOptions = {
   defaultReplayUrl?: string | null;
@@ -47,38 +41,29 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
 
 function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const [loadedReplay, setLoadedReplay] = useState<BattleReplay | null>(null);
-  const [replayIndex, setReplayIndex] = useState(0);
   const [status, setStatus] = useState("Ready");
-  const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [workbenchMode, setWorkbenchMode] = useState<"replay" | "research">("research");
-  const [researchBattlePresetId, setResearchBattlePresetId] = useState(RESEARCH_BATTLE_PRESETS[0]?.id ?? "");
-  const [researchUnitPresetId, setResearchUnitPresetId] = useState(RESEARCH_UNIT_PRESETS[0]?.id ?? "");
-  const [researchBotSource, setResearchBotSource] = useState(DEFAULT_RESEARCH_BOT_SOURCE);
-  const [researchTickCount, setResearchTickCount] = useState(180);
-  const [botLogs, setBotLogs] = useState<BotLogEntry[]>([]);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(MAX_PANEL_WIDTH);
-  const [rightPanelWidth, setRightPanelWidth] = useState(320);
-  const timerRef = useRef<number | null>(null);
+  const playback = useReplayPlayback(loadedReplay);
+  const research = useResearchRun({
+    applyReplay,
+    setStatus,
+    setIsLoading,
+    pause: playback.pause,
+  });
+  const { leftPanelWidth, rightPanelWidth, beginPanelResize } = usePanelResize();
 
   const fetchText = options.fetchText ?? fetchTextFromUrl;
   const defaultReplayUrl = options.defaultReplayUrl === undefined ? null : options.defaultReplayUrl;
   const autoplayDefaultReplay = options.autoplayDefaultReplay ?? false;
 
+  const replayIndex = playback.frameIndex;
+  const isPlaying = playback.isPlaying;
   const frame = loadedReplay?.frames[replayIndex] ?? null;
   const canStepBackward = Boolean(loadedReplay && replayIndex > 0);
   const canStepForward = Boolean(loadedReplay && replayIndex < loadedReplay.frames.length - 1);
   const canPlay = Boolean(loadedReplay && loadedReplay.frames.length > 1);
   const frameCount = loadedReplay?.frames.length ?? 0;
-  const researchBattlePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === researchBattlePresetId) ?? RESEARCH_BATTLE_PRESETS[0];
-  const researchUnitPreset = RESEARCH_UNIT_PRESETS.find((preset) => preset.id === researchUnitPresetId) ?? RESEARCH_UNIT_PRESETS[0];
-  const researchBattleConfigJson = useMemo(
-    () => createResearchBattleConfigJson({
-      battlePresetId: researchBattlePresetId,
-      unitPresetId: researchUnitPresetId,
-    }),
-    [researchBattlePresetId, researchUnitPresetId],
-  );
 
   const statusText = useMemo(() => {
     if (!loadedReplay || !frame) {
@@ -94,37 +79,14 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     void loadReplayUrl(defaultReplayUrl, autoplayDefaultReplay);
   }, [defaultReplayUrl, autoplayDefaultReplay]);
 
-  useEffect(() => {
-    if (!isPlaying || !loadedReplay) {
-      return;
-    }
-    const delayMs = Math.max(1, 1000 / loadedReplay.tickRate);
-    timerRef.current = window.setInterval(() => {
-      setReplayIndex((current) => {
-        if (current >= loadedReplay.frames.length - 1) {
-          setIsPlaying(false);
-          return current;
-        }
-        return current + 1;
-      });
-    }, delayMs);
-    return () => {
-      if (timerRef.current !== null) {
-        window.clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [isPlaying, loadedReplay]);
-
   async function loadReplayUrl(url: string, autoplay: boolean): Promise<void> {
-    setIsPlaying(false);
+    playback.pause();
     setIsLoading(true);
     setStatus("Loading replay");
     try {
       applyReplayText(await fetchText(url), autoplay);
     } catch (error: unknown) {
       setLoadedReplay(null);
-      setReplayIndex(0);
       setStatus(`Replay load failed: ${errorMessage(error)}`);
     } finally {
       setIsLoading(false);
@@ -137,66 +99,27 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
 
   function applyReplay(replay: BattleReplay, autoplay: boolean): void {
     setLoadedReplay(replay);
-    setReplayIndex(0);
     setStatus("Replay loaded");
-    setIsPlaying(autoplay && replay.frames.length > 1);
+    if (autoplay && replay.frames.length > 1) {
+      playback.play();
+    } else {
+      playback.pause();
+    }
   }
 
   async function loadReplayFile(file: File): Promise<void> {
-    setIsPlaying(false);
+    playback.pause();
     setIsLoading(true);
     setStatus("Loading replay");
     try {
-      setBotLogs([]);
+      research.setBotLogs([]);
       applyReplayText(await file.text(), false);
     } catch (error: unknown) {
       setLoadedReplay(null);
-      setReplayIndex(0);
       setStatus(`Replay load failed: ${errorMessage(error)}`);
     } finally {
       setIsLoading(false);
     }
-  }
-
-  async function runResearch(): Promise<void> {
-    setIsPlaying(false);
-    setIsLoading(true);
-    setStatus("Running research");
-    try {
-      const result = await runResearchInBrowser({
-        battleConfigJson: researchBattleConfigJson,
-        botSource: researchBotSource,
-        tickCount: researchTickCount,
-      });
-      setBotLogs(result.logs);
-      applyReplay(result.replay, true);
-      setStatus(`Research run loaded - ${result.replay.frames.length} frames`);
-    } catch (error: unknown) {
-      setStatus(`Research run failed: ${errorMessage(error)}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  function beginPanelResize(panel: "left" | "right", pointerStartX: number): void {
-    const startWidth = panel === "left" ? leftPanelWidth : rightPanelWidth;
-    const applyWidth = panel === "left" ? setLeftPanelWidth : setRightPanelWidth;
-
-    function handlePointerMove(event: PointerEvent): void {
-      const delta = event.clientX - pointerStartX;
-      const nextWidth = panel === "left" ? startWidth + delta : startWidth - delta;
-      applyWidth(clamp(nextWidth, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH));
-    }
-
-    function handlePointerUp(): void {
-      document.body.classList.remove("is-resizing-panel");
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    }
-
-    document.body.classList.add("is-resizing-panel");
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
   return (
@@ -248,9 +171,9 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
                     <Label htmlFor="research-battle-preset">Battle</Label>
                     <select
                       id="research-battle-preset"
-                      value={researchBattlePresetId}
+                      value={research.researchBattlePresetId}
                       disabled={isLoading}
-                      onChange={(event) => setResearchBattlePresetId(event.currentTarget.value)}
+                      onChange={(event) => research.setResearchBattlePresetId(event.currentTarget.value)}
                     >
                       {RESEARCH_BATTLE_PRESETS.map((preset) => (
                         <option key={preset.id} value={preset.id}>
@@ -263,9 +186,9 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
                     <Label htmlFor="research-unit-preset">Unit</Label>
                     <select
                       id="research-unit-preset"
-                      value={researchUnitPresetId}
+                      value={research.researchUnitPresetId}
                       disabled={isLoading}
-                      onChange={(event) => setResearchUnitPresetId(event.currentTarget.value)}
+                      onChange={(event) => research.setResearchUnitPresetId(event.currentTarget.value)}
                     >
                       {RESEARCH_UNIT_PRESETS.map((preset) => (
                         <option key={preset.id} value={preset.id}>
@@ -281,26 +204,31 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
                       type="number"
                       min={1}
                       max={900}
-                      value={researchTickCount}
+                      value={research.researchTickCount}
                       disabled={isLoading}
-                      onChange={(event) => setResearchTickCount(Number(event.currentTarget.value))}
+                      onChange={(event) => {
+                        const nextTickCount = Number(event.currentTarget.value);
+                        if (!Number.isNaN(nextTickCount)) {
+                          research.setResearchTickCount(nextTickCount);
+                        }
+                      }}
                     />
                   </div>
-                  <Button type="button" disabled={isLoading} onClick={() => void runResearch()}>
+                  <Button type="button" disabled={isLoading} onClick={() => void research.runResearch()}>
                     Run
                   </Button>
                   <div className="preset-description">
-                    <span>{researchBattlePreset?.description ?? ""}</span>
-                    <span>{researchUnitPreset?.description ?? ""}</span>
+                    <span>{research.researchBattlePreset?.description ?? ""}</span>
+                    <span>{research.researchUnitPreset?.description ?? ""}</span>
                   </div>
                 </div>
               </div>
               <Suspense fallback={<div className="code-editor-loading">Loading editor</div>}>
                 <CodeEditor
                   disabled={isLoading}
-                  onRun={() => void runResearch()}
-                  onValueChange={setResearchBotSource}
-                  value={researchBotSource}
+                  onRun={() => void research.runResearch()}
+                  onValueChange={research.setResearchBotSource}
+                  value={research.researchBotSource}
                 />
               </Suspense>
             </div>
@@ -318,17 +246,13 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
           currentIndex={replayIndex}
           frameCount={frameCount}
           isPlaying={isPlaying}
-          onNext={() => setReplayIndex((value) => Math.min(frameCount - 1, value + 1))}
-          onPlayPause={() => setIsPlaying((value) => !value)}
-          onPrev={() => setReplayIndex((value) => Math.max(0, value - 1))}
-          onReset={() => {
-            setIsPlaying(false);
-            setReplayIndex(0);
-          }}
-          onSeek={(index) => {
-            setIsPlaying(false);
-            setReplayIndex(index);
-          }}
+          onNext={() => playback.stepTo(Math.min(frameCount - 1, replayIndex + 1))}
+          onPlayPause={() => (isPlaying ? playback.pause() : playback.play())}
+          onPrev={() => playback.stepTo(Math.max(0, replayIndex - 1))}
+          onReset={() => playback.seek(0)}
+          onSeek={(index) => playback.seek(index)}
+          speed={playback.speed}
+          onSpeedChange={playback.setSpeed}
         />
       </section>
       <PanelResizeHandle side="right" onResizeStart={(pointerX) => beginPanelResize("right", pointerX)} />
@@ -353,7 +277,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
           <AccordionItem value="console" className="state-section state-section-console">
             <AccordionTrigger className="state-section-trigger">Console</AccordionTrigger>
             <AccordionContent className="state-section-content">
-              <BotConsole logs={botLogs} currentTick={frame?.tick ?? 0} />
+              <BotConsole logs={research.botLogs} currentTick={frame?.tick ?? 0} />
             </AccordionContent>
           </AccordionItem>
         </Accordion>
@@ -417,8 +341,4 @@ function PanelResizeHandle({
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
