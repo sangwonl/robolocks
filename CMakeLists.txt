@@ -131,6 +131,15 @@ if(NOT EMSCRIPTEN)
       -DREPLAY_DIR=${CMAKE_CURRENT_BINARY_DIR}/replays
       -P ${CMAKE_CURRENT_SOURCE_DIR}/engine/tests/cli_replay_test.cmake
   )
+
+  find_package(Python3 COMPONENTS Interpreter)
+  if(Python3_FOUND)
+    add_test(
+      NAME "python sdk runtime unit tests"
+      COMMAND ${Python3_EXECUTABLE} -m unittest discover -s ${CMAKE_SOURCE_DIR}/sdk/python/tests
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/sdk/python
+    )
+  endif()
 endif()
 
 if(EMSCRIPTEN)
