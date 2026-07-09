@@ -1,0 +1,185 @@
+{
+  "contacts": {
+    "obstacles": [
+      {
+        "blocksLineOfSight": false,
+        "blocksMovement": false,
+        "id": "north_cover",
+        "position": {
+          "x": 18.0,
+          "y": 20.0
+        },
+        "radiusMeters": 2.5
+      }
+    ],
+    "projectiles": [
+      {
+        "heightMeters": 1.3,
+        "ownerUnitId": 1,
+        "position": {
+          "x": 14.2,
+          "y": 7.9
+        },
+        "previousHeightMeters": 1.1,
+        "previousPosition": {
+          "x": 13.0,
+          "y": 7.5
+        },
+        "projectileId": 7,
+        "radiusMeters": 0.08
+      }
+    ],
+    "units": [
+      {
+        "armorIntegrity": 62.0,
+        "bodyShape": {
+          "radiusMeters": 1.4,
+          "type": "circle"
+        },
+        "hullHeadingDegrees": 190.0,
+        "isEnemy": true,
+        "position": {
+          "x": 28.0,
+          "y": 16.5
+        },
+        "teamId": 2,
+        "turretHeadingDegrees": 205.0,
+        "unitId": 2,
+        "weaponCooldownTicks": 12
+      }
+    ]
+  },
+  "map": {
+    "obstacles": [
+      {
+        "blocksLineOfSight": false,
+        "blocksMovement": false,
+        "id": "north_cover",
+        "position": {
+          "x": 18.0,
+          "y": 20.0
+        },
+        "radiusMeters": 2.5
+      },
+      {
+        "blocksLineOfSight": false,
+        "blocksMovement": false,
+        "id": "south_wall",
+        "position": {
+          "x": 10.0,
+          "y": 4.0
+        },
+        "radiusMeters": 1.75
+      }
+    ]
+  },
+  "self": {
+    "armorIntegrity": 88.5,
+    "bodyShape": {
+      "lengthMeters": 6.4,
+      "radiusMeters": 1.2,
+      "type": "box",
+      "widthMeters": 3.1
+    },
+    "hullHeadingDegrees": 33.0,
+    "intents": {
+      "hull": {
+        "active": true,
+        "ageTicks": 5,
+        "errorDegrees": 11.0,
+        "target": {
+          "x": 22.0,
+          "y": 10.0
+        }
+      },
+      "mobility": {
+        "active": true,
+        "ageTicks": 12,
+        "remainingMeters": 18.5,
+        "target": {
+          "x": 24.0,
+          "y": 14.0
+        }
+      },
+      "turret": {
+        "active": true,
+        "ageTicks": 8,
+        "errorDegrees": 6.5,
+        "target": {
+          "x": 28.0,
+          "y": 16.5
+        }
+      },
+      "weapon": {
+        "active": true,
+        "ageTicks": 3,
+        "minHitChance": 0.65
+      }
+    },
+    "modules": {
+      "armor": {
+        "frontMillimeters": 120.0,
+        "id": "composite_armor_mk2",
+        "integrity": 88.5,
+        "rearMillimeters": 45.0,
+        "sideMillimeters": 70.0
+      },
+      "body": {
+        "id": "heavy_hull_mk2",
+        "massKilograms": 42000.0,
+        "shape": {
+          "lengthMeters": 6.4,
+          "radiusMeters": 1.2,
+          "type": "box",
+          "widthMeters": 3.1
+        }
+      },
+      "mobility": {
+        "id": "tracked_chassis_mk2",
+        "maxHullTurnDegreesPerSecond": 95.0,
+        "maxSpeedMetersPerSecond": 7.5
+      },
+      "sensor": {
+        "fovDegrees": 220.0,
+        "id": "radar_optic_mk2",
+        "rangeMeters": 640.0,
+        "refreshTicks": 3
+      },
+      "turret": {
+        "headingDegrees": 47.0,
+        "id": "heavy_turret_mk2",
+        "maxTurnDegreesPerSecond": 140.0
+      },
+      "weapon": {
+        "aimToleranceDegrees": 4.5,
+        "blastRadiusMeters": 2.25,
+        "damage": 42.0,
+        "fireMode": "ballistic",
+        "gravityMetersPerSecondSquared": 9.81,
+        "id": "cannon_88mm_mk2",
+        "launchAngleDegrees": 3.5,
+        "muzzleOffsetMeters": {
+          "x": 3.6,
+          "y": 0.2,
+          "z": 1.65
+        },
+        "muzzleVelocityMetersPerSecond": 780.0,
+        "penetrationMillimeters": 132.0,
+        "projectileRadiusMeters": 0.08,
+        "rangeMeters": 96.0,
+        "reloadTicks": 72
+      }
+    },
+    "name": "blue_vanguard",
+    "position": {
+      "x": 12.5,
+      "y": 7.25
+    },
+    "teamId": 1,
+    "turretHeadingDegrees": 47.0,
+    "unitId": 1,
+    "weaponCooldownTicks": 4
+  },
+  "selfId": 1,
+  "tick": 42
+}

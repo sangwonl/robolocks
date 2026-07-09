@@ -43,6 +43,7 @@ export type UnitModulesFrame = {
   };
   turret: {
     id: string;
+    headingDegrees: number;
     maxTurnDegreesPerSecond: number;
   };
   weapon: {
@@ -70,6 +71,7 @@ export type UnitModulesFrame = {
   body: {
     id: string;
     massKilograms: number;
+    shape?: BodyShapeFrame;
   };
   sensor: {
     id: string;

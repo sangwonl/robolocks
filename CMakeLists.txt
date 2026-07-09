@@ -90,6 +90,7 @@ if(NOT EMSCRIPTEN)
     engine/tests/battle_loader_test.cpp
     engine/tests/controller_protocol_json_test.cpp
     engine/tests/snapshot_json_test.cpp
+    engine/tests/contract_golden_test.cpp
     engine/tests/python_bot_controller_test.cpp
     engine/tests/sensor_system_test.cpp
   )

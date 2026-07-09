@@ -199,6 +199,7 @@ function parseModules(payload: unknown): UnitModulesFrame {
     },
     turret: {
       id: stringField(modules.turret, "id"),
+      headingDegrees: numberField(modules.turret, "headingDegrees"),
       maxTurnDegreesPerSecond: numberField(modules.turret, "maxTurnDegreesPerSecond"),
     },
     weapon: {
@@ -226,6 +227,7 @@ function parseModules(payload: unknown): UnitModulesFrame {
     body: {
       id: stringField(modules.body, "id"),
       massKilograms: numberField(modules.body, "massKilograms"),
+      ...parseOptionalBodyShape(modules.body),
     },
     sensor: {
       id: stringField(modules.sensor, "id"),
@@ -234,6 +236,15 @@ function parseModules(payload: unknown): UnitModulesFrame {
       refreshTicks: numberField(modules.sensor, "refreshTicks"),
     },
   };
+}
+
+function parseOptionalBodyShape(payload: unknown): { shape?: BodyShapeFrame } {
+  const object = payload as Record<string, unknown>;
+  const shape = typeof object === "object" && object !== null ? object.shape : undefined;
+  if (typeof shape !== "object" || shape === null) {
+    return {};
+  }
+  return { shape: parseBodyShape(shape) };
 }
 
 function stringField(payload: unknown, key: string): string {
@@ -269,7 +280,7 @@ function vec3Field(payload: unknown, key: string): { x: number; y: number; z: nu
 function defaultModules(): UnitModulesFrame {
   return {
     mobility: { id: "", maxSpeedMetersPerSecond: 0, maxHullTurnDegreesPerSecond: 0 },
-    turret: { id: "", maxTurnDegreesPerSecond: 0 },
+    turret: { id: "", headingDegrees: 0, maxTurnDegreesPerSecond: 0 },
     weapon: { id: "", fireMode: "direct", damage: 0, penetrationMillimeters: 0, rangeMeters: 0, muzzleVelocityMetersPerSecond: 0, muzzleOffsetMeters: { x: 0, y: 0, z: 0 }, launchAngleDegrees: 0, gravityMetersPerSecondSquared: 9.81, blastRadiusMeters: 0, projectileRadiusMeters: 0, aimToleranceDegrees: 0, reloadTicks: 0 },
     armor: { id: "", integrity: 0, frontMillimeters: 0, sideMillimeters: 0, rearMillimeters: 0 },
     body: { id: "", massKilograms: 0 },

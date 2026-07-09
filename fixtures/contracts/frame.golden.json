@@ -1,0 +1,328 @@
+{
+  "tick": 42,
+  "units": [
+    {
+      "unitId": 1,
+      "teamId": 1,
+      "name": "blue_vanguard",
+      "position": {
+        "x": 12.5,
+        "y": 7.25
+      },
+      "hullHeadingDegrees": 33.0,
+      "turretHeadingDegrees": 47.0,
+      "armorIntegrity": 88.5,
+      "weaponCooldownTicks": 4,
+      "bodyShape": {
+        "type": "box",
+        "radiusMeters": 1.2,
+        "lengthMeters": 6.4,
+        "widthMeters": 3.1
+      },
+      "modules": {
+        "mobility": {
+          "id": "tracked_chassis_mk2",
+          "maxSpeedMetersPerSecond": 7.5,
+          "maxHullTurnDegreesPerSecond": 95.0
+        },
+        "turret": {
+          "id": "heavy_turret_mk2",
+          "headingDegrees": 47.0,
+          "maxTurnDegreesPerSecond": 140.0
+        },
+        "weapon": {
+          "id": "cannon_88mm_mk2",
+          "fireMode": "ballistic",
+          "damage": 42.0,
+          "penetrationMillimeters": 132.0,
+          "rangeMeters": 96.0,
+          "muzzleVelocityMetersPerSecond": 780.0,
+          "muzzleOffsetMeters": {
+            "x": 3.6,
+            "y": 0.2,
+            "z": 1.65
+          },
+          "launchAngleDegrees": 3.5,
+          "gravityMetersPerSecondSquared": 9.81,
+          "blastRadiusMeters": 2.25,
+          "projectileRadiusMeters": 0.08,
+          "aimToleranceDegrees": 4.5,
+          "reloadTicks": 72
+        },
+        "armor": {
+          "id": "composite_armor_mk2",
+          "integrity": 88.5,
+          "frontMillimeters": 120.0,
+          "sideMillimeters": 70.0,
+          "rearMillimeters": 45.0
+        },
+        "body": {
+          "id": "heavy_hull_mk2",
+          "massKilograms": 42000.0,
+          "shape": {
+            "type": "box",
+            "radiusMeters": 1.2,
+            "lengthMeters": 6.4,
+            "widthMeters": 3.1
+          }
+        },
+        "sensor": {
+          "id": "radar_optic_mk2",
+          "rangeMeters": 640.0,
+          "fovDegrees": 220.0,
+          "refreshTicks": 3
+        }
+      },
+      "intents": {
+        "mobility": {
+          "active": true,
+          "target": {
+            "x": 24.0,
+            "y": 14.0
+          },
+          "remainingMeters": 18.5,
+          "ageTicks": 12
+        },
+        "turret": {
+          "active": true,
+          "target": {
+            "x": 28.0,
+            "y": 16.5
+          },
+          "errorDegrees": 6.5,
+          "ageTicks": 8
+        },
+        "hull": {
+          "active": true,
+          "target": {
+            "x": 22.0,
+            "y": 10.0
+          },
+          "errorDegrees": 11.0,
+          "ageTicks": 5
+        },
+        "weapon": {
+          "active": true,
+          "minHitChance": 0.65,
+          "ageTicks": 3
+        }
+      }
+    },
+    {
+      "unitId": 2,
+      "teamId": 2,
+      "name": "red_marauder",
+      "position": {
+        "x": 28.0,
+        "y": 16.5
+      },
+      "hullHeadingDegrees": 190.0,
+      "turretHeadingDegrees": 205.0,
+      "armorIntegrity": 62.0,
+      "weaponCooldownTicks": 12,
+      "bodyShape": {
+        "type": "circle",
+        "radiusMeters": 1.4
+      },
+      "modules": {
+        "mobility": {
+          "id": "wheeled_chassis_mk1",
+          "maxSpeedMetersPerSecond": 7.5,
+          "maxHullTurnDegreesPerSecond": 95.0
+        },
+        "turret": {
+          "id": "light_turret_mk1",
+          "headingDegrees": 205.0,
+          "maxTurnDegreesPerSecond": 140.0
+        },
+        "weapon": {
+          "id": "autocannon_40mm_mk1",
+          "fireMode": "direct",
+          "damage": 42.0,
+          "penetrationMillimeters": 132.0,
+          "rangeMeters": 96.0,
+          "muzzleVelocityMetersPerSecond": 780.0,
+          "muzzleOffsetMeters": {
+            "x": 3.6,
+            "y": 0.2,
+            "z": 1.65
+          },
+          "launchAngleDegrees": 3.5,
+          "gravityMetersPerSecondSquared": 9.81,
+          "blastRadiusMeters": 2.25,
+          "projectileRadiusMeters": 0.08,
+          "aimToleranceDegrees": 4.5,
+          "reloadTicks": 72
+        },
+        "armor": {
+          "id": "composite_armor_mk2",
+          "integrity": 88.5,
+          "frontMillimeters": 120.0,
+          "sideMillimeters": 70.0,
+          "rearMillimeters": 45.0
+        },
+        "body": {
+          "id": "medium_hull_mk1",
+          "massKilograms": 42000.0,
+          "shape": {
+            "type": "circle",
+            "radiusMeters": 1.4
+          }
+        },
+        "sensor": {
+          "id": "radar_optic_mk2",
+          "rangeMeters": 640.0,
+          "fovDegrees": 220.0,
+          "refreshTicks": 3
+        }
+      },
+      "intents": {
+        "mobility": {
+          "active": false,
+          "target": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "remainingMeters": 0.0,
+          "ageTicks": 0
+        },
+        "turret": {
+          "active": false,
+          "target": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "errorDegrees": 0.0,
+          "ageTicks": 0
+        },
+        "hull": {
+          "active": false,
+          "target": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "errorDegrees": 0.0,
+          "ageTicks": 0
+        },
+        "weapon": {
+          "active": false,
+          "minHitChance": 0.0,
+          "ageTicks": 0
+        }
+      }
+    }
+  ],
+  "projectiles": [
+    {
+      "projectileId": 7,
+      "ownerUnitId": 1,
+      "previousPosition": {
+        "x": 13.0,
+        "y": 7.5
+      },
+      "position": {
+        "x": 14.2,
+        "y": 7.9
+      },
+      "radiusMeters": 0.08,
+      "previousHeightMeters": 1.1,
+      "heightMeters": 1.3
+    }
+  ],
+  "events": [
+    {
+      "tick": 42,
+      "unitId": 2,
+      "code": "armor_penetrated",
+      "message": "Projectile penetrated side armor.",
+      "payload": {
+        "projectileId": 7,
+        "sourceUnitId": 1,
+        "targetUnitId": 2,
+        "sourceTeamId": 1,
+        "targetTeamId": 2,
+        "damageType": "direct",
+        "armorFacing": "side",
+        "damage": 42.0,
+        "remainingArmor": 62.0,
+        "penetrationMillimeters": 132.0,
+        "armorMillimeters": 70.0,
+        "impactDistanceMeters": 15.5,
+        "blastRadiusMeters": 2.25
+      }
+    }
+  ],
+  "actions": [
+    {
+      "unitId": 1,
+      "type": "aimAt",
+      "channel": "turret",
+      "target": {
+        "x": 28.0,
+        "y": 16.5
+      }
+    },
+    {
+      "unitId": 1,
+      "type": "fireIfSolution",
+      "channel": "weapon",
+      "minHitChance": 0.65
+    },
+    {
+      "unitId": 1,
+      "type": "scanArc",
+      "channel": "sensor",
+      "directionDegrees": 90.0,
+      "widthDegrees": 120.0,
+      "rangeMeters": 55.0
+    },
+    {
+      "unitId": 2,
+      "type": "moveTo",
+      "channel": "mobility",
+      "position": {
+        "x": 24.0,
+        "y": 14.0
+      }
+    }
+  ],
+  "ruleState": {
+    "scores": [
+      {
+        "unitId": 1,
+        "teamId": 1,
+        "kills": 1,
+        "deaths": 0,
+        "damageDealt": 42.0
+      },
+      {
+        "unitId": 2,
+        "teamId": 2,
+        "kills": 0,
+        "deaths": 1,
+        "damageDealt": 12.5
+      }
+    ],
+    "captureZones": [
+      {
+        "id": "center",
+        "position": {
+          "x": 20.0,
+          "y": 12.0
+        },
+        "radiusMeters": 3.5,
+        "holdTicksRequired": 300,
+        "heldTicks": 120,
+        "ownerUnitId": 1,
+        "ownerTeamId": 1,
+        "contested": true
+      }
+    ],
+    "outcome": {
+      "finished": true,
+      "reason": "kill_limit",
+      "winnerUnitId": 1,
+      "winnerTeamId": 1
+    }
+  }
+}
