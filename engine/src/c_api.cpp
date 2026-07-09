@@ -143,6 +143,13 @@ void robolocks_battle_runner_run(RobolocksBattleRunnerHandle handle, uint64_t ti
   if (runner == nullptr) {
     return;
   }
+  if (tick_count == 0) {
+    // Nothing to advance. Returning here (instead of falling through to the
+    // success path below) keeps a prior has_error/last_error state intact --
+    // otherwise a no-op run() would incorrectly clear a failed runner's error
+    // flag and let frame_json() start serializing a stale/mixed snapshot.
+    return;
+  }
   try {
     for (uint64_t i = 0; i < tick_count; i += 1) {
       runner->last_result = runner->runner.step_once();

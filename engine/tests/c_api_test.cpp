@@ -27,6 +27,22 @@ void test_json_bot_release_callback(const char* response_json, void*) {
   g_released_response = response_json;
 }
 
+// Counts every invocation (including the on_start call made during
+// create_from_json) and fails the call at g_partial_fail_at_call by
+// returning null, which call_registered_json_bot turns into a thrown
+// std::runtime_error. 0 disables failing entirely.
+int g_partial_call_count = 0;
+int g_partial_fail_at_call = 0;
+std::string g_partial_success_response;
+
+const char* partial_progress_json_bot_callback(uint32_t, const char*, void*) {
+  g_partial_call_count += 1;
+  if (g_partial_fail_at_call != 0 && g_partial_call_count == g_partial_fail_at_call) {
+    return nullptr;
+  }
+  return g_partial_success_response.c_str();
+}
+
 }  // namespace
 
 TEST_CASE("C API drives the battle runner and exposes snapshots") {
@@ -546,6 +562,166 @@ TEST_CASE("C API step and run fail softly when the JSON bot callback becomes unr
   robolocks_battle_runner_step(runtime);
 
   REQUIRE(robolocks_battle_runner_tick(runtime) == 1);
+  REQUIRE(robolocks_battle_runner_frame_json(runtime) != nullptr);
+
+  robolocks_battle_runner_destroy(runtime);
+  robolocks_battle_runner_set_json_bot_callback(nullptr, nullptr, nullptr);
+}
+
+TEST_CASE("C API run with tick_count zero is a no-op that leaves a failed runner failed") {
+  g_called_bot_id = 0;
+  g_received_observation = {};
+  g_release_call_count = 0;
+  g_released_response = nullptr;
+  g_callback_response = R"json({
+    "orders": [
+      {"type": "aimAt", "target": {"x": 34.0, "y": 18.0}}
+    ]
+  })json";
+  robolocks_battle_runner_set_json_bot_callback(
+    test_json_bot_callback,
+    test_json_bot_release_callback,
+    &g_callback_response
+  );
+
+  RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_from_json(R"json({
+    "battleId": "run_zero_ticks_test",
+    "seed": 1,
+    "tickRate": 30,
+    "tickLimit": 120,
+    "units": [
+      {
+        "unitId": 1,
+        "name": "Blue",
+        "spawn": {"x": 4, "y": 5, "headingDeg": 35},
+        "modules": {
+          "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      },
+      {
+        "unitId": 2,
+        "name": "Target",
+        "spawn": {"x": 34, "y": 18, "headingDeg": 215},
+        "modules": {
+          "mobility": {"id": "fixed_target_chassis", "maxSpeedMetersPerSecond": 0.0, "maxHullTurnDegreesPerSecond": 60.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      }
+    ],
+    "controllers": [
+      {"unitId": 1, "type": "json_callback"}
+    ]
+  })json");
+  REQUIRE(runtime != nullptr);
+
+  // Force a soft failure the same way the sibling failing-callback test does.
+  robolocks_battle_runner_set_json_bot_callback(nullptr, nullptr, nullptr);
+  robolocks_battle_runner_step(runtime);
+
+  REQUIRE(robolocks_battle_runner_frame_json(runtime) == nullptr);
+  const std::string error_before = robolocks_last_error();
+  REQUIRE_FALSE(error_before.empty());
+
+  // run(handle, 0) must be a true no-op: it must not touch has_error/last_error
+  // even though its success path would otherwise clear them unconditionally.
+  robolocks_battle_runner_run(runtime, 0);
+
+  REQUIRE(robolocks_battle_runner_tick(runtime) == 0);
+  const std::string error_after = robolocks_last_error();
+  REQUIRE_FALSE(error_after.empty());
+  REQUIRE(error_after == error_before);
+  REQUIRE(robolocks_battle_runner_frame_json(runtime) == nullptr);
+
+  robolocks_battle_runner_destroy(runtime);
+  robolocks_battle_runner_set_json_bot_callback(nullptr, nullptr, nullptr);
+}
+
+TEST_CASE("C API run resyncs the cached snapshot to partial progress after a mid-run callback failure") {
+  g_partial_call_count = 0;
+  g_partial_success_response = R"json({"orders": []})json";
+  // Invocation 1 is the on_start call made during create_from_json below.
+  // Invocations 2 and 3 are the on_tick calls for ticks 1 and 2 (succeed).
+  // Invocation 4 is the on_tick call for tick 3 -- fail it, so run(handle, 5)
+  // completes ticks 1-2 and then fails softly while attempting tick 3.
+  g_partial_fail_at_call = 4;
+  robolocks_battle_runner_set_json_bot_callback(
+    partial_progress_json_bot_callback,
+    nullptr,
+    nullptr
+  );
+
+  RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_from_json(R"json({
+    "battleId": "run_partial_progress_test",
+    "seed": 1,
+    "tickRate": 30,
+    "tickLimit": 120,
+    "units": [
+      {
+        "unitId": 1,
+        "name": "Blue",
+        "spawn": {"x": 4, "y": 5, "headingDeg": 35},
+        "modules": {
+          "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      },
+      {
+        "unitId": 2,
+        "name": "Target",
+        "spawn": {"x": 34, "y": 18, "headingDeg": 215},
+        "modules": {
+          "mobility": {"id": "fixed_target_chassis", "maxSpeedMetersPerSecond": 0.0, "maxHullTurnDegreesPerSecond": 60.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      }
+    ],
+    "controllers": [
+      {"unitId": 1, "type": "json_callback"}
+    ]
+  })json");
+  REQUIRE(runtime != nullptr);
+
+  robolocks_battle_runner_run(runtime, 5);
+
+  // The failing on_tick call throws before BattleRunner::step_once ever calls
+  // BattleSimulation::step for tick 3, so the runner's internal state (and
+  // the cached snapshot the run() catch branch resyncs to) only advanced
+  // through tick 2 -- not tick 0 (a full rollback) and not tick 3 (the
+  // failing tick counted as done).
+  REQUIRE(robolocks_battle_runner_tick(runtime) == 2);
+  const std::string run_error = robolocks_last_error();
+  REQUIRE_FALSE(run_error.empty());
+  REQUIRE(robolocks_battle_runner_frame_json(runtime) == nullptr);
+
+  // Re-registering a working callback and stepping once resumes from the
+  // resynced tick 2, landing on tick 3 -- proof the partial progress from
+  // ticks 1-2 was kept rather than the whole run() being discarded.
+  g_partial_fail_at_call = 0;
+  robolocks_battle_runner_set_json_bot_callback(
+    partial_progress_json_bot_callback,
+    nullptr,
+    nullptr
+  );
+  robolocks_battle_runner_step(runtime);
+
+  REQUIRE(robolocks_battle_runner_tick(runtime) == 3);
   REQUIRE(robolocks_battle_runner_frame_json(runtime) != nullptr);
 
   robolocks_battle_runner_destroy(runtime);

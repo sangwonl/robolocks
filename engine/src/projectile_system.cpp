@@ -5,6 +5,7 @@
 #include <robolocks/math.hpp>
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <optional>
@@ -315,6 +316,11 @@ std::vector<Event> ProjectileSystem::resolve_weapon_fire(
   std::vector<UnitState>& units,
   const std::vector<std::size_t>& fire_order_counts
 ) {
+  // fire_order_counts is built index-aligned with units by the caller (see
+  // BattleSimulation::run_projectile_phase); a mismatch means a caller bug,
+  // not a runtime condition to degrade gracefully from.
+  assert(fire_order_counts.size() == units.size());
+
   std::vector<Event> events;
   for (std::size_t i = 0; i < units.size(); i += 1) {
     auto& unit = units[i];
@@ -327,7 +333,7 @@ std::vector<Event> ProjectileSystem::resolve_weapon_fire(
       unit.weapon_cooldown_ticks -= 1;
     }
 
-    const std::size_t fire_order_count = i < fire_order_counts.size() ? fire_order_counts[i] : 0;
+    const std::size_t fire_order_count = fire_order_counts[i];
 
     if (fire_order_count > 1 || !unit.weapon_intent.active) {
       continue;

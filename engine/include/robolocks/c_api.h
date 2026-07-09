@@ -37,6 +37,8 @@ void robolocks_battle_runner_step(RobolocksBattleRunnerHandle handle);
 // ticks already completed are kept (the snapshot reflects them), the failure
 // is recorded via robolocks_last_error(), and frame_json() returns null until
 // the next step/run call succeeds. No exception ever crosses this boundary.
+// tick_count == 0 is a no-op: it returns immediately without touching any
+// error state, so a runner already in a failed state stays failed.
 void robolocks_battle_runner_run(RobolocksBattleRunnerHandle handle, uint64_t tick_count);
 
 uint64_t robolocks_battle_runner_tick(RobolocksBattleRunnerHandle handle);

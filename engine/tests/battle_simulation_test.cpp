@@ -736,6 +736,12 @@ TEST_CASE("battle_simulation applies FireIfSolution through weapon damage and re
 }
 
 TEST_CASE("battle_simulation rejects weapon fire when FireIfSolution is submitted more than once in a tick") {
+  // Geometry copied verbatim from the "applies FireIfSolution through weapon
+  // damage and reload" test above, which proves that this exact setup with a
+  // single FireIfSolution order fires and deals damage. The no-damage
+  // assertion below is only non-vacuous in tandem with that sibling test --
+  // on its own it can't distinguish "duplicate orders correctly rejected"
+  // from "nothing here can ever fire".
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;
   config.units = {
