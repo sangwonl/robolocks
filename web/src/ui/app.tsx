@@ -1,7 +1,7 @@
 import { createRoot, type Root } from "react-dom/client";
 import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties } from "react";
 
-import type { BattleFrame } from "../types/protocol";
+import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
 import { RESEARCH_BATTLE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
@@ -28,6 +28,10 @@ export type RenderAppOptions = {
 };
 
 const reactRoots = new WeakMap<HTMLElement, Root>();
+
+// Stable empty-obstacle reference so the battle scene is not rebuilt every render
+// while no replay is loaded (scene lifetime keys on the obstacles identity).
+const NO_OBSTACLES: StaticObstacleFrame[] = [];
 
 export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): void {
   const existing = reactRoots.get(root);
@@ -238,7 +242,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       </aside>
       <PanelResizeHandle side="left" onResizeStart={(pointerX) => beginPanelResize("left", pointerX)} />
       <section className="battle-scene">
-        <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? []} />
+        <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? NO_OBSTACLES} />
         <PlaybackControls
           canPlay={canPlay}
           canStepBackward={canStepBackward}

@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
-import { buildBattleScene } from "./battleSceneThreeScene.ts";
+import { createBattleScene, type BattleScene } from "./battleSceneThreeScene.ts";
 
 type CameraMode = "top" | "iso";
 
@@ -31,9 +31,13 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
+  const battleSceneRef = useRef<BattleScene | null>(null);
+  const frameRef = useRef<BattleFrame | null>(frame);
   const aspectRef = useRef(1);
   const cameraModeRef = useRef<CameraMode>("iso");
   const [cameraMode, setCameraMode] = useState<CameraMode>("iso");
+
+  frameRef.current = frame;
 
   useEffect(() => {
     cameraModeRef.current = cameraMode;
@@ -124,20 +128,41 @@ export function BattleSceneThreeView({ frame, obstacles }: BattleSceneThreeViewP
     }
   }, [cameraMode]);
 
+  // Scene lifetime is tied to the loaded replay (its obstacle set). Statics build
+  // once here; frame stepping never recreates the scene.
   useEffect(() => {
-    const scene = buildBattleScene({ frame, obstacles });
-    sceneRef.current = scene;
+    const battleScene = createBattleScene({ obstacles });
+    battleSceneRef.current = battleScene;
+    sceneRef.current = battleScene.scene;
+    battleScene.sync(frameRef.current);
     const renderer = rendererRef.current;
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     if (renderer && camera) {
       controls?.update();
-      renderer.render(scene, camera);
+      renderer.render(battleScene.scene, camera);
     }
     return () => {
-      disposeScene(scene);
+      battleScene.dispose();
+      battleSceneRef.current = null;
+      sceneRef.current = null;
     };
-  }, [frame, obstacles]);
+  }, [obstacles]);
+
+  // Frame stepping only updates the persistent rigs in place — no allocation of a
+  // new scene, no disposal.
+  useEffect(() => {
+    const battleScene = battleSceneRef.current;
+    if (!battleScene) {
+      return;
+    }
+    battleScene.sync(frame);
+    const renderer = rendererRef.current;
+    const camera = cameraRef.current;
+    if (renderer && camera) {
+      renderer.render(battleScene.scene, camera);
+    }
+  }, [frame]);
 
   return (
     <div ref={hostRef} className="battle-scene-three" aria-label="Battle scene viewport">
@@ -229,21 +254,4 @@ function fitCameraToArena(camera: THREE.OrthographicCamera, aspect: number): voi
   camera.right = viewWidth / 2;
   camera.top = viewHeight / 2;
   camera.bottom = -viewHeight / 2;
-}
-
-function disposeScene(scene: THREE.Scene): void {
-  scene.traverse((object) => {
-    const mesh = object as THREE.Mesh;
-    if (mesh.geometry) {
-      mesh.geometry.dispose();
-    }
-    const material = mesh.material;
-    if (Array.isArray(material)) {
-      for (const item of material) {
-        item.dispose();
-      }
-    } else if (material) {
-      material.dispose();
-    }
-  });
 }

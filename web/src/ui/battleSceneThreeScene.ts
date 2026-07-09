@@ -11,38 +11,185 @@ const MIN_BARREL_LENGTH_M = 0.25;
 const MIN_TRACK_WIDTH_M = 0.28;
 const ARMOR_OVERLAY_HEIGHT_M = 0.06;
 
+type ScanAction = BattleFrame["actions"][number];
+type ProjectileFrame = BattleFrame["projectiles"][number];
+
+type SensorMount = {
+  base: THREE.Vector3;
+  origin: THREE.Vector3;
+};
+
+/**
+ * Persistent per-unit render rig. The geometry/materials are built once when the
+ * unit is first seen (its module specs and body shape never change during a
+ * battle) and reused every frame; only transforms, tint, and the scan-arc are
+ * mutated per frame. Owned resources are disposed when the unit disappears or
+ * when the whole scene is torn down.
+ */
+type UnitRig = {
+  group: THREE.Group;
+  turret: THREE.Group;
+  sensor: THREE.Group;
+  scanArc: THREE.Mesh;
+  hullMaterial: THREE.MeshStandardMaterial;
+  armorMaterial: THREE.MeshStandardMaterial;
+  scanArcMaterial: THREE.MeshBasicMaterial;
+  mount: SensorMount;
+  lastArcKey: string;
+};
+
+/**
+ * Persistent per-projectile render rig. Projectiles appear/disappear frequently,
+ * but a given projectile keeps a constant radius across its lifetime, so its
+ * sphere geometry is built once and reused; the trail's endpoints are updated in
+ * place (no per-frame allocation). Body/trail materials are shared at scene level.
+ */
+type ProjectileRig = {
+  group: THREE.Group;
+  body: THREE.Mesh;
+  sphereGeometry: THREE.SphereGeometry;
+  trailGeometry: THREE.BufferGeometry;
+  trailPositions: THREE.Float32BufferAttribute;
+};
+
 export type BattleSceneInput = {
-  frame: BattleFrame | null;
   obstacles: StaticObstacleFrame[];
 };
 
-export function buildBattleScene(input: BattleSceneInput): THREE.Scene {
+export type BattleScene = {
+  /** The persistent THREE scene. Statics (ground/grid/lights/obstacles) live for the whole handle. */
+  readonly scene: THREE.Scene;
+  /** Reconcile the persistent unit/projectile rigs to the given frame. Allocates nothing per frame except documented exceptions (new rigs, scan-arc geometry rebuild on param change, new projectile radii). */
+  sync(frame: BattleFrame | null): void;
+  /** Fully dispose the scene, every rig, and shared resources. Called on replay switch. */
+  dispose(): void;
+};
+
+/**
+ * Builds the static scene once (ground, grid, lights, obstacles, shared projectile
+ * materials) and returns a handle whose `sync` updates persistent unit/projectile
+ * rigs per frame. Nothing here is rebuilt on frame stepping; `dispose` tears the
+ * whole thing down on replay switch.
+ */
+export function createBattleScene(input: BattleSceneInput): BattleScene {
   const scene = new THREE.Scene();
   scene.name = "robolocks-battle-scene";
   scene.background = new THREE.Color("#1b211b");
 
-  scene.add(createGround());
-  scene.add(createLights());
+  const ground = createGround();
+  const lighting = createLights();
+  scene.add(ground);
+  scene.add(lighting);
 
+  const obstacleMeshes: THREE.Mesh[] = [];
   for (const obstacle of input.obstacles) {
-    scene.add(createObstacle(obstacle));
+    const mesh = createObstacle(obstacle);
+    obstacleMeshes.push(mesh);
+    scene.add(mesh);
   }
 
-  if (input.frame) {
-    for (const unit of input.frame.units) {
-      scene.add(createUnit(unit));
-    }
-    for (const unit of input.frame.units) {
-      const scanAction = input.frame.actions.find((action) => action.unitId === unit.unitId && action.type === "scanArc");
-      scene.add(createScanArc(unit, scanAction));
-    }
-    for (const projectile of input.frame.projectiles) {
-      const mesh = createProjectile(projectile);
-      scene.add(mesh);
-    }
-  }
+  // Shared, scene-lifetime projectile resources. Their color is constant across
+  // every projectile and every replay, so a single instance is reused by all
+  // projectile rigs and disposed exactly once on teardown.
+  const projectileMaterial = new THREE.MeshStandardMaterial({
+    color: "#ffe36a",
+    emissive: "#7a4d13",
+    emissiveIntensity: 0.35,
+    roughness: 0.45,
+  });
+  const trailMaterial = new THREE.LineBasicMaterial({
+    color: "#fff1a8",
+    transparent: true,
+    opacity: 0.7,
+  });
 
-  return scene;
+  const unitRigs = new Map<number, UnitRig>();
+  const projectileRigs = new Map<number, ProjectileRig>();
+
+  const syncUnits = (frame: BattleFrame): void => {
+    const seen = new Set<number>();
+    for (const unit of frame.units) {
+      seen.add(unit.unitId);
+      const scanAction = frame.actions.find(
+        (action) => action.unitId === unit.unitId && action.type === "scanArc",
+      );
+      let rig = unitRigs.get(unit.unitId);
+      if (!rig) {
+        rig = createUnitRig(unit, scanAction);
+        unitRigs.set(unit.unitId, rig);
+        scene.add(rig.group);
+        scene.add(rig.scanArc);
+      }
+      updateUnitRig(rig, unit, scanAction);
+    }
+    for (const [unitId, rig] of unitRigs) {
+      if (!seen.has(unitId)) {
+        destroyUnitRig(scene, rig);
+        unitRigs.delete(unitId);
+      }
+    }
+  };
+
+  const syncProjectiles = (frame: BattleFrame): void => {
+    const seen = new Set<number>();
+    for (const projectile of frame.projectiles) {
+      seen.add(projectile.projectileId);
+      let rig = projectileRigs.get(projectile.projectileId);
+      if (!rig) {
+        rig = createProjectileRig(projectile, projectileMaterial, trailMaterial);
+        projectileRigs.set(projectile.projectileId, rig);
+        scene.add(rig.group);
+      }
+      updateProjectileRig(rig, projectile);
+    }
+    for (const [projectileId, rig] of projectileRigs) {
+      if (!seen.has(projectileId)) {
+        destroyProjectileRig(scene, rig);
+        projectileRigs.delete(projectileId);
+      }
+    }
+  };
+
+  return {
+    scene,
+    sync(frame: BattleFrame | null): void {
+      if (!frame) {
+        for (const [, rig] of unitRigs) {
+          destroyUnitRig(scene, rig);
+        }
+        unitRigs.clear();
+        for (const [, rig] of projectileRigs) {
+          destroyProjectileRig(scene, rig);
+        }
+        projectileRigs.clear();
+        return;
+      }
+      syncUnits(frame);
+      syncProjectiles(frame);
+    },
+    dispose(): void {
+      for (const [, rig] of unitRigs) {
+        destroyUnitRig(scene, rig);
+      }
+      unitRigs.clear();
+      for (const [, rig] of projectileRigs) {
+        destroyProjectileRig(scene, rig);
+      }
+      projectileRigs.clear();
+
+      disposeObjectTree(ground);
+      scene.remove(ground);
+      scene.remove(lighting);
+      for (const mesh of obstacleMeshes) {
+        disposeObjectTree(mesh);
+        scene.remove(mesh);
+      }
+      obstacleMeshes.length = 0;
+
+      projectileMaterial.dispose();
+      trailMaterial.dispose();
+    },
+  };
 }
 
 export function replayToWorld(position: { x: number; y: number }, heightMeters = 0): THREE.Vector3 {
@@ -108,11 +255,9 @@ function createObstacle(obstacle: StaticObstacleFrame): THREE.Mesh {
   return mesh;
 }
 
-function createUnit(unit: UnitFrame): THREE.Group {
+function createUnitRig(unit: UnitFrame, scanAction: ScanAction | undefined): UnitRig {
   const group = new THREE.Group();
   group.name = `unit-${unit.unitId}`;
-  group.position.copy(replayToWorld(unit.position, 0));
-  group.rotation.y = -THREE.MathUtils.degToRad(unit.hullHeadingDegrees);
   group.userData = {
     unitId: unit.unitId,
     name: unit.name,
@@ -123,7 +268,6 @@ function createUnit(unit: UnitFrame): THREE.Group {
   const mobility = createMobilityModule(unit);
   const armor = createArmorModule(unit);
   const turret = createTurret(unit);
-  turret.rotation.y = -THREE.MathUtils.degToRad(unit.turretHeadingDegrees - unit.hullHeadingDegrees);
   const sensor = createSensorModule(unit);
 
   group.add(mobility);
@@ -131,7 +275,44 @@ function createUnit(unit: UnitFrame): THREE.Group {
   group.add(armor);
   group.add(turret);
   group.add(sensor);
-  return group;
+
+  const mount = sensorMountForUnit(unit);
+  const scanArc = createScanArc(unit, scanAction, mount);
+
+  const rig: UnitRig = {
+    group,
+    turret,
+    sensor,
+    scanArc,
+    hullMaterial: hull.material as THREE.MeshStandardMaterial,
+    armorMaterial: (armor.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial,
+    scanArcMaterial: scanArc.material as THREE.MeshBasicMaterial,
+    mount,
+    lastArcKey: scanArc.userData.arcKey as string,
+  };
+  return rig;
+}
+
+function updateUnitRig(rig: UnitRig, unit: UnitFrame, scanAction: ScanAction | undefined): void {
+  rig.group.position.set(unit.position.x, 0, unit.position.y);
+  rig.group.rotation.y = -THREE.MathUtils.degToRad(unit.hullHeadingDegrees);
+  rig.group.userData.armorIntegrity = unit.armorIntegrity;
+
+  const turretRelative = -THREE.MathUtils.degToRad(unit.turretHeadingDegrees - unit.hullHeadingDegrees);
+  rig.turret.rotation.y = turretRelative;
+  rig.sensor.rotation.y = turretRelative;
+
+  rig.hullMaterial.color.set(unitColor(unit));
+  rig.armorMaterial.color.set(armorColorForIntegrity(unit.armorIntegrity, unit.modules.armor.integrity));
+
+  updateScanArc(rig, unit, scanAction);
+}
+
+function destroyUnitRig(scene: THREE.Scene, rig: UnitRig): void {
+  scene.remove(rig.group);
+  scene.remove(rig.scanArc);
+  disposeObjectTree(rig.group);
+  disposeObjectTree(rig.scanArc);
 }
 
 function createHull(unit: UnitFrame): THREE.Mesh {
@@ -301,6 +482,7 @@ function createTurret(unit: UnitFrame): THREE.Group {
   muzzleCap.position.set(muzzle.x + barrelCaliber * 0.12, muzzle.z, muzzle.y);
   group.add(muzzleCap);
 
+  group.rotation.y = -THREE.MathUtils.degToRad(unit.turretHeadingDegrees - unit.hullHeadingDegrees);
   group.userData = {
     turretModuleId: unit.modules.turret.id,
     weaponModuleId: unit.modules.weapon.id,
@@ -360,57 +542,135 @@ function createSensorModule(unit: UnitFrame): THREE.Group {
   return group;
 }
 
-function createProjectile(projectile: BattleFrame["projectiles"][number]): THREE.Group {
+function createProjectileRig(
+  projectile: ProjectileFrame,
+  bodyMaterial: THREE.MeshStandardMaterial,
+  trailMaterial: THREE.LineBasicMaterial,
+): ProjectileRig {
   const group = new THREE.Group();
   group.name = `projectile-${projectile.projectileId}`;
 
   const radius = Math.max(0.09, projectile.radiusMeters);
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(radius, 16, 12),
-    new THREE.MeshStandardMaterial({
-      color: "#ffe36a",
-      emissive: "#7a4d13",
-      emissiveIntensity: 0.35,
-      roughness: 0.45,
-    }),
-  );
-  mesh.name = `projectile-${projectile.projectileId}-body`;
-  mesh.position.copy(replayToWorld(projectile.position, projectile.heightMeters));
-  mesh.castShadow = true;
-  group.add(mesh);
+  const sphereGeometry = new THREE.SphereGeometry(radius, 16, 12);
+  const body = new THREE.Mesh(sphereGeometry, bodyMaterial);
+  body.name = `projectile-${projectile.projectileId}-body`;
+  body.castShadow = true;
+  group.add(body);
 
-  const trailGeometry = new THREE.BufferGeometry().setFromPoints([
-    replayToWorld(projectile.previousPosition, projectile.previousHeightMeters),
-    replayToWorld(projectile.position, projectile.heightMeters),
-  ]);
-  const trail = new THREE.Line(
-    trailGeometry,
-    new THREE.LineBasicMaterial({
-      color: "#fff1a8",
-      transparent: true,
-      opacity: 0.7,
-    }),
-  );
+  const trailPositions = new THREE.Float32BufferAttribute(new Float32Array(6), 3);
+  const trailGeometry = new THREE.BufferGeometry();
+  trailGeometry.setAttribute("position", trailPositions);
+  const trail = new THREE.Line(trailGeometry, trailMaterial);
   trail.name = `projectile-${projectile.projectileId}-trail`;
   group.add(trail);
 
-  mesh.userData = {
+  body.userData = {
     projectileId: projectile.projectileId,
     ownerUnitId: projectile.ownerUnitId,
     radiusMeters: projectile.radiusMeters,
     previousHeightMeters: projectile.previousHeightMeters,
     heightMeters: projectile.heightMeters,
   };
-  return group;
+
+  return { group, body, sphereGeometry, trailGeometry, trailPositions };
 }
 
-function createScanArc(unit: UnitFrame, action?: BattleFrame["actions"][number]): THREE.Mesh {
-  const mount = sensorMountForUnit(unit);
+function updateProjectileRig(rig: ProjectileRig, projectile: ProjectileFrame): void {
+  rig.body.position.set(projectile.position.x, projectile.heightMeters, projectile.position.y);
+  rig.body.userData.previousHeightMeters = projectile.previousHeightMeters;
+  rig.body.userData.heightMeters = projectile.heightMeters;
+
+  const array = rig.trailPositions.array as Float32Array;
+  array[0] = projectile.previousPosition.x;
+  array[1] = projectile.previousHeightMeters;
+  array[2] = projectile.previousPosition.y;
+  array[3] = projectile.position.x;
+  array[4] = projectile.heightMeters;
+  array[5] = projectile.position.y;
+  rig.trailPositions.needsUpdate = true;
+  rig.trailGeometry.computeBoundingSphere();
+}
+
+function destroyProjectileRig(scene: THREE.Scene, rig: ProjectileRig): void {
+  scene.remove(rig.group);
+  // Sphere + trail geometry are rig-owned; body/trail materials are shared and
+  // disposed once at scene teardown, so they are intentionally not touched here.
+  rig.sphereGeometry.dispose();
+  rig.trailGeometry.dispose();
+}
+
+function createScanArc(unit: UnitFrame, action: ScanAction | undefined, mount: SensorMount): THREE.Mesh {
+  const params = scanArcParams(unit, action, mount);
+  const geometry = buildScanArcGeometry(params.rangeMeters, params.directionDegrees, params.widthDegrees);
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      color: teamColor(unit.teamId).arc,
+      transparent: true,
+      opacity: action ? 0.24 : 0.14,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  mesh.name = `unit-${unit.unitId}-scan-arc`;
+  mesh.renderOrder = 1;
+  mesh.userData = {
+    unitId: unit.unitId,
+    rangeMeters: params.rangeMeters,
+    directionDegrees: params.rawDirectionDegrees,
+    widthDegrees: params.widthDegrees,
+    originLocal: { x: mount.origin.x, y: mount.origin.y, z: mount.origin.z },
+    originHeightMeters: mount.origin.y,
+    arcKey: params.arcKey,
+  };
+  applyScanArcTransform(mesh, unit, mount);
+  return mesh;
+}
+
+function updateScanArc(rig: UnitRig, unit: UnitFrame, action: ScanAction | undefined): void {
+  const params = scanArcParams(unit, action, rig.mount);
+  if (params.arcKey !== rig.lastArcKey) {
+    // Documented per-frame exception: the scan-arc's triangle fan geometry depends
+    // on range/direction/width, which change when a scan action is present. We only
+    // rebuild (and dispose the old geometry) when those params actually change, so a
+    // static sensor cone allocates nothing on subsequent frames.
+    rig.scanArc.geometry.dispose();
+    rig.scanArc.geometry = buildScanArcGeometry(params.rangeMeters, params.directionDegrees, params.widthDegrees);
+    rig.lastArcKey = params.arcKey;
+  }
+  rig.scanArcMaterial.opacity = action ? 0.24 : 0.14;
+  rig.scanArc.userData.rangeMeters = params.rangeMeters;
+  rig.scanArc.userData.directionDegrees = params.rawDirectionDegrees;
+  rig.scanArc.userData.widthDegrees = params.widthDegrees;
+  rig.scanArc.userData.arcKey = params.arcKey;
+  applyScanArcTransform(rig.scanArc, unit, rig.mount);
+}
+
+type ScanArcParams = {
+  rangeMeters: number;
+  directionDegrees: number;
+  widthDegrees: number;
+  rawDirectionDegrees: number;
+  arcKey: string;
+};
+
+function scanArcParams(unit: UnitFrame, action: ScanAction | undefined, _mount: SensorMount): ScanArcParams {
   const sensorRange = Math.max(0, unit.modules.sensor.rangeMeters);
   const actionRange = typeof action?.rangeMeters === "number" && action.rangeMeters > 0 ? action.rangeMeters : sensorRange;
   const rangeMeters = Math.min(actionRange, sensorRange);
-  const directionDegrees = (action?.directionDegrees ?? unit.hullHeadingDegrees) - unit.hullHeadingDegrees;
+  const rawDirectionDegrees = action?.directionDegrees ?? unit.hullHeadingDegrees;
+  const directionDegrees = rawDirectionDegrees - unit.hullHeadingDegrees;
   const widthDegrees = Math.max(0, Math.min(action?.widthDegrees ?? unit.modules.sensor.fovDegrees, unit.modules.sensor.fovDegrees));
+  return {
+    rangeMeters,
+    directionDegrees,
+    widthDegrees,
+    rawDirectionDegrees,
+    arcKey: `${rangeMeters}|${directionDegrees}|${widthDegrees}`,
+  };
+}
+
+function buildScanArcGeometry(rangeMeters: number, directionDegrees: number, widthDegrees: number): THREE.BufferGeometry {
   const segmentCount = Math.max(8, Math.ceil(widthDegrees / 6));
   const startDegrees = directionDegrees - widthDegrees / 2;
   const vertices: number[] = [0, 0, 0];
@@ -430,32 +690,14 @@ function createScanArc(unit: UnitFrame, action?: BattleFrame["actions"][number])
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
+  return geometry;
+}
 
-  const mesh = new THREE.Mesh(
-    geometry,
-    new THREE.MeshBasicMaterial({
-      color: teamColor(unit.teamId).arc,
-      transparent: true,
-      opacity: action ? 0.24 : 0.14,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    }),
-  );
-  mesh.name = `unit-${unit.unitId}-scan-arc`;
-  mesh.position.copy(replayToWorld(unit.position, mount.origin.y));
-  mesh.rotation.y = -THREE.MathUtils.degToRad(unit.hullHeadingDegrees);
+function applyScanArcTransform(mesh: THREE.Mesh, unit: UnitFrame, mount: SensorMount): void {
+  mesh.position.set(unit.position.x, mount.origin.y, unit.position.y);
+  mesh.rotation.set(0, -THREE.MathUtils.degToRad(unit.hullHeadingDegrees), 0);
   mesh.translateX(mount.origin.x);
   mesh.translateZ(mount.origin.z);
-  mesh.renderOrder = 1;
-  mesh.userData = {
-    unitId: unit.unitId,
-    rangeMeters,
-    directionDegrees: action?.directionDegrees ?? unit.hullHeadingDegrees,
-    widthDegrees,
-    originLocal: { x: mount.origin.x, y: mount.origin.y, z: mount.origin.z },
-    originHeightMeters: mount.origin.y,
-  };
-  return mesh;
 }
 
 function shapeMetrics(shape: BodyShapeFrame): { lengthMeters: number; widthMeters: number } {
@@ -487,10 +729,7 @@ function weaponCaliber(unit: UnitFrame): number {
   return Math.max(0.12, Math.min(0.34, 0.11 + damageScale + penetrationScale + ballisticBoost));
 }
 
-function sensorMountForUnit(unit: UnitFrame): {
-  base: THREE.Vector3;
-  origin: THREE.Vector3;
-} {
+function sensorMountForUnit(unit: UnitFrame): SensorMount {
   const metrics = shapeMetrics(unit.bodyShape);
   const rangeRatio = Math.min(1.4, Math.max(0.45, unit.modules.sensor.rangeMeters / 60));
   const mastHeight = 0.28 + rangeRatio * 0.42;
@@ -514,4 +753,21 @@ function unitColor(unit: UnitFrame): THREE.ColorRepresentation {
     return "#4a4d46";
   }
   return teamColor(unit.teamId).body;
+}
+
+function disposeObjectTree(root: THREE.Object3D): void {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (mesh.geometry) {
+      mesh.geometry.dispose();
+    }
+    const material = mesh.material;
+    if (Array.isArray(material)) {
+      for (const item of material) {
+        item.dispose();
+      }
+    } else if (material) {
+      material.dispose();
+    }
+  });
 }
