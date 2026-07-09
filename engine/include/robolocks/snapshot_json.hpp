@@ -1,10 +1,10 @@
 #pragma once
 
 #include <robolocks/battle_config.hpp>
-#include <robolocks/battle_simulation.hpp>
 #include <robolocks/observation.hpp>
 #include <robolocks/order.hpp>
 #include <robolocks/snapshot.hpp>
+#include <robolocks/step_result.hpp>
 #include <robolocks/types.hpp>
 
 #include <nlohmann/json_fwd.hpp>
