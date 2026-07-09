@@ -13,6 +13,7 @@ test("battle scene renders unit sensor coverage when no scan action exists", () 
       units: [
         {
           unitId: 1,
+          teamId: 1,
           name: "Blue",
           position: { x: 10, y: 8 },
           hullHeadingDegrees: 0,
@@ -61,6 +62,7 @@ test("battle scene renders unit modules from specs", () => {
       units: [
         {
           unitId: 2,
+          teamId: 2,
           name: "Red",
           position: { x: 12, y: 9 },
           hullHeadingDegrees: 20,

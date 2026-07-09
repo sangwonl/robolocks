@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import type { BattleFrame, BodyShapeFrame, StaticObstacleFrame, UnitFrame } from "../types/protocol";
+import { teamColor } from "./teamPalette.ts";
 
 const HULL_HEIGHT_M = 1.2;
 const TURRET_HEIGHT_M = 0.35;
@@ -433,7 +434,7 @@ function createScanArc(unit: UnitFrame, action?: BattleFrame["actions"][number])
   const mesh = new THREE.Mesh(
     geometry,
     new THREE.MeshBasicMaterial({
-      color: unit.name.toLowerCase().includes("red") ? "#ff7a70" : "#77b7ff",
+      color: teamColor(unit.teamId).arc,
       transparent: true,
       opacity: action ? 0.24 : 0.14,
       side: THREE.DoubleSide,
@@ -512,12 +513,5 @@ function unitColor(unit: UnitFrame): THREE.ColorRepresentation {
   if (unit.armorIntegrity <= 0) {
     return "#4a4d46";
   }
-  const name = unit.name.toLowerCase();
-  if (name.includes("red")) {
-    return "#b9564f";
-  }
-  if (name.includes("blue")) {
-    return "#527ead";
-  }
-  return "#788470";
+  return teamColor(unit.teamId).body;
 }

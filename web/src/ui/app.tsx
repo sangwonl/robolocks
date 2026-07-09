@@ -605,7 +605,7 @@ function PlaybackControls({
 
 function UnitCard({ unit, actions, events }: { unit: UnitFrame; actions: BattleAction[]; events: BattleEvent[] }) {
   return (
-    <Accordion type="single" collapsible className="unit-card" data-side={unit.name.toLowerCase()}>
+    <Accordion type="single" collapsible className="unit-card" data-team={unit.teamId}>
       <AccordionItem value="unit" className="unit-card-item">
         <AccordionTrigger className="unit-card-head">
           <span className="unit-card-title">

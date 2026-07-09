@@ -767,11 +767,11 @@ th {
   overflow: hidden;
 }
 
-.unit-card[data-side="blue"] {
+.unit-card[data-team="1"] {
   border-left: 3px solid #5f9ee6;
 }
 
-.unit-card[data-side="red"] {
+.unit-card[data-team="2"] {
   border-left: 3px solid #df645b;
 }
 
