@@ -2,6 +2,9 @@
 
 #include <robolocks/types.hpp>
 
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -75,6 +78,25 @@ inline const char* to_string(OrderKind kind) {
       return "faceArmorToward";
   }
   return "unknown";
+}
+
+inline OrderKind order_kind_from_string(std::string_view type) {
+  if (type == "moveTo") {
+    return OrderKind::MoveTo;
+  }
+  if (type == "aimAt") {
+    return OrderKind::AimAt;
+  }
+  if (type == "fireIfSolution") {
+    return OrderKind::FireIfSolution;
+  }
+  if (type == "scanArc") {
+    return OrderKind::ScanArc;
+  }
+  if (type == "faceArmorToward") {
+    return OrderKind::FaceArmorToward;
+  }
+  throw std::runtime_error("Unsupported order type: " + std::string(type));
 }
 
 inline const char* to_string(OrderChannel channel) {

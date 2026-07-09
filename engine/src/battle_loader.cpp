@@ -1,5 +1,7 @@
 #include <robolocks/battle_loader.hpp>
 
+#include <robolocks/json_field.hpp>
+
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -11,13 +13,6 @@
 namespace robolocks {
 
 namespace {
-
-double required_number(const nlohmann::json& object, const char* key) {
-  if (!object.contains(key) || !object.at(key).is_number()) {
-    throw std::runtime_error(std::string("Expected numeric field: ") + key);
-  }
-  return object.at(key).get<double>();
-}
 
 double required_positive_number(const nlohmann::json& object, const char* key) {
   const double value = required_number(object, key);
@@ -44,24 +39,6 @@ std::uint32_t optional_u32(const nlohmann::json& object, const char* key, std::u
   return object.at(key).get<std::uint32_t>();
 }
 
-std::string required_string(const nlohmann::json& object, const char* key) {
-  if (!object.contains(key) || !object.at(key).is_string()) {
-    throw std::runtime_error(std::string("Expected string field: ") + key);
-  }
-  return object.at(key).get<std::string>();
-}
-
-Vec2 required_vec2(const nlohmann::json& object, const char* key) {
-  if (!object.contains(key) || !object.at(key).is_object()) {
-    throw std::runtime_error(std::string("Expected vector field: ") + key);
-  }
-  const auto& vec = object.at(key);
-  return Vec2{
-    .x = required_number(vec, "x"),
-    .y = required_number(vec, "y"),
-  };
-}
-
 Vec3 required_vec3(const nlohmann::json& object, const char* key) {
   if (!object.contains(key) || !object.at(key).is_object()) {
     throw std::runtime_error(std::string("Expected vector field: ") + key);
@@ -72,16 +49,6 @@ Vec3 required_vec3(const nlohmann::json& object, const char* key) {
     .y = required_number(vec, "y"),
     .z = required_number(vec, "z"),
   };
-}
-
-double optional_number(const nlohmann::json& object, const char* key, double fallback) {
-  if (!object.contains(key)) {
-    return fallback;
-  }
-  if (!object.at(key).is_number()) {
-    throw std::runtime_error(std::string("Expected numeric field: ") + key);
-  }
-  return object.at(key).get<double>();
 }
 
 std::string optional_string(const nlohmann::json& object, const char* key) {
@@ -98,14 +65,7 @@ WeaponFireMode optional_weapon_fire_mode(const nlohmann::json& object, WeaponFir
   if (!object.contains("fireMode")) {
     return fallback;
   }
-  const auto mode = required_string(object, "fireMode");
-  if (mode == "direct") {
-    return WeaponFireMode::Direct;
-  }
-  if (mode == "ballistic") {
-    return WeaponFireMode::Ballistic;
-  }
-  throw std::runtime_error("Expected weapon fireMode to be direct or ballistic");
+  return weapon_fire_mode_from_string(required_string(object, "fireMode"));
 }
 
 bool optional_bool(const nlohmann::json& object, const char* key, bool fallback) {
@@ -329,20 +289,14 @@ BodyShapeSpec required_body_shape_component(const nlohmann::json& body_json) {
 
   BodyShapeSpec shape;
   shape.radius_m = required_positive_number(shape_json, "radiusMeters");
+  shape.type = body_shape_type_from_string(shape_type);
 
-  if (shape_type == "circle") {
-    shape.type = BodyShapeType::Circle;
-    return shape;
-  }
-
-  if (shape_type == "box") {
-    shape.type = BodyShapeType::Box;
+  if (shape.type == BodyShapeType::Box) {
     shape.length_m = required_positive_number(shape_json, "lengthMeters");
     shape.width_m = required_positive_number(shape_json, "widthMeters");
-    return shape;
   }
 
-  throw std::runtime_error("Unsupported modules.body.shape.type: " + shape_type);
+  return shape;
 }
 
 BodySpec optional_body_component(const nlohmann::json& unit, const ModuleCatalog& catalog) {

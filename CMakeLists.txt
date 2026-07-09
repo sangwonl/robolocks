@@ -23,6 +23,7 @@ add_library(robolocks_core
     engine/src/battle_simulation.cpp
   engine/src/physics_system.cpp
   engine/src/battle_runner.cpp
+  engine/src/json_field.cpp
   engine/src/controller_protocol_json.cpp
   engine/src/snapshot_json.cpp
   engine/src/json_callback_bot_controller.cpp

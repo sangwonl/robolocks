@@ -3,7 +3,9 @@
 #include <robolocks/types.hpp>
 
 #include <cstdint>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace robolocks {
@@ -55,6 +57,16 @@ inline const char* to_string(WeaponFireMode mode) {
   return "direct";
 }
 
+inline WeaponFireMode weapon_fire_mode_from_string(std::string_view mode) {
+  if (mode == "direct") {
+    return WeaponFireMode::Direct;
+  }
+  if (mode == "ballistic") {
+    return WeaponFireMode::Ballistic;
+  }
+  throw std::runtime_error("Expected weapon fireMode to be direct or ballistic");
+}
+
 struct WeaponSpec {
   std::string id;
   WeaponFireMode fire_mode = WeaponFireMode::Direct;
@@ -84,6 +96,16 @@ inline const char* to_string(BodyShapeType type) {
       return "box";
   }
   return "circle";
+}
+
+inline BodyShapeType body_shape_type_from_string(std::string_view type) {
+  if (type == "circle") {
+    return BodyShapeType::Circle;
+  }
+  if (type == "box") {
+    return BodyShapeType::Box;
+  }
+  throw std::runtime_error(std::string("Unsupported modules.body.shape.type: ") + std::string(type));
 }
 
 struct BodyShapeSpec {

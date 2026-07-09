@@ -1,5 +1,6 @@
 #include <robolocks/controller_protocol_json.hpp>
 
+#include <robolocks/json_field.hpp>
 #include <robolocks/snapshot_json.hpp>
 
 #include <stdexcept>
@@ -11,73 +12,41 @@ namespace robolocks {
 
 namespace {
 
-double required_number(const nlohmann::json& object, const char* key) {
-  if (!object.contains(key) || !object.at(key).is_number()) {
-    throw std::runtime_error(std::string("Expected numeric order field: ") + key);
-  }
-  return object.at(key).get<double>();
-}
-
-double optional_number(const nlohmann::json& object, const char* key, double fallback) {
-  if (!object.contains(key)) {
-    return fallback;
-  }
-  return required_number(object, key);
-}
-
-std::string required_string(const nlohmann::json& object, const char* key) {
-  if (!object.contains(key) || !object.at(key).is_string()) {
-    throw std::runtime_error(std::string("Expected string order field: ") + key);
-  }
-  return object.at(key).get<std::string>();
-}
-
-Vec2 required_vec2(const nlohmann::json& object, const char* key) {
-  if (!object.contains(key) || !object.at(key).is_object()) {
-    throw std::runtime_error(std::string("Expected vector order field: ") + key);
-  }
-  const auto& vec = object.at(key);
-  return Vec2{
-    .x = required_number(vec, "x"),
-    .y = required_number(vec, "y"),
-  };
-}
+constexpr const char* kOrderFieldLabel = "order field";
 
 Order order_from_json(const nlohmann::json& json) {
-  const auto type = required_string(json, "type");
-  if (type == "moveTo") {
-    return Order{
-      .kind = OrderKind::MoveTo,
-      .payload = MoveToOrder{required_vec2(json, "position")},
-    };
-  }
-  if (type == "aimAt") {
-    return Order{
-      .kind = OrderKind::AimAt,
-      .payload = AimAtOrder{required_vec2(json, "target")},
-    };
-  }
-  if (type == "faceArmorToward") {
-    return Order{
-      .kind = OrderKind::FaceArmorToward,
-      .payload = FaceArmorTowardOrder{required_vec2(json, "target")},
-    };
-  }
-  if (type == "fireIfSolution") {
-    return Order{
-      .kind = OrderKind::FireIfSolution,
-      .payload = FireIfSolutionOrder{required_number(json, "minHitChance")},
-    };
-  }
-  if (type == "scanArc") {
-    return Order{
-      .kind = OrderKind::ScanArc,
-      .payload = ScanArcOrder{
-        .direction_deg = required_number(json, "directionDegrees"),
-        .width_deg = required_number(json, "widthDegrees"),
-        .range_m = optional_number(json, "rangeMeters", 0.0),
-      },
-    };
+  const auto type = required_string(json, "type", kOrderFieldLabel);
+  const auto kind = order_kind_from_string(type);
+  switch (kind) {
+    case OrderKind::MoveTo:
+      return Order{
+        .kind = kind,
+        .payload = MoveToOrder{required_vec2(json, "position", kOrderFieldLabel)},
+      };
+    case OrderKind::AimAt:
+      return Order{
+        .kind = kind,
+        .payload = AimAtOrder{required_vec2(json, "target", kOrderFieldLabel)},
+      };
+    case OrderKind::FaceArmorToward:
+      return Order{
+        .kind = kind,
+        .payload = FaceArmorTowardOrder{required_vec2(json, "target", kOrderFieldLabel)},
+      };
+    case OrderKind::FireIfSolution:
+      return Order{
+        .kind = kind,
+        .payload = FireIfSolutionOrder{required_number(json, "minHitChance", kOrderFieldLabel)},
+      };
+    case OrderKind::ScanArc:
+      return Order{
+        .kind = kind,
+        .payload = ScanArcOrder{
+          .direction_deg = required_number(json, "directionDegrees", kOrderFieldLabel),
+          .width_deg = required_number(json, "widthDegrees", kOrderFieldLabel),
+          .range_m = optional_number(json, "rangeMeters", 0.0, kOrderFieldLabel),
+        },
+      };
   }
   throw std::runtime_error("Unsupported order type: " + type);
 }
