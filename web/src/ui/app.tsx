@@ -5,6 +5,7 @@ import type { BattleFrame, StaticObstacleFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
 import { RESEARCH_BATTLE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
+import { deriveStatusText } from "./statusText.ts";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
@@ -80,11 +81,11 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const frameCount = loadedReplay?.frames.length ?? 0;
 
   const statusText = useMemo(() => {
-    if (!loadedReplay || !frame) {
-      return status;
-    }
-    return `Replay ${replayIndex + 1}/${loadedReplay.frames.length} - tick ${frame.tick}`;
-  }, [frame, loadedReplay, replayIndex, status]);
+    const frameLabel = loadedReplay && frame
+      ? `Replay ${replayIndex + 1}/${loadedReplay.frames.length} - tick ${frame.tick}`
+      : null;
+    return deriveStatusText({ status, statusIsError, frameLabel });
+  }, [frame, loadedReplay, replayIndex, status, statusIsError]);
 
   useEffect(() => {
     if (!defaultReplayUrl) {
