@@ -186,6 +186,48 @@ test("wasm JSON battle adapter falls back to Unit <id> when a unit has no name",
   runner.destroy();
 });
 
+test("wasm JSON battle adapter surfaces the engine error when creation fails", async () => {
+  const calls = new Map([
+    ["robolocks_battle_runner_create_from_json", () => 0],
+    ["robolocks_last_error", () => "Expected string field: battleId"],
+  ]);
+  const factory = async () => ({
+    cwrap(name, returnType) {
+      const fn = calls.get(name);
+      if (fn) {
+        return fn;
+      }
+      return returnType === "string" ? () => "" : () => 0;
+    },
+  });
+
+  await assert.rejects(
+    createPresetDuelFromWasmFactory(factory),
+    /Expected string field: battleId/,
+  );
+});
+
+test("wasm JSON battle adapter falls back to a generic message when creation fails without an error", async () => {
+  const calls = new Map([
+    ["robolocks_battle_runner_create_from_json", () => 0],
+    ["robolocks_last_error", () => ""],
+  ]);
+  const factory = async () => ({
+    cwrap(name, returnType) {
+      const fn = calls.get(name);
+      if (fn) {
+        return fn;
+      }
+      return returnType === "string" ? () => "" : () => 0;
+    },
+  });
+
+  await assert.rejects(
+    createPresetDuelFromWasmFactory(factory),
+    /battle runner creation failed/,
+  );
+});
+
 test("wasm research duel adapter lets the battle runner call a JSON bot callback", async () => {
   let registeredCallback = null;
   let registeredReleaseCallback = null;

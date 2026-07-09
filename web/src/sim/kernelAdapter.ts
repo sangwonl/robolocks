@@ -11,6 +11,7 @@ type WasmModule = {
   addFunction(fn: (...args: number[]) => number | void, signature: string): number;
   removeFunction(pointer: number): void;
   cwrap(name: "robolocks_battle_runner_create_from_json", returnType: "number", argTypes: ["string"]): (jsonConfig: string) => number;
+  cwrap(name: "robolocks_last_error", returnType: "string", argTypes: []): () => string;
   cwrap(name: "robolocks_battle_runner_set_json_bot_callback", returnType: null, argTypes: ["number", "number", "number"]): (callback: number, releaseCallback: number, userData: number) => void;
   cwrap(name: "robolocks_battle_runner_destroy", returnType: null, argTypes: ["number"]): (handle: number) => void;
   cwrap(name: "robolocks_battle_runner_step", returnType: null, argTypes: ["number"]): (handle: number) => void;
@@ -124,6 +125,7 @@ export async function createBattleFromJsonWithWasmFactory(
   });
 
   const createRuntime = module.cwrap("robolocks_battle_runner_create_from_json", "number", ["string"]);
+  const lastError = module.cwrap("robolocks_last_error", "string", []);
   const destroyRuntime = module.cwrap("robolocks_battle_runner_destroy", null, ["number"]);
   const stepRuntime = module.cwrap("robolocks_battle_runner_step", null, ["number"]);
   const frameJson = module.cwrap("robolocks_battle_runner_frame_json", "string", ["number"]);
@@ -135,6 +137,9 @@ export async function createBattleFromJsonWithWasmFactory(
   const obstacleBlocksMovement = module.cwrap("robolocks_battle_runner_obstacle_blocks_movement", "number", ["number", "number"]);
   const obstacleBlocksLineOfSight = module.cwrap("robolocks_battle_runner_obstacle_blocks_line_of_sight", "number", ["number", "number"]);
   const handle = createRuntime(jsonConfig);
+  if (!handle) {
+    throw new Error(lastError() || "battle runner creation failed");
+  }
 
   return {
     staticObstacles(): StaticObstacleFrame[] {

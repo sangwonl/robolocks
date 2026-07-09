@@ -450,3 +450,12 @@ TEST_CASE("C API exposes capture zone progress") {
 
   robolocks_battle_runner_destroy(runtime);
 }
+
+TEST_CASE("C API create-from-json returns null and records an error for invalid config") {
+  RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_from_json(R"json({})json");
+
+  REQUIRE(runtime == nullptr);
+  const std::string error = robolocks_last_error();
+  REQUIRE_FALSE(error.empty());
+  REQUIRE(error == "Expected string field: battleId");
+}
