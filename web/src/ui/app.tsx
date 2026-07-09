@@ -101,6 +101,9 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   // while typing bot code in the Monaco editor).
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
+      if (event.defaultPrevented) {
+        return;
+      }
       if (!loadedReplay || isEditableTarget(event.target)) {
         return;
       }
@@ -418,9 +421,11 @@ function PanelResizeHandle({
       onKeyDown={(event) => {
         if (event.key === "ArrowRight") {
           event.preventDefault();
+          event.stopPropagation();
           onStep(PANEL_WIDTH_KEYBOARD_STEP);
         } else if (event.key === "ArrowLeft") {
           event.preventDefault();
+          event.stopPropagation();
           onStep(-PANEL_WIDTH_KEYBOARD_STEP);
         }
       }}

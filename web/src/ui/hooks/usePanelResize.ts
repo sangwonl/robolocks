@@ -49,10 +49,21 @@ export function usePanelResize(): UsePanelResizeResult {
   // continuous pointer position.
   function stepPanelWidth(panel: "left" | "right", deltaPx: number): void {
     const applyWidth = panel === "left" ? setLeftPanelWidth : setRightPanelWidth;
-    applyWidth((current) => clamp(current + deltaPx, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH));
+    applyWidth((current) => computeSteppedPanelWidth(panel, current, deltaPx));
   }
 
   return { leftPanelWidth, rightPanelWidth, beginPanelResize, stepPanelWidth };
+}
+
+// Pure core of stepPanelWidth, exported for testing. `deltaPx` is signed the
+// same way as pointer movement in beginPanelResize above (positive means the
+// separator moves right): the left panel grows with the separator, the right
+// panel shrinks, matching both the mouse-drag behavior and the WAI-ARIA
+// window splitter convention (ArrowRight grows the element before the
+// separator, i.e. the scene, which means the right panel shrinks).
+export function computeSteppedPanelWidth(panel: "left" | "right", current: number, deltaPx: number): number {
+  const signedDelta = panel === "left" ? deltaPx : -deltaPx;
+  return clamp(current + signedDelta, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH);
 }
 
 function clamp(value: number, min: number, max: number): number {
