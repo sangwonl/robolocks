@@ -1,14 +1,9 @@
 #include <robolocks/math.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 namespace robolocks {
-
-namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-}  // namespace
 
 double clamp(double value, double min_value, double max_value) {
   if (value < min_value) {
@@ -84,6 +79,43 @@ double advance_angle_toward(double from_deg, double to_deg, double max_delta_deg
   }
   const double step = delta < 0.0 ? -max_delta_deg : max_delta_deg;
   return normalize_angle_deg(from_deg + step);
+}
+
+double distance(Vec2 from, Vec2 to) {
+  return length(Vec2{to.x - from.x, to.y - from.y});
+}
+
+double dot(Vec2 a, Vec2 b) {
+  return a.x * b.x + a.y * b.y;
+}
+
+Vec2 forward_vector(double heading_deg) {
+  const double radians = normalize_angle_deg(heading_deg) * kPi / 180.0;
+  return Vec2{std::cos(radians), std::sin(radians)};
+}
+
+Vec2 right_vector(double heading_deg) {
+  const Vec2 forward = forward_vector(heading_deg);
+  return Vec2{-forward.y, forward.x};
+}
+
+bool segment_intersects_circle(Vec2 a, Vec2 b, Vec2 center, double radius) {
+  const Vec2 segment{b.x - a.x, b.y - a.y};
+  const double length_sq = dot(segment, segment);
+  if (length_sq <= 0.0) {
+    return distance(a, center) <= radius;
+  }
+  const Vec2 a_to_center{center.x - a.x, center.y - a.y};
+  const double t = clamp(dot(a_to_center, segment) / length_sq, 0.0, 1.0);
+  const Vec2 closest{a.x + segment.x * t, a.y + segment.y * t};
+  return distance(closest, center) <= radius;
+}
+
+double collision_radius(const BodyShapeSpec& shape) {
+  if (shape.type == BodyShapeType::Box) {
+    return std::max(shape.radius_m, std::hypot(shape.length_m * 0.5, shape.width_m * 0.5));
+  }
+  return shape.radius_m;
 }
 
 }  // namespace robolocks

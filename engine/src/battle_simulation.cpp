@@ -16,17 +16,6 @@ namespace {
 
 constexpr double kPhysicsBlockedEpsilonM = 1.0e-3;
 
-double distance_between(Vec2 from, Vec2 to) {
-  return length(Vec2{to.x - from.x, to.y - from.y});
-}
-
-double collision_radius_for_shape(const BodyShapeSpec& shape) {
-  if (shape.type == BodyShapeType::Box) {
-    return std::max(shape.radius_m, std::hypot(shape.length_m * 0.5, shape.width_m * 0.5));
-  }
-  return shape.radius_m;
-}
-
 }  // namespace
 
 BattleSimulation::BattleSimulation(BattleConfig config)
@@ -102,7 +91,7 @@ WorldSnapshot BattleSimulation::snapshot() const {
   out.units.reserve(units_.size());
   for (const auto& unit : units_) {
     const double mobility_remaining = unit.mobility_intent_active
-      ? distance_between(unit.transform.position, unit.mobility_intent_target)
+      ? distance(unit.transform.position, unit.mobility_intent_target)
       : 0.0;
     const double turret_error = unit.turret_intent_active
       ? std::abs(shortest_angle_delta_deg(
@@ -200,7 +189,7 @@ StepResult BattleSimulation::step(const std::vector<UnitOrders>& orders_by_unit)
   pre_physics_move_remaining.reserve(units_.size());
   for (const auto& unit : units_) {
     pre_physics_move_remaining.push_back(unit.mobility_intent_active
-      ? distance_between(unit.transform.position, unit.mobility_intent_target)
+      ? distance(unit.transform.position, unit.mobility_intent_target)
       : 0.0);
     physics_bodies.push_back(PhysicsBody{
       .unit_id = unit.unit_id,
@@ -215,7 +204,7 @@ StepResult BattleSimulation::step(const std::vector<UnitOrders>& orders_by_unit)
   for (std::size_t i = 0; i < units_.size(); i += 1) {
     units_[i].transform.position = physics_bodies[i].position;
     if (units_[i].mobility_intent_active) {
-      const double post_physics_remaining = distance_between(
+      const double post_physics_remaining = distance(
         units_[i].transform.position,
         units_[i].mobility_intent_target
       );
@@ -313,20 +302,20 @@ void BattleSimulation::process_respawns(std::vector<Event>& events) {
       break;
     }
 
-    const double unit_radius = collision_radius_for_shape(unit.body.shape);
+    const double unit_radius = collision_radius(unit.body.shape);
     bool blocked = false;
     for (const auto& other : units_) {
       if (other.unit_id == unit.unit_id || other.armor.integrity <= 0.0) {
         continue;
       }
-      const double other_radius = collision_radius_for_shape(other.body.shape);
-      if (distance_between(spawn.position, other.transform.position) < unit_radius + other_radius) {
+      const double other_radius = collision_radius(other.body.shape);
+      if (distance(spawn.position, other.transform.position) < unit_radius + other_radius) {
         blocked = true;
         break;
       }
     }
     for (const auto& obstacle : obstacles_) {
-      if (distance_between(spawn.position, obstacle.position) < unit_radius + obstacle.radius_m) {
+      if (distance(spawn.position, obstacle.position) < unit_radius + obstacle.radius_m) {
         blocked = true;
         break;
       }
@@ -375,7 +364,7 @@ void BattleSimulation::update_capture_zones() {
       if (unit.armor.integrity <= 0.0) {
         continue;
       }
-      if (distance_between(unit.transform.position, zone.position) > zone.radius_m) {
+      if (distance(unit.transform.position, zone.position) > zone.radius_m) {
         continue;
       }
 

@@ -19,12 +19,7 @@ const UnitSnapshot* find_unit(const WorldSnapshot& snapshot, UnitId unit_id) {
   return nullptr;
 }
 
-double distance(Vec2 a, Vec2 b) {
-  return length(Vec2{b.x - a.x, b.y - a.y});
-}
-
 Vec2 rotate_local(Vec2 local, double heading_deg) {
-  constexpr double kPi = 3.14159265358979323846;
   const double radians = heading_deg * kPi / 180.0;
   const double c = std::cos(radians);
   const double s = std::sin(radians);
@@ -61,24 +56,6 @@ bool is_in_fov(Vec2 sensor_origin, Vec2 target_position, double direction_deg, d
   const double target_heading = angle_to(sensor_origin, target_position);
   const double delta = std::abs(shortest_angle_delta_deg(direction_deg, target_heading));
   return delta <= width_deg * 0.5;
-}
-
-bool segment_intersects_circle(Vec2 start, Vec2 end, Vec2 center, double radius) {
-  const Vec2 segment{end.x - start.x, end.y - start.y};
-  const double length_squared = segment.x * segment.x + segment.y * segment.y;
-  if (length_squared <= 0.0) {
-    return distance(start, center) <= radius;
-  }
-
-  const Vec2 start_to_center{center.x - start.x, center.y - start.y};
-  const double projection =
-    (start_to_center.x * segment.x + start_to_center.y * segment.y) / length_squared;
-  const double clamped_projection = clamp(projection, 0.0, 1.0);
-  const Vec2 closest{
-    start.x + segment.x * clamped_projection,
-    start.y + segment.y * clamped_projection,
-  };
-  return distance(closest, center) <= radius;
 }
 
 bool line_of_sight_blocked(

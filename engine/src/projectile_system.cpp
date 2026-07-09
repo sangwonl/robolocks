@@ -13,7 +13,6 @@ namespace robolocks {
 
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
 constexpr double kMinHitChance = 0.0;
 constexpr double kMaxHitChance = 1.0;
 
@@ -23,47 +22,10 @@ enum class ArmorFacing {
   Rear,
 };
 
-double distance_between(Vec2 from, Vec2 to) {
-  return length(Vec2{to.x - from.x, to.y - from.y});
-}
-
-double dot(Vec2 a, Vec2 b) {
-  return a.x * b.x + a.y * b.y;
-}
-
-Vec2 forward_vector(double heading_deg) {
-  const double radians = normalize_angle_deg(heading_deg) * kPi / 180.0;
-  return Vec2{std::cos(radians), std::sin(radians)};
-}
-
-double collision_radius_for_shape(const BodyShapeSpec& shape) {
-  if (shape.type == BodyShapeType::Box) {
-    return std::max(shape.radius_m, std::hypot(shape.length_m * 0.5, shape.width_m * 0.5));
-  }
-  return shape.radius_m;
-}
-
-bool segment_intersects_circle(Vec2 from, Vec2 to, Vec2 center, double radius) {
-  const Vec2 segment{to.x - from.x, to.y - from.y};
-  const double length_sq = dot(segment, segment);
-  if (length_sq <= 0.0) {
-    return distance_between(from, center) <= radius;
-  }
-  const Vec2 from_to_center{center.x - from.x, center.y - from.y};
-  const double t = clamp(dot(from_to_center, segment) / length_sq, 0.0, 1.0);
-  const Vec2 closest{from.x + segment.x * t, from.y + segment.y * t};
-  return distance_between(closest, center) <= radius;
-}
-
 struct MuzzleTransform {
   Vec2 position;
   double height_m = 0.0;
 };
-
-Vec2 right_vector(double heading_deg) {
-  const Vec2 forward = forward_vector(heading_deg);
-  return Vec2{-forward.y, forward.x};
-}
 
 MuzzleTransform muzzle_transform_for_unit(const UnitState& unit) {
   const Vec2 direction = forward_vector(unit.turret.heading_deg);
@@ -234,16 +196,16 @@ std::vector<Event> resolve_weapon_fire(
         continue;
       }
       const MuzzleTransform muzzle = muzzle_transform_for_unit(unit);
-      const double distance = distance_between(muzzle.position, target.transform.position);
-      if (distance > unit.weapon.range_m) {
+      const double target_distance = distance(muzzle.position, target.transform.position);
+      if (target_distance > unit.weapon.range_m) {
         continue;
       }
       const double target_heading = angle_to(muzzle.position, target.transform.position);
       const double aim_error = std::abs(shortest_angle_delta_deg(unit.turret.heading_deg, target_heading));
       const double range_hit_chance = ballistic_range_hit_chance(
         unit.weapon,
-        distance,
-        collision_radius_for_shape(target.body.shape)
+        target_distance,
+        collision_radius(target.body.shape)
       );
       if (range_hit_chance <= 0.0) {
         continue;
@@ -273,8 +235,8 @@ std::vector<Event> resolve_weapon_fire(
     const double hit_chance = hit_chance_for_error(aim_error, unit.weapon.aim_tolerance_deg)
       * ballistic_range_hit_chance(
         unit.weapon,
-        distance_between(muzzle.position, target.transform.position),
-        collision_radius_for_shape(target.body.shape)
+        distance(muzzle.position, target.transform.position),
+        collision_radius(target.body.shape)
       );
     if (hit_chance < min_hit_chance) {
       if (fire_order_count == 1) {
@@ -344,15 +306,15 @@ std::vector<Event> advance_projectiles(
     projectile.previous_height_m = projectile.height_m;
     const double max_distance = std::max(0.0, projectile.remaining_range_m);
     const double requested_distance = length(projectile.velocity) * tick_dt_sec;
-    const double distance = std::min(requested_distance, max_distance);
+    const double travel_distance = std::min(requested_distance, max_distance);
     const Vec2 direction = requested_distance > 0.0
       ? Vec2{projectile.velocity.x / requested_distance * tick_dt_sec, projectile.velocity.y / requested_distance * tick_dt_sec}
       : Vec2{0.0, 0.0};
     projectile.position = Vec2{
-      projectile.position.x + direction.x * distance,
-      projectile.position.y + direction.y * distance,
+      projectile.position.x + direction.x * travel_distance,
+      projectile.position.y + direction.y * travel_distance,
     };
-    projectile.remaining_range_m -= distance;
+    projectile.remaining_range_m -= travel_distance;
 
     if (projectile.fire_mode == WeaponFireMode::Ballistic) {
       projectile.height_m = projectile.height_m
@@ -374,11 +336,11 @@ std::vector<Event> advance_projectiles(
           if (target.unit_id == projectile.owner_unit_id || target.armor.integrity <= 0.0) {
             continue;
           }
-          const double target_radius = collision_radius_for_shape(target.body.shape);
+          const double target_radius = collision_radius(target.body.shape);
           const double blast_radius = std::max(projectile.blast_radius_m, projectile.radius_m);
           const double impact_distance = std::max(
             0.0,
-            distance_between(impact_position, target.transform.position) - target_radius
+            distance(impact_position, target.transform.position) - target_radius
           );
           if (impact_distance > blast_radius) {
             continue;
@@ -436,7 +398,7 @@ std::vector<Event> advance_projectiles(
       if (target.invulnerable_until_tick > tick) {
         continue;
       }
-      const double hit_radius = collision_radius_for_shape(target.body.shape) + projectile.radius_m;
+      const double hit_radius = collision_radius(target.body.shape) + projectile.radius_m;
       if (segment_intersects_circle(projectile.previous_position, projectile.position, target.transform.position, hit_radius)) {
         hit_target_index = i;
         break;

@@ -8,10 +8,6 @@ namespace {
 
 constexpr double kMoveTargetEpsilon = 1.0e-9;
 
-double distance_between(Vec2 from, Vec2 to) {
-  return length(Vec2{to.x - from.x, to.y - from.y});
-}
-
 }  // namespace
 
 void clear_intents(UnitState& unit) {
@@ -24,7 +20,7 @@ void clear_intents(UnitState& unit) {
 void apply_resolved_orders_to_intents(UnitState& unit, const ResolvedUnitOrders& resolved_orders, Tick tick) {
   if (resolved_orders.move_to.has_value()) {
     if (!unit.mobility_intent_active ||
-        distance_between(unit.mobility_intent_target, resolved_orders.move_to->position) > kMoveTargetEpsilon) {
+        distance(unit.mobility_intent_target, resolved_orders.move_to->position) > kMoveTargetEpsilon) {
       unit.mobility_intent_started_tick = tick;
     }
     unit.mobility_intent_active = true;
@@ -33,7 +29,7 @@ void apply_resolved_orders_to_intents(UnitState& unit, const ResolvedUnitOrders&
   }
   if (resolved_orders.aim_at.has_value()) {
     if (!unit.turret_intent_active ||
-        distance_between(unit.turret_intent_target, resolved_orders.aim_at->target) > kMoveTargetEpsilon) {
+        distance(unit.turret_intent_target, resolved_orders.aim_at->target) > kMoveTargetEpsilon) {
       unit.turret_intent_started_tick = tick;
     }
     unit.turret_intent_active = true;
@@ -42,7 +38,7 @@ void apply_resolved_orders_to_intents(UnitState& unit, const ResolvedUnitOrders&
   }
   if (resolved_orders.face_armor_toward.has_value()) {
     if (!unit.hull_intent_active ||
-        distance_between(unit.hull_intent_target, resolved_orders.face_armor_toward->target) > kMoveTargetEpsilon) {
+        distance(unit.hull_intent_target, resolved_orders.face_armor_toward->target) > kMoveTargetEpsilon) {
       unit.hull_intent_started_tick = tick;
     }
     unit.hull_intent_active = true;

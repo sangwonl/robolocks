@@ -29,7 +29,6 @@ namespace {
 
 constexpr double kPositionEpsilon = 1.0e-9;
 constexpr double kMinCollisionMassKg = 1.0e-9;
-constexpr double kPi = 3.14159265358979323846;
 
 struct BoxAxes {
   Vec2 forward;
@@ -38,10 +37,6 @@ struct BoxAxes {
 
 bool has_box_shape(const PhysicsBody& body) {
   return body.shape.type == BodyShapeType::Box && body.shape.length_m > 0.0 && body.shape.width_m > 0.0;
-}
-
-double dot(Vec2 a, Vec2 b) {
-  return a.x * b.x + a.y * b.y;
 }
 
 Vec2 scaled(Vec2 value, double amount) {

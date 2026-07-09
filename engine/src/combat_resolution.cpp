@@ -7,12 +7,6 @@
 
 namespace robolocks {
 
-namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-}  // namespace
-
 double direct_damage_after_penetration(double base_damage, double penetration_mm, double armor_mm) {
   if (armor_mm <= 0.0) {
     return base_damage * 1.5;

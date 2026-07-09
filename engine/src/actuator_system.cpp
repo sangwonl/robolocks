@@ -10,23 +10,13 @@ namespace robolocks {
 
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
 constexpr double kMoveTargetEpsilon = 1.0e-9;
-
-double distance_between(Vec2 from, Vec2 to) {
-  return length(Vec2{to.x - from.x, to.y - from.y});
-}
-
-Vec2 forward_vector(double heading_deg) {
-  const double radians = normalize_angle_deg(heading_deg) * kPi / 180.0;
-  return Vec2{std::cos(radians), std::sin(radians)};
-}
 
 }  // namespace
 
 void advance_unit_actuators(UnitState& unit, double tick_dt_sec) {
   const double move_remaining = unit.mobility_intent_active
-    ? distance_between(unit.transform.position, unit.mobility_intent_target)
+    ? distance(unit.transform.position, unit.mobility_intent_target)
     : 0.0;
   if (unit.mobility_intent_active && move_remaining <= kMoveTargetEpsilon) {
     unit.mobility_intent_active = false;
@@ -34,13 +24,13 @@ void advance_unit_actuators(UnitState& unit, double tick_dt_sec) {
 
   if (unit.mobility_intent_active && move_remaining > kMoveTargetEpsilon) {
     const double max_distance = unit.mobility.max_speed_mps * tick_dt_sec;
-    const double distance = std::min(max_distance, move_remaining);
+    const double move_step = std::min(max_distance, move_remaining);
     const Vec2 forward = forward_vector(unit.transform.hull_heading_deg);
     unit.transform.position = Vec2{
-      unit.transform.position.x + forward.x * distance,
-      unit.transform.position.y + forward.y * distance,
+      unit.transform.position.x + forward.x * move_step,
+      unit.transform.position.y + forward.y * move_step,
     };
-    if (distance_between(unit.transform.position, unit.mobility_intent_target) <= kMoveTargetEpsilon) {
+    if (distance(unit.transform.position, unit.mobility_intent_target) <= kMoveTargetEpsilon) {
       unit.mobility_intent_active = false;
     }
   }
