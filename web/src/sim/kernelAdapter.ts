@@ -156,16 +156,28 @@ export async function createBattleFromJsonWithWasmFactory(
       return obstacles;
     },
     snapshot(): BattleFrame {
-      return parseFrame(JSON.parse(frameJson(handle)));
+      return parseFrameOrThrow(frameJson(handle), lastError);
     },
     step(): BattleFrame {
       stepRuntime(handle);
-      return parseFrame(JSON.parse(frameJson(handle)));
+      return parseFrameOrThrow(frameJson(handle), lastError);
     },
     destroy(): void {
       destroyRuntime(handle);
     },
   };
+}
+
+// robolocks_battle_runner_frame_json returns null on error -- including when
+// the preceding step/run call failed (e.g. a JSON bot callback threw). cwrap's
+// "string" return type turns a null C string into "" on the JS side, so an
+// empty string is the sentinel to check for here. Follows the same
+// throw-with-last-error pattern as the create path above.
+function parseFrameOrThrow(frameText: string, lastError: () => string): BattleFrame {
+  if (!frameText) {
+    throw new Error(lastError() || "battle runner step failed");
+  }
+  return parseFrame(JSON.parse(frameText));
 }
 
 function loadWasmFactory(): WasmFactory {

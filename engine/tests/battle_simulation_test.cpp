@@ -735,6 +735,42 @@ TEST_CASE("battle_simulation applies FireIfSolution through weapon damage and re
   REQUIRE(second.events[0].code == "weapon_reloading");
 }
 
+TEST_CASE("battle_simulation rejects weapon fire when FireIfSolution is submitted more than once in a tick") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 0.0}, 0.0, 100.0, 0.0, 0.0),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{10.0, 0.0}, 0.0, 100.0, 180.0, 180.0),
+  };
+
+  robolocks::BattleSimulation battle_simulation(config);
+
+  const auto result = battle_simulation.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{10.0, 0.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+
+  REQUIRE(result.snapshot.units[1].armor_integrity == Catch::Approx(100.0));
+  for (const auto& event : result.events) {
+    REQUIRE(event.code != "weapon_fired");
+  }
+}
+
 TEST_CASE("battle_simulation ends kill-limit deathmatch when a team reaches the target kills") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;

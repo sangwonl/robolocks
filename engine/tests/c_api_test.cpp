@@ -459,3 +459,95 @@ TEST_CASE("C API create-from-json returns null and records an error for invalid 
   REQUIRE_FALSE(error.empty());
   REQUIRE(error == "Expected string field: battleId");
 }
+
+TEST_CASE("C API step and run fail softly when the JSON bot callback becomes unregistered") {
+  g_called_bot_id = 0;
+  g_received_observation = {};
+  g_release_call_count = 0;
+  g_released_response = nullptr;
+  g_callback_response = R"json({
+    "orders": [
+      {"type": "aimAt", "target": {"x": 34.0, "y": 18.0}}
+    ]
+  })json";
+  robolocks_battle_runner_set_json_bot_callback(
+    test_json_bot_callback,
+    test_json_bot_release_callback,
+    &g_callback_response
+  );
+
+  RobolocksBattleRunnerHandle runtime = robolocks_battle_runner_create_from_json(R"json({
+    "battleId": "json_callback_failure_test",
+    "seed": 1,
+    "tickRate": 30,
+    "tickLimit": 120,
+    "units": [
+      {
+        "unitId": 1,
+        "name": "Blue",
+        "spawn": {"x": 4, "y": 5, "headingDeg": 35},
+        "modules": {
+          "mobility": {"id": "tracked_chassis_mk1", "maxSpeedMetersPerSecond": 6.0, "maxHullTurnDegreesPerSecond": 120.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      },
+      {
+        "unitId": 2,
+        "name": "Target",
+        "spawn": {"x": 34, "y": 18, "headingDeg": 215},
+        "modules": {
+          "mobility": {"id": "fixed_target_chassis", "maxSpeedMetersPerSecond": 0.0, "maxHullTurnDegreesPerSecond": 60.0},
+          "turret": {"id": "light_turret_mk1", "maxTurnDegreesPerSecond": 180.0},
+          "weapon": {"id": "slow_cannon_test", "damage": 25.0, "penetrationMillimeters": 80.0, "rangeMeters": 80.0, "muzzleVelocityMetersPerSecond": 20.0, "muzzleOffsetMeters": {"x": 3.6, "y": 0.0, "z": 1.65}, "projectileRadiusMeters": 0.08, "reloadTicks": 90},
+          "armor": {"id": "rolled_armor_mk1", "integrity": 100.0, "frontMillimeters": 100.0, "sideMillimeters": 70.0, "rearMillimeters": 45.0},
+          "body": {"id": "medium_hull_mk1", "massKilograms": 30000.0, "shape": {"type": "box", "radiusMeters": 1.2, "lengthMeters": 5.6, "widthMeters": 2.8}},
+          "sensor": {"id": "visual_optic_mk1", "rangeMeters": 60.0, "fovDegrees": 120.0, "refreshTicks": 1}
+        }
+      }
+    ],
+    "controllers": [
+      {"unitId": 1, "type": "json_callback"}
+    ]
+  })json");
+  REQUIRE(runtime != nullptr);
+
+  // Unregister the callback: the next bot tick throws inside the C ABI. The
+  // call must not crash the process -- it should fail softly by recording an
+  // error and leaving the runner's observable state unchanged.
+  robolocks_battle_runner_set_json_bot_callback(nullptr, nullptr, nullptr);
+
+  robolocks_battle_runner_step(runtime);
+
+  REQUIRE(robolocks_battle_runner_tick(runtime) == 0);
+  const std::string step_error = robolocks_last_error();
+  REQUIRE_FALSE(step_error.empty());
+  REQUIRE(step_error == "JSON bot callback is not registered");
+  REQUIRE(robolocks_battle_runner_frame_json(runtime) == nullptr);
+
+  robolocks_battle_runner_run(runtime, 5);
+
+  REQUIRE(robolocks_battle_runner_tick(runtime) == 0);
+  const std::string run_error = robolocks_last_error();
+  REQUIRE_FALSE(run_error.empty());
+  REQUIRE(run_error == "JSON bot callback is not registered");
+  REQUIRE(robolocks_battle_runner_frame_json(runtime) == nullptr);
+
+  // Re-registering the callback lets the runner recover: the next successful
+  // step clears the failed state and frame_json resumes returning data.
+  robolocks_battle_runner_set_json_bot_callback(
+    test_json_bot_callback,
+    test_json_bot_release_callback,
+    &g_callback_response
+  );
+  robolocks_battle_runner_step(runtime);
+
+  REQUIRE(robolocks_battle_runner_tick(runtime) == 1);
+  REQUIRE(robolocks_battle_runner_frame_json(runtime) != nullptr);
+
+  robolocks_battle_runner_destroy(runtime);
+  robolocks_battle_runner_set_json_bot_callback(nullptr, nullptr, nullptr);
+}

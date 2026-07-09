@@ -10,6 +10,7 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -23,10 +24,11 @@
 // and the web replay parser (web/tests/contract.test.mjs), so a schema change
 // only has to be re-blessed once and every stale mirror lights up.
 //
-// Re-bless workflow: set WRITE_GOLDEN=1 in the environment and run this test
-// once. The two goldens are overwritten from the live serializer output; commit
-// the result. In normal mode (no env var) the test asserts serializer output
-// equals the goldens byte-for-value.
+// Re-bless workflow: set WRITE_GOLDEN=1 (the value must be exactly "1") in the
+// environment and run this test once. The two goldens are overwritten from
+// the live serializer output and a conspicuous WARN is printed to stderr;
+// commit the result. In normal mode (no env var, or any value other than
+// "1") the test asserts serializer output equals the goldens byte-for-value.
 
 namespace {
 
@@ -321,7 +323,14 @@ TEST_CASE("canonical frame and observation match the checked-in goldens") {
   const auto frame = canonical_frame();
   const auto observation = canonical_observation();
 
-  if (std::getenv("WRITE_GOLDEN") != nullptr) {
+  const char* write_golden_env = std::getenv("WRITE_GOLDEN");
+  if (write_golden_env != nullptr && std::string(write_golden_env) == "1") {
+    std::cerr << "\n"
+              << "!!! WARN: WRITE_GOLDEN=1 -- re-blessing checked-in golden fixtures !!!\n"
+              << "    " << kFrameGoldenPath << "\n"
+              << "    " << kObservationGoldenPath << "\n"
+              << "    Overwritten from live serializer output. Review the diff and commit.\n"
+              << std::endl;
     write_file(kFrameGoldenPath, frame.dump(2));
     write_file(kObservationGoldenPath, observation.dump(2));
     SUCCEED("Golden fixtures re-blessed from live serializer output.");

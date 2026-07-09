@@ -19,13 +19,21 @@ namespace {
 RobolocksJsonBotCallback g_json_bot_callback = nullptr;
 RobolocksJsonBotReleaseCallback g_json_bot_release_callback = nullptr;
 void* g_json_bot_callback_user_data = nullptr;
-std::string g_last_error;
+// thread_local so concurrent callers (e.g. multiple wasm workers sharing this
+// translation unit in a multi-threaded host) each see only their own most
+// recent error instead of racing on a shared global.
+thread_local std::string g_last_error;
 
 struct RobolocksBattleRunner {
   robolocks::BattleRunner runner;
   robolocks::WorldSnapshot snapshot;
   robolocks::StepResult last_result;
   std::string frame_json;
+  // Set when the most recent step/run call threw (e.g. the JSON bot callback
+  // failed) and cleared by the next *successful* step/run. While set,
+  // frame_json() returns null instead of serializing a frame -- see the
+  // header doc comments for the full contract.
+  bool has_error = false;
 
   explicit RobolocksBattleRunner(robolocks::BattleRunner battle_runner)
       : runner(std::move(battle_runner)), snapshot(runner.snapshot()) {}
@@ -117,8 +125,17 @@ void robolocks_battle_runner_step(RobolocksBattleRunnerHandle handle) {
   if (runner == nullptr) {
     return;
   }
-  runner->last_result = runner->runner.step_once();
-  runner->snapshot = runner->last_result.snapshot;
+  try {
+    runner->last_result = runner->runner.step_once();
+    runner->snapshot = runner->last_result.snapshot;
+    runner->has_error = false;
+  } catch (const std::exception& error) {
+    g_last_error = error.what();
+    runner->has_error = true;
+  } catch (...) {
+    g_last_error = "Unknown error during battle runner step";
+    runner->has_error = true;
+  }
 }
 
 void robolocks_battle_runner_run(RobolocksBattleRunnerHandle handle, uint64_t tick_count) {
@@ -126,10 +143,23 @@ void robolocks_battle_runner_run(RobolocksBattleRunnerHandle handle, uint64_t ti
   if (runner == nullptr) {
     return;
   }
-  for (uint64_t i = 0; i < tick_count; i += 1) {
-    runner->last_result = runner->runner.step_once();
+  try {
+    for (uint64_t i = 0; i < tick_count; i += 1) {
+      runner->last_result = runner->runner.step_once();
+    }
+    runner->snapshot = runner->runner.snapshot();
+    runner->has_error = false;
+  } catch (const std::exception& error) {
+    g_last_error = error.what();
+    runner->has_error = true;
+    // Ticks before the failing one already mutated the runner's internal
+    // state; resync the cached snapshot with it instead of leaving stale data.
+    runner->snapshot = runner->runner.snapshot();
+  } catch (...) {
+    g_last_error = "Unknown error during battle runner run";
+    runner->has_error = true;
+    runner->snapshot = runner->runner.snapshot();
   }
-  runner->snapshot = runner->runner.snapshot();
 }
 
 uint64_t robolocks_battle_runner_tick(RobolocksBattleRunnerHandle handle) {
@@ -142,16 +172,24 @@ uint64_t robolocks_battle_runner_tick(RobolocksBattleRunnerHandle handle) {
 
 const char* robolocks_battle_runner_frame_json(RobolocksBattleRunnerHandle handle) {
   auto* runner = as_runner(handle);
-  if (runner == nullptr) {
+  if (runner == nullptr || runner->has_error) {
     return nullptr;
   }
-  runner->frame_json = robolocks::frame_to_json(
-    runner->snapshot,
-    runner->last_result.events,
-    runner->last_result.orders_by_unit,
-    &runner->last_result.rule_state
-  ).dump();
-  return runner->frame_json.c_str();
+  try {
+    runner->frame_json = robolocks::frame_to_json(
+      runner->snapshot,
+      runner->last_result.events,
+      runner->last_result.orders_by_unit,
+      &runner->last_result.rule_state
+    ).dump();
+    return runner->frame_json.c_str();
+  } catch (const std::exception& error) {
+    g_last_error = error.what();
+    return nullptr;
+  } catch (...) {
+    g_last_error = "Unknown error building battle runner frame JSON";
+    return nullptr;
+  }
 }
 
 size_t robolocks_battle_runner_obstacle_count(RobolocksBattleRunnerHandle handle) {

@@ -228,6 +228,64 @@ test("wasm JSON battle adapter falls back to a generic message when creation fai
   );
 });
 
+test("wasm JSON battle adapter surfaces the engine error when a step fails", async () => {
+  const calls = new Map([
+    ["robolocks_battle_runner_create_from_json", () => 12],
+    ["robolocks_battle_runner_destroy", () => undefined],
+    ["robolocks_battle_runner_step", () => undefined],
+    // frame_json returns null (empty string via cwrap) once the runner enters
+    // its failed state, per the c_api.cpp step/frame_json contract.
+    ["robolocks_battle_runner_frame_json", () => ""],
+    ["robolocks_last_error", () => "JSON bot callback is not registered"],
+  ]);
+  const factory = async () => ({
+    cwrap(name, returnType) {
+      const fn = calls.get(name);
+      if (fn) {
+        return fn;
+      }
+      return returnType === "string" ? () => "" : () => 0;
+    },
+  });
+
+  const runner = await createPresetDuelFromWasmFactory(factory);
+
+  assert.throws(
+    () => runner.step(),
+    /JSON bot callback is not registered/,
+  );
+
+  runner.destroy();
+});
+
+test("wasm JSON battle adapter falls back to a generic message when a step fails without an error", async () => {
+  const calls = new Map([
+    ["robolocks_battle_runner_create_from_json", () => 13],
+    ["robolocks_battle_runner_destroy", () => undefined],
+    ["robolocks_battle_runner_step", () => undefined],
+    ["robolocks_battle_runner_frame_json", () => ""],
+    ["robolocks_last_error", () => ""],
+  ]);
+  const factory = async () => ({
+    cwrap(name, returnType) {
+      const fn = calls.get(name);
+      if (fn) {
+        return fn;
+      }
+      return returnType === "string" ? () => "" : () => 0;
+    },
+  });
+
+  const runner = await createPresetDuelFromWasmFactory(factory);
+
+  assert.throws(
+    () => runner.step(),
+    /battle runner step failed/,
+  );
+
+  runner.destroy();
+});
+
 test("wasm research duel adapter lets the battle runner call a JSON bot callback", async () => {
   let registeredCallback = null;
   let registeredReleaseCallback = null;
