@@ -6,8 +6,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace robolocks {
 
@@ -123,43 +125,209 @@ Event destroyed_event(
   };
 }
 
+// Applies `damage` to `target`, emits the armor_damage event from the
+// caller-populated payload, and emits the paired unit_destroyed event when the
+// hit is lethal. Centralizes the damage/event pair shared by direct and blast
+// resolution.
+void apply_projectile_damage(
+  std::vector<Event>& events,
+  Tick tick,
+  UnitState& target,
+  double damage,
+  std::string message,
+  EventPayload payload
+) {
+  const double armor_before = target.armor.integrity;
+  target.armor.integrity = std::max(0.0, target.armor.integrity - damage);
+  if (target.armor.integrity <= 0.0) {
+    clear_intents(target);
+  }
+  payload.damage = damage;
+  payload.remaining_armor = target.armor.integrity;
+  events.push_back(Event{
+    .tick = tick,
+    .unit_id = target.unit_id,
+    .code = "armor_damage",
+    .message = std::move(message),
+    .payload = payload,
+  });
+  if (armor_before > 0.0 && target.armor.integrity <= 0.0) {
+    events.push_back(destroyed_event(tick, payload.source_unit_id, payload.source_team_id, target));
+  }
+}
+
+// Integrates a ballistic shell's vertical flight and, on the tick it drops to
+// ground, applies blast damage to every unit inside the crater. Returns true
+// when the shell detonated (and should be retired).
+bool resolve_ballistic_flight(
+  Tick tick,
+  double tick_dt_sec,
+  std::vector<UnitState>& units,
+  ProjectileState& projectile,
+  std::vector<Event>& events
+) {
+  projectile.height_m = projectile.height_m
+    + projectile.vertical_velocity_mps * tick_dt_sec
+    - 0.5 * projectile.gravity_mps2 * tick_dt_sec * tick_dt_sec;
+  projectile.vertical_velocity_mps -= projectile.gravity_mps2 * tick_dt_sec;
+
+  if (!(projectile.height_m <= 0.0 && projectile.previous_height_m > 0.0)) {
+    return false;
+  }
+
+  const double impact_t = clamp(
+    projectile.previous_height_m / (projectile.previous_height_m - projectile.height_m),
+    0.0,
+    1.0
+  );
+  const Vec2 impact_position{
+    projectile.previous_position.x + (projectile.position.x - projectile.previous_position.x) * impact_t,
+    projectile.previous_position.y + (projectile.position.y - projectile.previous_position.y) * impact_t,
+  };
+  for (auto& target : units) {
+    if (target.unit_id == projectile.owner_unit_id || target.armor.integrity <= 0.0) {
+      continue;
+    }
+    const double target_radius = collision_radius(target.body.shape);
+    const double blast_radius = std::max(projectile.blast_radius_m, projectile.radius_m);
+    const double impact_distance = std::max(
+      0.0,
+      distance(impact_position, target.transform.position) - target_radius
+    );
+    if (impact_distance > blast_radius) {
+      continue;
+    }
+    const double damage = splash_damage_at_distance(projectile.damage, impact_distance, blast_radius);
+    if (damage <= 0.0) {
+      continue;
+    }
+    apply_projectile_damage(
+      events,
+      tick,
+      target,
+      damage,
+      "Ballistic projectile blast reduced armor integrity.",
+      EventPayload{
+        .projectile_id = projectile.projectile_id,
+        .source_unit_id = projectile.owner_unit_id,
+        .target_unit_id = target.unit_id,
+        .source_team_id = team_for_unit(units, projectile.owner_unit_id),
+        .target_team_id = target.team_id,
+        .damage_type = "splash",
+        .armor_facing = "",
+        .penetration_mm = 0.0,
+        .armor_mm = 0.0,
+        .impact_distance_m = impact_distance,
+        .blast_radius_m = blast_radius,
+      }
+    );
+  }
+  return true;
+}
+
+// Resolves a direct-fire projectile against the first unit its swept segment
+// hits, emitting either a bounce or a penetrating-damage event. Returns true
+// when the projectile struck a target (and should be retired).
+bool resolve_direct_flight(
+  Tick tick,
+  std::vector<UnitState>& units,
+  ProjectileState& projectile,
+  std::vector<Event>& events
+) {
+  std::optional<std::size_t> hit_target_index;
+  for (std::size_t i = 0; i < units.size(); i += 1) {
+    auto& target = units[i];
+    if (target.unit_id == projectile.owner_unit_id || target.armor.integrity <= 0.0) {
+      continue;
+    }
+    if (target.invulnerable_until_tick > tick) {
+      continue;
+    }
+    const double hit_radius = collision_radius(target.body.shape) + projectile.radius_m;
+    if (segment_intersects_circle(projectile.previous_position, projectile.position, target.transform.position, hit_radius)) {
+      hit_target_index = i;
+      break;
+    }
+  }
+
+  if (!hit_target_index.has_value()) {
+    return false;
+  }
+
+  auto& target = units[*hit_target_index];
+  const auto facing = armor_facing_from_projectile(
+    target.transform.position,
+    target.transform.hull_heading_deg,
+    projectile.previous_position
+  );
+  const double armor_mm = armor_thickness_mm(target.armor, facing);
+  if (projectile.penetration_mm < armor_mm) {
+    events.push_back(Event{
+      .tick = tick,
+      .unit_id = target.unit_id,
+      .code = "armor_bounced",
+      .message = std::string("Projectile failed to penetrate ") + armor_facing_name(facing) + " armor.",
+      .payload = EventPayload{
+        .projectile_id = projectile.projectile_id,
+        .source_unit_id = projectile.owner_unit_id,
+        .target_unit_id = target.unit_id,
+        .source_team_id = team_for_unit(units, projectile.owner_unit_id),
+        .target_team_id = target.team_id,
+        .damage_type = "direct",
+        .armor_facing = armor_facing_name(facing),
+        .damage = 0.0,
+        .remaining_armor = target.armor.integrity,
+        .penetration_mm = projectile.penetration_mm,
+        .armor_mm = armor_mm,
+        .impact_distance_m = 0.0,
+        .blast_radius_m = 0.0,
+      },
+    });
+    return true;
+  }
+
+  const double damage = direct_damage_after_penetration(projectile.damage, projectile.penetration_mm, armor_mm);
+  apply_projectile_damage(
+    events,
+    tick,
+    target,
+    damage,
+    std::string("Projectile penetrated ") + armor_facing_name(facing) + " armor.",
+    EventPayload{
+      .projectile_id = projectile.projectile_id,
+      .source_unit_id = projectile.owner_unit_id,
+      .target_unit_id = target.unit_id,
+      .source_team_id = team_for_unit(units, projectile.owner_unit_id),
+      .target_team_id = target.team_id,
+      .damage_type = "direct",
+      .armor_facing = armor_facing_name(facing),
+      .penetration_mm = projectile.penetration_mm,
+      .armor_mm = armor_mm,
+    }
+  );
+  return true;
+}
+
 }  // namespace
 
-std::vector<Event> resolve_weapon_fire(
+std::vector<Event> ProjectileSystem::resolve_weapon_fire(
   Tick tick,
-  double,
-  const std::vector<UnitOrders>& orders_by_unit,
   std::vector<UnitState>& units,
-  std::vector<ProjectileState>& projectiles,
-  std::uint64_t& next_projectile_id
+  const std::vector<std::size_t>& fire_order_counts
 ) {
   std::vector<Event> events;
   for (std::size_t i = 0; i < units.size(); i += 1) {
     auto& unit = units[i];
+    // Dead units already had their intents cleared while their orders were
+    // resolved; skip them without re-clearing.
     if (unit.armor.integrity <= 0.0) {
-      clear_intents(unit);
       continue;
     }
     if (unit.weapon_cooldown_ticks > 0) {
       unit.weapon_cooldown_ticks -= 1;
     }
 
-    std::optional<FireIfSolutionOrder> fire_if_solution;
-    std::size_t fire_order_count = 0;
-    for (const auto& unit_orders : orders_by_unit) {
-      if (!(unit_orders.unit_id == unit.unit_id)) {
-        continue;
-      }
-      for (const auto& order : unit_orders.orders) {
-        if (order.kind != OrderKind::FireIfSolution || !order_payload_matches_kind(order)) {
-          continue;
-        }
-        if (const auto* payload = std::get_if<FireIfSolutionOrder>(&order.payload)) {
-          fire_order_count += 1;
-          fire_if_solution = *payload;
-        }
-      }
-    }
+    const std::size_t fire_order_count = i < fire_order_counts.size() ? fire_order_counts[i] : 0;
 
     if (fire_order_count > 1 || !unit.weapon_intent.active) {
       continue;
@@ -177,10 +345,9 @@ std::vector<Event> resolve_weapon_fire(
       continue;
     }
 
+    // min_hit_chance was already applied to the weapon intent when this tick's
+    // orders were resolved, so read it straight off the intent.
     const double min_hit_chance = unit.weapon_intent.min_hit_chance;
-    if (fire_order_count == 1 && fire_if_solution.has_value()) {
-      unit.weapon_intent.min_hit_chance = fire_if_solution->min_hit_chance;
-    }
 
     std::optional<std::size_t> target_index;
     double best_aim_error = unit.weapon.aim_tolerance_deg;
@@ -261,8 +428,8 @@ std::vector<Event> resolve_weapon_fire(
     const double horizontal_velocity_mps = ballistic
       ? unit.weapon.muzzle_velocity_mps * std::cos(launch_angle_rad)
       : unit.weapon.muzzle_velocity_mps;
-    projectiles.push_back(ProjectileState{
-      .projectile_id = next_projectile_id++,
+    projectiles_.push_back(ProjectileState{
+      .projectile_id = next_projectile_id_++,
       .owner_unit_id = unit.unit_id,
       .fire_mode = unit.weapon.fire_mode,
       .previous_position = muzzle.position,
@@ -292,16 +459,15 @@ std::vector<Event> resolve_weapon_fire(
   return events;
 }
 
-std::vector<Event> advance_projectiles(
+std::vector<Event> ProjectileSystem::advance_projectiles(
   Tick tick,
   double tick_dt_sec,
-  std::vector<UnitState>& units,
-  std::vector<ProjectileState>& projectiles
+  std::vector<UnitState>& units
 ) {
   std::vector<Event> events;
   std::vector<ProjectileState> active_projectiles;
-  active_projectiles.reserve(projectiles.size());
-  for (auto projectile : projectiles) {
+  active_projectiles.reserve(projectiles_.size());
+  for (auto projectile : projectiles_) {
     projectile.previous_position = projectile.position;
     projectile.previous_height_m = projectile.height_m;
     const double max_distance = std::max(0.0, projectile.remaining_range_m);
@@ -316,165 +482,15 @@ std::vector<Event> advance_projectiles(
     };
     projectile.remaining_range_m -= travel_distance;
 
-    if (projectile.fire_mode == WeaponFireMode::Ballistic) {
-      projectile.height_m = projectile.height_m
-        + projectile.vertical_velocity_mps * tick_dt_sec
-        - 0.5 * projectile.gravity_mps2 * tick_dt_sec * tick_dt_sec;
-      projectile.vertical_velocity_mps -= projectile.gravity_mps2 * tick_dt_sec;
+    const bool consumed = projectile.fire_mode == WeaponFireMode::Ballistic
+      ? resolve_ballistic_flight(tick, tick_dt_sec, units, projectile, events)
+      : resolve_direct_flight(tick, units, projectile, events);
 
-      if (projectile.height_m <= 0.0 && projectile.previous_height_m > 0.0) {
-        const double impact_t = clamp(
-          projectile.previous_height_m / (projectile.previous_height_m - projectile.height_m),
-          0.0,
-          1.0
-        );
-        const Vec2 impact_position{
-          projectile.previous_position.x + (projectile.position.x - projectile.previous_position.x) * impact_t,
-          projectile.previous_position.y + (projectile.position.y - projectile.previous_position.y) * impact_t,
-        };
-        for (auto& target : units) {
-          if (target.unit_id == projectile.owner_unit_id || target.armor.integrity <= 0.0) {
-            continue;
-          }
-          const double target_radius = collision_radius(target.body.shape);
-          const double blast_radius = std::max(projectile.blast_radius_m, projectile.radius_m);
-          const double impact_distance = std::max(
-            0.0,
-            distance(impact_position, target.transform.position) - target_radius
-          );
-          if (impact_distance > blast_radius) {
-            continue;
-          }
-          const double damage = splash_damage_at_distance(projectile.damage, impact_distance, blast_radius);
-          if (damage <= 0.0) {
-            continue;
-          }
-          const double armor_before = target.armor.integrity;
-          target.armor.integrity = std::max(0.0, target.armor.integrity - damage);
-          if (target.armor.integrity <= 0.0) {
-            clear_intents(target);
-          }
-          const auto source_team_id = team_for_unit(units, projectile.owner_unit_id);
-          events.push_back(Event{
-            .tick = tick,
-            .unit_id = target.unit_id,
-            .code = "armor_damage",
-            .message = "Ballistic projectile blast reduced armor integrity.",
-            .payload = EventPayload{
-              .projectile_id = projectile.projectile_id,
-              .source_unit_id = projectile.owner_unit_id,
-              .target_unit_id = target.unit_id,
-              .source_team_id = source_team_id,
-              .target_team_id = target.team_id,
-              .damage_type = "splash",
-              .armor_facing = "",
-              .damage = damage,
-              .remaining_armor = target.armor.integrity,
-              .penetration_mm = 0.0,
-              .armor_mm = 0.0,
-              .impact_distance_m = impact_distance,
-              .blast_radius_m = blast_radius,
-            },
-          });
-          if (armor_before > 0.0 && target.armor.integrity <= 0.0) {
-            events.push_back(destroyed_event(tick, projectile.owner_unit_id, source_team_id, target));
-          }
-        }
-        continue;
-      }
-
-      if (projectile.remaining_range_m > 0.0) {
-        active_projectiles.push_back(projectile);
-      }
-      continue;
-    }
-
-    std::optional<std::size_t> hit_target_index;
-    for (std::size_t i = 0; i < units.size(); i += 1) {
-      auto& target = units[i];
-      if (target.unit_id == projectile.owner_unit_id || target.armor.integrity <= 0.0) {
-        continue;
-      }
-      if (target.invulnerable_until_tick > tick) {
-        continue;
-      }
-      const double hit_radius = collision_radius(target.body.shape) + projectile.radius_m;
-      if (segment_intersects_circle(projectile.previous_position, projectile.position, target.transform.position, hit_radius)) {
-        hit_target_index = i;
-        break;
-      }
-    }
-
-    if (hit_target_index.has_value()) {
-      auto& target = units[*hit_target_index];
-      const auto facing = armor_facing_from_projectile(
-        target.transform.position,
-        target.transform.hull_heading_deg,
-        projectile.previous_position
-      );
-      const double armor_mm = armor_thickness_mm(target.armor, facing);
-      if (projectile.penetration_mm < armor_mm) {
-        events.push_back(Event{
-          .tick = tick,
-          .unit_id = target.unit_id,
-          .code = "armor_bounced",
-          .message = std::string("Projectile failed to penetrate ") + armor_facing_name(facing) + " armor.",
-          .payload = EventPayload{
-            .projectile_id = projectile.projectile_id,
-            .source_unit_id = projectile.owner_unit_id,
-            .target_unit_id = target.unit_id,
-            .source_team_id = team_for_unit(units, projectile.owner_unit_id),
-            .target_team_id = target.team_id,
-            .damage_type = "direct",
-            .armor_facing = armor_facing_name(facing),
-            .damage = 0.0,
-            .remaining_armor = target.armor.integrity,
-            .penetration_mm = projectile.penetration_mm,
-            .armor_mm = armor_mm,
-            .impact_distance_m = 0.0,
-            .blast_radius_m = 0.0,
-          },
-        });
-        continue;
-      }
-
-      const double damage = direct_damage_after_penetration(projectile.damage, projectile.penetration_mm, armor_mm);
-      const double armor_before = target.armor.integrity;
-      target.armor.integrity = std::max(0.0, target.armor.integrity - damage);
-      if (target.armor.integrity <= 0.0) {
-        clear_intents(target);
-      }
-      const auto source_team_id = team_for_unit(units, projectile.owner_unit_id);
-      events.push_back(Event{
-        .tick = tick,
-        .unit_id = target.unit_id,
-        .code = "armor_damage",
-        .message = std::string("Projectile penetrated ") + armor_facing_name(facing) + " armor.",
-        .payload = EventPayload{
-          .projectile_id = projectile.projectile_id,
-          .source_unit_id = projectile.owner_unit_id,
-          .target_unit_id = target.unit_id,
-          .source_team_id = source_team_id,
-          .target_team_id = target.team_id,
-          .damage_type = "direct",
-          .armor_facing = armor_facing_name(facing),
-          .damage = damage,
-          .remaining_armor = target.armor.integrity,
-          .penetration_mm = projectile.penetration_mm,
-          .armor_mm = armor_mm,
-        },
-      });
-      if (armor_before > 0.0 && target.armor.integrity <= 0.0) {
-        events.push_back(destroyed_event(tick, projectile.owner_unit_id, source_team_id, target));
-      }
-      continue;
-    }
-
-    if (projectile.remaining_range_m > 0.0) {
+    if (!consumed && projectile.remaining_range_m > 0.0) {
       active_projectiles.push_back(projectile);
     }
   }
-  projectiles = std::move(active_projectiles);
+  projectiles_ = std::move(active_projectiles);
   return events;
 }
 

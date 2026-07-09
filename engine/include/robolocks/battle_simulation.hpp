@@ -3,6 +3,7 @@
 #include <robolocks/battle_config.hpp>
 #include <robolocks/order.hpp>
 #include <robolocks/physics_system.hpp>
+#include <robolocks/projectile_system.hpp>
 #include <robolocks/runtime_state.hpp>
 #include <robolocks/snapshot.hpp>
 #include <robolocks/step_result.hpp>
@@ -22,13 +23,12 @@ class BattleSimulation {
  private:
   double tick_dt_sec_ = 1.0 / 30.0;
   PhysicsSystem physics_;
+  ProjectileSystem projectiles_;
   Tick tick_ = 0;
-  std::uint64_t next_projectile_id_ = 1;
   BattleRuleConfig rule_;
   BattleRuleState rule_state_;
   std::vector<StaticObstacle> obstacles_;
   std::vector<UnitState> units_;
-  std::vector<ProjectileState> projectiles_;
 
   void apply_unit_orders(const std::vector<UnitOrders>& orders_by_unit, std::vector<Event>& events);
   void run_projectile_phase(const std::vector<UnitOrders>& orders_by_unit, std::vector<Event>& events);

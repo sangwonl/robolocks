@@ -8,7 +8,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <utility>
+#include <variant>
+#include <vector>
 
 namespace robolocks {
 
@@ -133,8 +136,8 @@ WorldSnapshot BattleSimulation::snapshot() const {
       },
     });
   }
-  out.projectiles.reserve(projectiles_.size());
-  for (const auto& projectile : projectiles_) {
+  out.projectiles.reserve(projectiles_.projectiles().size());
+  for (const auto& projectile : projectiles_.projectiles()) {
     out.projectiles.push_back(ProjectileSnapshot{
       .projectile_id = projectile.projectile_id,
       .owner_unit_id = projectile.owner_unit_id,
@@ -182,17 +185,34 @@ void BattleSimulation::run_projectile_phase(
   const std::vector<UnitOrders>& orders_by_unit,
   std::vector<Event>& events
 ) {
-  auto weapon_events = resolve_weapon_fire(
-    tick_,
-    tick_dt_sec_,
-    orders_by_unit,
-    units_,
-    projectiles_,
-    next_projectile_id_
-  );
+  // Count each unit's FireIfSolution orders this tick, aligned with units_.
+  // The order resolution step collapses duplicate weapon orders away, so the
+  // projectile system needs this count to reject a unit that submitted more
+  // than one fire order.
+  std::vector<std::size_t> fire_order_counts;
+  fire_order_counts.reserve(units_.size());
+  for (const auto& unit : units_) {
+    std::size_t fire_order_count = 0;
+    for (const auto& unit_orders : orders_by_unit) {
+      if (!(unit_orders.unit_id == unit.unit_id)) {
+        continue;
+      }
+      for (const auto& order : unit_orders.orders) {
+        if (order.kind != OrderKind::FireIfSolution || !order_payload_matches_kind(order)) {
+          continue;
+        }
+        if (std::get_if<FireIfSolutionOrder>(&order.payload)) {
+          fire_order_count += 1;
+        }
+      }
+    }
+    fire_order_counts.push_back(fire_order_count);
+  }
+
+  auto weapon_events = projectiles_.resolve_weapon_fire(tick_, units_, fire_order_counts);
   events.insert(events.end(), weapon_events.begin(), weapon_events.end());
 
-  auto projectile_events = advance_projectiles(tick_, tick_dt_sec_, units_, projectiles_);
+  auto projectile_events = projectiles_.advance_projectiles(tick_, tick_dt_sec_, units_);
   events.insert(events.end(), projectile_events.begin(), projectile_events.end());
 }
 
