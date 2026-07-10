@@ -40,7 +40,7 @@ def on_tick(state: BattleState) -> list[OrderLike]:
     own = state.own_unit
     enemy = state.contacts.closest_enemy()
     if not enemy:
-        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
+        return [MoveTo(state.map.center), ScanArc(direction=own.turret_heading, width=160.0)]
     return [
         AimAt(enemy.position),
         FireIfSolution(min_hit_chance=0.0),
@@ -73,7 +73,7 @@ def on_tick(state: BattleState) -> list[OrderLike]:
     own = state.own_unit
     enemy = state.contacts.closest_enemy()
     if not enemy:
-        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
+        return [MoveTo(state.map.center), ScanArc(direction=own.turret_heading, width=160.0)]
 
     dx = own.position.x - enemy.position.x
     dy = own.position.y - enemy.position.y
@@ -113,7 +113,7 @@ def on_tick(state: BattleState) -> list[OrderLike]:
     own = state.own_unit
     enemy = state.contacts.closest_enemy()
     if not enemy:
-        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
+        return [MoveTo(state.map.center), ScanArc(direction=own.turret_heading, width=160.0)]
 
     angle = math.atan2(own.position.y - enemy.position.y, own.position.x - enemy.position.x)
     angle += math.radians(STEP_DEG)  # advance counter-clockwise around the enemy
@@ -149,7 +149,7 @@ def on_tick(state: BattleState) -> list[OrderLike]:
     own = state.own_unit
     enemy = state.contacts.closest_enemy()
     if not enemy:
-        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
+        return [MoveTo(state.map.center), ScanArc(direction=own.turret_heading, width=160.0)]
 
     hull = math.radians(enemy.hull_heading)
     # Perpendicular to the enemy's facing = their left/right side.
@@ -205,7 +205,7 @@ def on_tick(state: BattleState) -> list[OrderLike]:
 
     # 2) No incoming fire: hold long range, retreat if crowded.
     if not enemy:
-        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
+        return [MoveTo(state.map.center), ScanArc(direction=own.turret_heading, width=160.0)]
     dx = own.position.x - enemy.position.x
     dy = own.position.y - enemy.position.y
     dist = math.hypot(dx, dy) or 1.0

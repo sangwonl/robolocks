@@ -42,7 +42,9 @@ Vec2 sensor_origin_for_unit(const UnitSnapshot& unit) {
     -body_length * 0.16 + 0.18,
     0.0,
   };
-  const Vec2 rotated = rotate_local(local_origin, unit.hull_heading_deg);
+  // The sensor is mounted on the turret (hull -> turret -> sensor), so its origin
+  // rotates with the turret heading, not the hull.
+  const Vec2 rotated = rotate_local(local_origin, unit.turret_heading_deg);
   return Vec2{
     unit.position.x + rotated.x,
     unit.position.y + rotated.y,

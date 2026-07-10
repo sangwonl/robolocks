@@ -594,7 +594,10 @@ function createUnitRig(unit: UnitFrame, scanAction: ScanAction | undefined): Uni
   group.add(hull);
   group.add(armor);
   group.add(turret);
-  group.add(sensor);
+  // Hierarchy: hull group -> turret -> sensor. The sensor is mounted on the
+  // turret, so parenting it under the turret makes it inherit turret rotation
+  // (no separate per-frame rotation needed).
+  turret.add(sensor);
 
   const mount = sensorMountForUnit(unit);
   const scanArc = createScanArc(unit, scanAction, mount);
@@ -624,7 +627,7 @@ function updateUnitRig(rig: UnitRig, unit: UnitFrame, scanAction: ScanAction | u
 
   const turretRelative = -THREE.MathUtils.degToRad(unit.turretHeadingDegrees - unit.hullHeadingDegrees);
   rig.turret.rotation.y = turretRelative;
-  rig.sensor.rotation.y = turretRelative;
+  // rig.sensor is a child of rig.turret, so it inherits the turret rotation.
 
   rig.hullMaterial.color.set(unitColor(unit));
   rig.armorMaterial.color.set(armorColorForIntegrity(unit.armorIntegrity, unit.modules.armor.integrity));
@@ -891,7 +894,8 @@ function createSensorModule(unit: UnitFrame): THREE.Group {
   const mount = sensorMountForUnit(unit);
   const group = new THREE.Group();
   group.name = `unit-${unit.unitId}-sensor-module`;
-  group.rotation.y = -THREE.MathUtils.degToRad(unit.turretHeadingDegrees - unit.hullHeadingDegrees);
+  // No self-rotation: this group is parented under the turret (see createUnitRig)
+  // and inherits its rotation, so it rides on top of the turret.
 
   const rangeRatio = Math.min(1.4, Math.max(0.45, unit.modules.sensor.rangeMeters / 60));
   const fovRatio = Math.min(1.25, Math.max(0.55, unit.modules.sensor.fovDegrees / 120));
@@ -1157,8 +1161,13 @@ function scanArcParams(unit: UnitFrame, action: ScanAction | undefined, _mount: 
   const sensorRange = Math.max(0, unit.modules.sensor.rangeMeters);
   const actionRange = typeof action?.rangeMeters === "number" && action.rangeMeters > 0 ? action.rangeMeters : sensorRange;
   const rangeMeters = Math.min(actionRange, sensorRange);
-  const rawDirectionDegrees = action?.directionDegrees ?? unit.hullHeadingDegrees;
-  const directionDegrees = rawDirectionDegrees - unit.hullHeadingDegrees;
+  // The sensor rides on the turret, so the cone is expressed relative to the
+  // turret heading (its apex tracks the turret mount). The scan direction the bot
+  // requests is still an absolute world angle; subtracting the turret heading here
+  // and rotating the mesh by the turret heading in applyScanArcTransform nets back
+  // to that absolute direction.
+  const rawDirectionDegrees = action?.directionDegrees ?? unit.turretHeadingDegrees;
+  const directionDegrees = rawDirectionDegrees - unit.turretHeadingDegrees;
   const widthDegrees = Math.max(0, Math.min(action?.widthDegrees ?? unit.modules.sensor.fovDegrees, unit.modules.sensor.fovDegrees));
   return {
     rangeMeters,
@@ -1198,7 +1207,7 @@ function buildScanArcGeometry(rangeMeters: number, directionDegrees: number, wid
 
 function applyScanArcTransform(mesh: THREE.Mesh, unit: UnitFrame, mount: SensorMount): void {
   mesh.position.set(unit.position.x, mount.origin.y, unit.position.y);
-  mesh.rotation.set(0, -THREE.MathUtils.degToRad(unit.hullHeadingDegrees), 0);
+  mesh.rotation.set(0, -THREE.MathUtils.degToRad(unit.turretHeadingDegrees), 0);
   mesh.translateX(mount.origin.x);
   mesh.translateZ(mount.origin.z);
 }
