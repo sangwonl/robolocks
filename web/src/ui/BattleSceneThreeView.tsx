@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Repeat } from "lucide-react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
@@ -6,7 +7,7 @@ import type { BattleFrame, FieldBoundsFrame, StaticObstacleFrame } from "../type
 import { cn } from "../lib/utils.ts";
 import { createBattleScene, type BattleScene } from "./battleSceneThreeScene.ts";
 
-type CameraMode = "top" | "perspective";
+type CameraMode = "top" | "perspective" | "fpv";
 
 export type BattleSceneThreeViewProps = {
   frame: BattleFrame | null;
@@ -40,13 +41,35 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
   const aspectRef = useRef(1);
   const cameraModeRef = useRef<CameraMode>("perspective");
   const [cameraMode, setCameraMode] = useState<CameraMode>("perspective");
+  // Which unit the first-person camera rides (null = default to Blue/first).
+  const [fpvUnitId, setFpvUnitId] = useState<number | null>(null);
+  const fpvUnitIdRef = useRef<number | null>(fpvUnitId);
 
   frameRef.current = frame;
   fieldRef.current = field;
+  fpvUnitIdRef.current = fpvUnitId;
 
   useEffect(() => {
     cameraModeRef.current = cameraMode;
   }, [cameraMode]);
+
+  // Clicking FPV enters first-person; clicking it again cycles to the next unit.
+  const handleFpvClick = () => {
+    const units = frameRef.current ? [...frameRef.current.units].sort((a, b) => a.unitId - b.unitId) : [];
+    if (cameraModeRef.current !== "fpv") {
+      setCameraMode("fpv");
+      // Pin to the default unit (Blue/first) so the next click cycles cleanly.
+      if (fpvUnitIdRef.current === null && units.length > 0) {
+        setFpvUnitId((units.find((unit) => unit.teamId === 1) ?? units[0]).unitId);
+      }
+      return;
+    }
+    if (units.length === 0) {
+      return;
+    }
+    const currentIndex = units.findIndex((unit) => unit.unitId === fpvUnitIdRef.current);
+    setFpvUnitId(units[(currentIndex + 1) % units.length].unitId);
+  };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -162,12 +185,17 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
       return;
     }
     cameraModeRef.current = cameraMode;
-    applyCameraMode(camera, controls, cameraMode, aspectRef.current, fieldRef.current);
+    if (cameraMode === "fpv") {
+      applyFpvCamera(camera, controls, frameRef.current, fieldRef.current, fpvUnitIdRef.current);
+    } else {
+      controls.enabled = true;
+      applyCameraMode(camera, controls, cameraMode, aspectRef.current, fieldRef.current);
+    }
     if (renderer && scene) {
       battleSceneRef.current?.faceCamera(camera);
       requestRenderRef.current?.();
     }
-  }, [cameraMode]);
+  }, [cameraMode, fpvUnitId]);
 
   // Scene lifetime is tied to the loaded replay (its obstacle set and play field).
   // Statics — ground, grid, boundary — build once here from the field bounds;
@@ -202,6 +230,10 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
     battleScene.sync(frame);
     const camera = cameraRef.current;
     if (camera) {
+      // First-person rides the unit, so re-place the camera as the unit moves.
+      if (cameraModeRef.current === "fpv" && controlsRef.current) {
+        applyFpvCamera(camera, controlsRef.current, frame, fieldRef.current, fpvUnitIdRef.current);
+      }
       battleScene.faceCamera(camera);
       requestRenderRef.current?.();
     }
@@ -210,34 +242,96 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
   return (
     <div ref={hostRef} className="absolute inset-0 min-h-0 min-w-0" aria-label="Battle scene viewport">
       <div
-        className="absolute right-3 top-3 z-[2] grid grid-cols-[repeat(2,54px)] gap-1 rounded-lg border border-[var(--brand-border-menu)] bg-[var(--overlay)] p-1 backdrop-blur-md"
+        className="absolute right-3 top-3 z-[2] grid grid-cols-[repeat(3,54px)] gap-1 rounded-lg border border-[var(--brand-border-menu)] bg-[var(--overlay)] p-1 backdrop-blur-md"
         aria-label="Camera mode"
       >
+        {([
+          { mode: "top" as const, label: "Top" },
+          { mode: "perspective" as const, label: "Persp." },
+        ]).map(({ mode, label }) => (
+          <button
+            key={mode}
+            type="button"
+            className={cn(
+              "w-[54px] rounded-[5px] border-0 bg-transparent px-0 py-2 text-[10px] font-semibold leading-none text-[var(--text-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
+              cameraMode === mode && "bg-[var(--brand)] text-[var(--ink)]",
+            )}
+            aria-pressed={cameraMode === mode}
+            onClick={() => setCameraMode(mode)}
+          >
+            {label}
+          </button>
+        ))}
         <button
           type="button"
           className={cn(
-            "w-[54px] rounded-[5px] border-0 bg-transparent px-0 py-2 text-[10px] font-semibold leading-none text-[var(--text-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
-            cameraMode === "top" && "bg-[var(--brand)] text-[var(--ink)]",
+            "flex w-[54px] items-center justify-center gap-1 rounded-[5px] border-0 bg-transparent px-0 py-2 text-[10px] font-semibold leading-none text-[var(--text-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] [&_svg]:h-3 [&_svg]:w-3",
+            cameraMode === "fpv" && "bg-[var(--brand)] text-[var(--ink)]",
           )}
-          aria-pressed={cameraMode === "top"}
-          onClick={() => setCameraMode("top")}
+          aria-pressed={cameraMode === "fpv"}
+          title="First-person view. Click again to cycle units."
+          onClick={handleFpvClick}
         >
-          Top
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "w-[54px] rounded-[5px] border-0 bg-transparent px-0 py-2 text-[10px] font-semibold leading-none text-[var(--text-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
-            cameraMode === "perspective" && "bg-[var(--brand)] text-[var(--ink)]",
-          )}
-          aria-pressed={cameraMode === "perspective"}
-          onClick={() => setCameraMode("perspective")}
-        >
-          Persp.
+          FPV
+          <Repeat aria-hidden="true" />
         </button>
       </div>
+      {cameraMode === "fpv" ? (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-[2] rounded-md border border-[var(--line)] bg-[var(--overlay)] px-2 py-1 text-[9px] font-semibold text-[var(--text-muted)] backdrop-blur-md">
+          FPV: {pickFpvUnit(frame, fpvUnitId)?.name ?? "—"} · click FPV to cycle units
+        </div>
+      ) : (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-[2] rounded-md border border-[var(--line)] bg-[var(--overlay)] px-2 py-1 text-[9px] font-semibold text-[var(--text-muted)] backdrop-blur-md">
+          drag=rotate · right-drag / two-finger=move · wheel=zoom
+        </div>
+      )}
     </div>
   );
+}
+
+// Picks the unit the first-person camera rides: the selected unit if it is still
+// in the frame, else Blue (team 1), else the first unit.
+function pickFpvUnit(frame: BattleFrame | null, fpvUnitId: number | null) {
+  if (!frame || frame.units.length === 0) {
+    return null;
+  }
+  if (fpvUnitId !== null) {
+    const selected = frame.units.find((unit) => unit.unitId === fpvUnitId);
+    if (selected) {
+      return selected;
+    }
+  }
+  return frame.units.find((unit) => unit.teamId === 1) ?? frame.units[0];
+}
+
+// First-person camera: sit on the followed unit's turret and look down its aim
+// (turret heading). OrbitControls is disabled so the view stays locked to the unit.
+function applyFpvCamera(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  frame: BattleFrame | null,
+  field: FieldBoundsFrame,
+  fpvUnitId: number | null,
+): void {
+  controls.enabled = false;
+  const unit = pickFpvUnit(frame, fpvUnitId);
+  if (!unit) {
+    // No unit to ride yet: frame the field from a low angle as a placeholder.
+    applyCameraMode(camera, controls, "perspective", camera.aspect, field);
+    controls.enabled = false;
+    return;
+  }
+  const theta = THREE.MathUtils.degToRad(unit.turretHeadingDegrees);
+  const forwardX = Math.cos(theta);
+  const forwardZ = Math.sin(theta);
+  const EYE_HEIGHT_M = 2.6;
+  const LOOK_HEIGHT_M = 1.6;
+  const BACK_OFFSET_M = 1.2; // sit just behind the turret pivot
+  const LOOK_AHEAD_M = 60;
+  camera.up.set(0, 1, 0);
+  camera.position.set(unit.position.x - forwardX * BACK_OFFSET_M, EYE_HEIGHT_M, unit.position.y - forwardZ * BACK_OFFSET_M);
+  camera.lookAt(unit.position.x + forwardX * LOOK_AHEAD_M, LOOK_HEIGHT_M, unit.position.y + forwardZ * LOOK_AHEAD_M);
+  camera.updateProjectionMatrix();
 }
 
 // Positions the free-orbit perspective camera for a preset viewpoint (iso or
