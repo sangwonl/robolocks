@@ -40,7 +40,7 @@ type UnitRig = {
   healthFill: THREE.Mesh;
   healthFillMaterial: THREE.MeshBasicMaterial;
   healthBarWidthM: number;
-  scanArcMaterial: THREE.MeshBasicMaterial;
+  scanArcMaterial: THREE.ShaderMaterial;
   mount: SensorMount;
   lastArcKey: string;
 };
@@ -610,7 +610,7 @@ function createUnitRig(unit: UnitFrame, scanAction: ScanAction | undefined): Uni
     healthFill: healthBar.fill,
     healthFillMaterial: healthBar.fill.material as THREE.MeshBasicMaterial,
     healthBarWidthM: healthBar.widthM,
-    scanArcMaterial: scanArc.material as THREE.MeshBasicMaterial,
+    scanArcMaterial: scanArc.material as THREE.ShaderMaterial,
     mount,
     lastArcKey: scanArc.userData.arcKey as string,
   };
@@ -1063,18 +1063,53 @@ function captureZoneColor(zone: CaptureZoneFrame): THREE.ColorRepresentation {
   return "#d4e164";
 }
 
+// Scan-arc gradient: opaque near the sensor origin, trailing off to transparent
+// at the range edge so the cone reads like a fading radar sweep rather than a
+// flat wedge. `aFade` is 1 at the origin vertex and 0 on the rim; the fragment
+// shader eases it (pow < 1 keeps the near field readable) and tints by team.
+const SCAN_ARC_OPACITY_ACTIVE = 0.42;
+const SCAN_ARC_OPACITY_IDLE = 0.26;
+
+const SCAN_ARC_VERTEX_SHADER = `
+attribute float aFade;
+varying float vFade;
+void main() {
+  vFade = aFade;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const SCAN_ARC_FRAGMENT_SHADER = `
+precision mediump float;
+uniform vec3 uColor;
+uniform float uOpacity;
+varying float vFade;
+void main() {
+  float fade = clamp(vFade, 0.0, 1.0);
+  gl_FragColor = vec4(uColor, uOpacity * pow(fade, 0.85));
+}
+`;
+
+function createScanArcMaterial(colorHex: THREE.ColorRepresentation, opacity: number): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(colorHex) },
+      uOpacity: { value: opacity },
+    },
+    vertexShader: SCAN_ARC_VERTEX_SHADER,
+    fragmentShader: SCAN_ARC_FRAGMENT_SHADER,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+
 function createScanArc(unit: UnitFrame, action: ScanAction | undefined, mount: SensorMount): THREE.Mesh {
   const params = scanArcParams(unit, action, mount);
   const geometry = buildScanArcGeometry(params.rangeMeters, params.directionDegrees, params.widthDegrees);
   const mesh = new THREE.Mesh(
     geometry,
-    new THREE.MeshBasicMaterial({
-      color: teamColor(unit.teamId).arc,
-      transparent: true,
-      opacity: action ? 0.24 : 0.14,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    }),
+    createScanArcMaterial(teamColor(unit.teamId).arc, action ? SCAN_ARC_OPACITY_ACTIVE : SCAN_ARC_OPACITY_IDLE),
   );
   mesh.name = `unit-${unit.unitId}-scan-arc`;
   mesh.renderOrder = 1;
@@ -1102,7 +1137,7 @@ function updateScanArc(rig: UnitRig, unit: UnitFrame, action: ScanAction | undef
     rig.scanArc.geometry = buildScanArcGeometry(params.rangeMeters, params.directionDegrees, params.widthDegrees);
     rig.lastArcKey = params.arcKey;
   }
-  rig.scanArcMaterial.opacity = action ? 0.24 : 0.14;
+  rig.scanArcMaterial.uniforms.uOpacity.value = action ? SCAN_ARC_OPACITY_ACTIVE : SCAN_ARC_OPACITY_IDLE;
   rig.scanArc.userData.rangeMeters = params.rangeMeters;
   rig.scanArc.userData.directionDegrees = params.rawDirectionDegrees;
   rig.scanArc.userData.widthDegrees = params.widthDegrees;
@@ -1138,11 +1173,15 @@ function buildScanArcGeometry(rangeMeters: number, directionDegrees: number, wid
   const segmentCount = Math.max(8, Math.ceil(widthDegrees / 6));
   const startDegrees = directionDegrees - widthDegrees / 2;
   const vertices: number[] = [0, 0, 0];
+  // aFade drives the radial gradient in the scan-arc shader: 1 at the origin
+  // vertex, 0 on every rim vertex, linearly interpolated across the fan.
+  const fades: number[] = [1];
 
   for (let index = 0; index <= segmentCount; index += 1) {
     const degrees = startDegrees + (widthDegrees * index) / segmentCount;
     const radians = THREE.MathUtils.degToRad(degrees);
     vertices.push(Math.cos(radians) * rangeMeters, 0, Math.sin(radians) * rangeMeters);
+    fades.push(0);
   }
 
   const indices: number[] = [];
@@ -1152,8 +1191,8 @@ function buildScanArcGeometry(rangeMeters: number, directionDegrees: number, wid
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute("aFade", new THREE.Float32BufferAttribute(fades, 1));
   geometry.setIndex(indices);
-  geometry.computeVertexNormals();
   return geometry;
 }
 

@@ -55,6 +55,9 @@ const NO_OBSTACLES: StaticObstacleFrame[] = [];
 // replay is loaded, so the scene/camera key on a constant identity.
 const NO_FIELD: FieldBoundsFrame = { min: { x: 0, y: 0 }, max: { x: 40, y: 24 } };
 
+// Bot authoring guide (rendered on GitHub). Linked from the Bot logic panel.
+const BOT_GUIDE_URL = "https://github.com/sangwonl/robolocks/blob/main/docs/bots/writing-bots.md";
+
 // Team colors are sourced once from teamPalette.ts and applied at the app
 // root as CSS custom properties, so styles.css never hardcodes a team hex.
 const TEAM_CSS_VARIABLES = teamCssVariables();
@@ -491,7 +494,18 @@ function ResearchDockPanel() {
             </div>
           </div>
           <div className="grid gap-1 rounded-lg border border-[var(--line)] bg-[var(--surface-sunken)] p-2">
-            <div className="u-label text-[10px]">Bot logic</div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="u-label text-[10px]">Bot logic</span>
+              <a
+                href={BOT_GUIDE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[9px] font-semibold text-[var(--brand)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                title="Open the bot authoring guide (orders, movement model, examples)"
+              >
+                Guide ↗
+              </a>
+            </div>
             <div className="grid gap-1">
               {Object.entries(research.botLogicByUnit)
                 .sort(([a], [b]) => Number(a) - Number(b))
