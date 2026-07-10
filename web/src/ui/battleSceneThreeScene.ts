@@ -80,6 +80,9 @@ export type BattleScene = {
   sync(frame: BattleFrame | null): void;
   /** Rotate screen-space overlays so they stay camera-facing and horizontally readable. */
   faceCamera(camera: THREE.Camera): void;
+  /** Advance time-based visual effects (the scan-cone sweep pulse). Purely
+   * cosmetic and real-time driven — not part of the deterministic simulation. */
+  advanceAnimation(timeSeconds: number): void;
   /** Fully dispose the scene, every rig, and shared resources. Called on replay switch. */
   dispose(): void;
 };
@@ -219,6 +222,11 @@ export function createBattleScene(input: BattleSceneInput): BattleScene {
     faceCamera(camera: THREE.Camera): void {
       for (const [, rig] of unitRigs) {
         rig.healthBar.quaternion.copy(camera.quaternion);
+      }
+    },
+    advanceAnimation(timeSeconds: number): void {
+      for (const [, rig] of unitRigs) {
+        rig.scanArcMaterial.uniforms.uTime.value = timeSeconds;
       }
     },
     dispose(): void {
@@ -944,7 +952,10 @@ function createProjectileRig(
   const group = new THREE.Group();
   group.name = `projectile-${projectile.projectileId}`;
 
-  const radius = Math.max(0.09, projectile.radiusMeters);
+  // Shells are physically tiny (~0.05-0.12m) and nearly invisible next to 5.6m
+  // tanks, so render them larger for legibility: scale up with a floor. Purely
+  // visual — the sim uses the real projectile radius for hit detection.
+  const radius = Math.max(0.45, projectile.radiusMeters * 3.0);
   const sphereGeometry = new THREE.SphereGeometry(radius, 16, 12);
   const body = new THREE.Mesh(sphereGeometry, bodyMaterial);
   body.name = `projectile-${projectile.projectileId}-body`;
@@ -1071,8 +1082,11 @@ function captureZoneColor(zone: CaptureZoneFrame): THREE.ColorRepresentation {
 // at the range edge so the cone reads like a fading radar sweep rather than a
 // flat wedge. `aFade` is 1 at the origin vertex and 0 on the rim; the fragment
 // shader eases it (pow < 1 keeps the near field readable) and tints by team.
-const SCAN_ARC_OPACITY_ACTIVE = 0.42;
-const SCAN_ARC_OPACITY_IDLE = 0.26;
+// A single, stable opacity for the scan cone. It must NOT depend on whether a
+// ScanArc order was (re)issued this tick: the cone persists and is drawn every
+// frame, so keying brightness to per-tick order presence made it flicker between
+// "active" and "idle" whenever a bot scanned intermittently.
+const SCAN_ARC_OPACITY = 0.18;
 
 const SCAN_ARC_VERTEX_SHADER = `
 attribute float aFade;
@@ -1083,14 +1097,29 @@ void main() {
 }
 `;
 
+// uSweepSpeed: pulses per second; uSweepWidth: thickness of the moving band
+// (in normalized radius). The cone shows a steady radial gradient plus a soft
+// ring that sweeps from the sensor origin out to the range edge, conveying an
+// active scan without the old on/off brightness flicker.
+const SCAN_ARC_SWEEP_SPEED = 0.55;
+const SCAN_ARC_SWEEP_WIDTH = 0.16;
+
 const SCAN_ARC_FRAGMENT_SHADER = `
 precision mediump float;
 uniform vec3 uColor;
 uniform float uOpacity;
+uniform float uTime;
+uniform float uSweepSpeed;
+uniform float uSweepWidth;
 varying float vFade;
 void main() {
   float fade = clamp(vFade, 0.0, 1.0);
-  gl_FragColor = vec4(uColor, uOpacity * pow(fade, 0.85));
+  float radius = 1.0 - fade;                       // 0 at the sensor, 1 at the range edge
+  float base = pow(fade, 0.85);                    // steady radial gradient (bright near origin)
+  float front = fract(uTime * uSweepSpeed);        // sweep position travelling outward, looping
+  float band = smoothstep(uSweepWidth, 0.0, abs(radius - front)) * fade;  // soft ring, dimming to the rim
+  float alpha = uOpacity * (base + band * 0.9);
+  gl_FragColor = vec4(uColor, alpha);
 }
 `;
 
@@ -1099,6 +1128,9 @@ function createScanArcMaterial(colorHex: THREE.ColorRepresentation, opacity: num
     uniforms: {
       uColor: { value: new THREE.Color(colorHex) },
       uOpacity: { value: opacity },
+      uTime: { value: 0 },
+      uSweepSpeed: { value: SCAN_ARC_SWEEP_SPEED },
+      uSweepWidth: { value: SCAN_ARC_SWEEP_WIDTH },
     },
     vertexShader: SCAN_ARC_VERTEX_SHADER,
     fragmentShader: SCAN_ARC_FRAGMENT_SHADER,
@@ -1113,7 +1145,7 @@ function createScanArc(unit: UnitFrame, action: ScanAction | undefined, mount: S
   const geometry = buildScanArcGeometry(params.rangeMeters, params.directionDegrees, params.widthDegrees);
   const mesh = new THREE.Mesh(
     geometry,
-    createScanArcMaterial(teamColor(unit.teamId).arc, action ? SCAN_ARC_OPACITY_ACTIVE : SCAN_ARC_OPACITY_IDLE),
+    createScanArcMaterial(teamColor(unit.teamId).arc, SCAN_ARC_OPACITY),
   );
   mesh.name = `unit-${unit.unitId}-scan-arc`;
   mesh.renderOrder = 1;
@@ -1141,7 +1173,8 @@ function updateScanArc(rig: UnitRig, unit: UnitFrame, action: ScanAction | undef
     rig.scanArc.geometry = buildScanArcGeometry(params.rangeMeters, params.directionDegrees, params.widthDegrees);
     rig.lastArcKey = params.arcKey;
   }
-  rig.scanArcMaterial.uniforms.uOpacity.value = action ? SCAN_ARC_OPACITY_ACTIVE : SCAN_ARC_OPACITY_IDLE;
+  // Opacity is constant (set once at creation) — see SCAN_ARC_OPACITY. Do not
+  // key it to `action`, or the cone flickers when a bot scans intermittently.
   rig.scanArc.userData.rangeMeters = params.rangeMeters;
   rig.scanArc.userData.directionDegrees = params.rawDirectionDegrees;
   rig.scanArc.userData.widthDegrees = params.widthDegrees;

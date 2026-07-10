@@ -129,7 +129,19 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
     const observer = new ResizeObserver(resize);
     observer.observe(host);
 
+    // Continuous animation loop for real-time visual effects (the scan-cone sweep
+    // pulse). This is cosmetic only and independent of the deterministic sim; it
+    // advances a time uniform and redraws each frame while mounted.
+    const startTime = performance.now();
+    let animationHandle = requestAnimationFrame(function animate() {
+      const timeSeconds = (performance.now() - startTime) / 1000;
+      battleSceneRef.current?.advanceAnimation(timeSeconds);
+      renderCurrentScene();
+      animationHandle = requestAnimationFrame(animate);
+    });
+
     return () => {
+      cancelAnimationFrame(animationHandle);
       observer.disconnect();
       controls.dispose();
       renderer.dispose();
