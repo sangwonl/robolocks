@@ -73,10 +73,11 @@ def on_tick(state: BattleState) -> list[OrderLike]:
     enemy = state.contacts.closest_enemy()   # nearest LIVE enemy, or None
     own = state.own_unit
     if not enemy:
-        # Nothing in sight: sweep the sensor across our facing and hold.
-        return [ScanArc(direction=own.hull_heading, width=160.0)]
+        # Nothing in sight: sweep the (turret-mounted) sensor and hold.
+        return [ScanArc(direction=own.turret_heading, width=160.0)]
     return [
         AimAt(enemy.position),               # turret tracks the target (independent of the hull)
+        ScanArc(direction=own.turret_heading, width=160.0),  # sensor rides the turret
         FireIfSolution(min_hit_chance=0.3),  # fire when a good-enough solution exists
         MoveTo(enemy.position),              # drive toward the enemy (hull steers where it moves)
     ]

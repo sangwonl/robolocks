@@ -1,25 +1,28 @@
 # Writing Bots
 
-The authoring guide for Robolocks bots: the movement model, every order, the
-observation you read, targeting & firing, movement recipes, and the pitfalls that
-trip people up. For how bots are executed, see [bot-system.md](bot-system.md).
+The complete authoring guide and API reference for Robolocks bots: the movement
+model, every order, every field of the observation, targeting & firing, movement
+recipes, and the pitfalls that trip people up. For how bots are executed (tick
+loop, lifecycle, runtimes, determinism), see [bot-system.md](bot-system.md).
 
 A bot is a Python module that ends with `run_bot(on_tick)`. Import everything
-from the top-level `robolocks` package.
+from the top-level `robolocks` package. `on_tick` receives a `BattleState` and
+returns an iterable of orders.
 
 ```python
 from robolocks import AimAt, BattleState, FireIfSolution, MoveTo, OrderLike, ScanArc, run_bot
 
 
 def on_tick(state: BattleState) -> list[OrderLike]:
-    enemy = state.contacts.closest_enemy()
     own = state.own_unit
+    enemy = state.contacts.closest_enemy()          # nearest LIVE enemy, or None
     if not enemy:
-        return [ScanArc(direction=own.hull_heading, width=160.0)]
+        return [ScanArc(direction=own.turret_heading, width=160.0)]
     return [
-        AimAt(enemy.position),
-        FireIfSolution(min_hit_chance=0.3),
-        MoveTo(enemy.position),
+        AimAt(enemy.position),                       # turret tracks the target (independent of the hull)
+        ScanArc(direction=own.turret_heading, width=160.0),  # sensor rides the turret; look where we aim
+        FireIfSolution(min_hit_chance=0.3),          # fire when a good-enough solution exists
+        MoveTo(enemy.position),                      # drive toward the enemy (hull steers where it moves)
     ]
 
 
@@ -30,8 +33,8 @@ run_bot(on_tick)
 
 ## 1. The mental model (read this first)
 
-Three facts drive every bot. Get these wrong and your unit will spin, stall, or
-sit blind.
+Four facts drive every bot. Get these wrong and your unit spins, stalls, or sits
+blind.
 
 ### Movement is tank-like, not free
 
@@ -41,8 +44,8 @@ A unit **moves forward along its hull heading**. It does not slide toward a
 - `MoveTo(target)` steers the **hull** toward `target` (turning at the hull's
   turn rate) and drives forward — so to go somewhere, just `MoveTo` there.
 - `FaceArmorToward(target)` **overrides** hull steering to point the hull's front
-  (thickest) armor at `target`. While it is active the hull faces `target`, so
-  the unit drives *toward `target`*, ignoring `MoveTo`'s direction.
+  (thickest) armor at `target`. While active, the hull faces `target`, so the
+  unit drives *toward `target`*, ignoring `MoveTo`'s direction.
 
 > **Never combine `MoveTo` and `FaceArmorToward` in the same tick to go one way
 > while facing another — they both fight over the hull heading.** Use `MoveTo`
@@ -52,154 +55,267 @@ A unit **moves forward along its hull heading**. It does not slide toward a
 ### The turret is independent
 
 `AimAt(target)` steers the **turret** toward `target` at the turret's turn rate,
-regardless of where the hull points or moves. So a unit can drive one direction
-and keep its gun on the enemy — strafing, kiting, and orbiting all work because
+regardless of where the hull points or moves. A unit can drive one direction and
+keep its gun on the enemy — strafing, kiting, and orbiting all work because
 `AimAt` is decoupled from `MoveTo`.
+
+### The sensor is mounted on the turret
+
+The sensor rides on the turret (hull → turret → sensor). Its origin and its scan
+cone track the turret. So the natural way to look where your gun points is to scan
+along the **turret** heading: `ScanArc(direction=own.turret_heading, ...)`.
 
 ### You must scan to see
 
 The sensor reports contacts **only while a `ScanArc` is active**, and a scan arc
 **persists** until you issue a new one. Consequences:
 
-- Issue `ScanArc` at least once or your `contacts` will be empty (you'll be
-  blind). A brand-new unit has no scan arc until its bot sets one.
-- Because it persists, you don't have to re-send it every tick — but the arc
-  stays pointed where you last aimed it. If you want the sensor to follow a
-  moving fight, re-issue `ScanArc` toward the action (or use a wide arc).
+- Issue `ScanArc` or your `contacts` stay empty (you're blind). A brand-new unit
+  has no scan arc until its bot sets one.
+- Because it persists, you don't have to resend it every tick — but the arc's
+  *direction* stays where you last aimed it (the cone's origin still tracks the
+  turret each frame; only the beam direction is frozen at the last request). To
+  keep the sensor pointed at a moving fight, reissue `ScanArc` each tick.
 
 ---
 
-## 2. Orders reference
+## 2. Orders
 
-Return an iterable of orders from `on_tick`. At most one order per channel per
-tick (see [bot-system.md](bot-system.md#one-order-per-channel-per-tick)). All
-positions are in **meters**; all angles in **degrees**.
+Return an iterable of orders from `on_tick`. **At most one order per channel per
+tick** (see [bot-system.md](bot-system.md#one-order-per-channel-per-tick)).
+Positions are in **meters**, angles in **degrees**.
 
-| Order | Signature | Effect |
-| --- | --- | --- |
-| `MoveTo` | `MoveTo(position)` | Drive to `position` (hull steers toward it). |
-| `AimAt` | `AimAt(target)` | Turn the turret to bear on `target`. |
-| `FaceArmorToward` | `FaceArmorToward(target)` | Turn the hull so front armor faces `target` (stationary use). |
-| `FireIfSolution` | `FireIfSolution(min_hit_chance)` | Fire this tick if a valid solution with hit chance ≥ `min_hit_chance` exists. |
-| `ScanArc` | `ScanArc(direction, width, range=0.0)` | Point the sensor: `direction`/`width` in degrees, `range` in meters (`0` = sensor max). |
+| Order | Signature | Channel | Effect |
+| --- | --- | --- | --- |
+| `MoveTo(position)` | `position: VecLike` | mobility | Drive to `position` (hull steers toward it). |
+| `AimAt(target)` | `target: VecLike` | turret | Turn the turret to bear on `target`. |
+| `FaceArmorToward(target)` | `target: VecLike` | hull | Turn the hull so front armor faces `target` (stationary use). |
+| `FireIfSolution(min_hit_chance)` | `min_hit_chance: float` | weapon | Fire this tick if a valid solution with hit chance ≥ `min_hit_chance` exists. |
+| `ScanArc(direction, width, range=0.0)` | degrees, degrees, meters | sensor | Point the sensor. `range=0` means the sensor's max range. |
 
-`position`/`target` accept a `Vec2`, anything with `.x`/`.y`, or a `{"x", "y"}`
-dict.
-
-### Firing details
-
-`FireIfSolution(min_hit_chance)` fires only when **all** hold:
-
-- The weapon is **off cooldown** (after firing, it reloads for `reload_ticks`).
-- A live, targetable enemy is within **weapon range**.
-- The **turret is aimed** at it within the weapon's aim tolerance — the aim error
-  is measured from the turret pivot, so point-blank targets still resolve.
-- The resulting **hit chance ≥ `min_hit_chance`**.
-
-Use `min_hit_chance=0.0` to fire whenever any target is in the solution
-(aggressive), or a higher value (e.g. `0.5`) to hold fire until the shot is good.
-Pair `FireIfSolution` with `AimAt` — the gun must be on target to fire.
+- `VecLike` = a `Vec2`, anything with `.x`/`.y`, or a `{"x", "y"}` dict.
+- Submitting two of the same order kind in one tick uses only the first —
+  **except `FireIfSolution`, where two in one tick *reject* the shot** (a
+  double-fire guard). Send exactly one of each.
+- You may also return a raw dict order (advanced); the typed classes above are
+  the supported surface.
 
 ---
 
 ## 3. The observation (`BattleState`)
 
-`on_tick` receives a `BattleState` describing what your unit sees this tick.
+`on_tick(state)` receives a `BattleState` — everything your unit can see this
+tick. Every type below is a frozen dataclass.
 
-```python
-state.tick          # int — current tick
-state.self_id       # int — your unit id
-state.own_unit      # UnitState — you (also state.self)
-state.contacts      # ContactSet — what you sense right now
-state.map           # BattleMap — static map info
-```
+### `BattleState`
 
-### `UnitState` (own_unit and each contact)
+| Field / prop | Type | Notes |
+| --- | --- | --- |
+| `tick` | `int` | current simulation tick |
+| `self_id` | `int` | your unit id |
+| `own_unit` | `UnitState` | your own unit |
+| `self` | `UnitState` | alias for `own_unit` |
+| `contacts` | `ContactSet` | what you sense right now |
+| `map` | `BattleMap` | static map info |
+
+### `UnitState` (your unit, and each contact)
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `unit_id`, `team_id` | int | identity |
-| `is_enemy` | bool | enemy relative to the observer |
-| `name` | str | |
+| `unit_id` | `int` | |
+| `team_id` | `int` | |
+| `is_enemy` | `bool` | enemy relative to the observing unit |
+| `name` | `str` | |
 | `position` | `Vec2` | meters |
-| `hull_heading` | float | degrees |
-| `turret_heading` | float | degrees |
-| `armor_integrity` | float | current armor (0 = destroyed) |
-| `weapon_cooldown` | int | ticks left until it can fire |
-| `intent` | `UnitIntents` | active mobility/turret/hull/weapon intents |
+| `hull_heading` | `float` | degrees |
+| `turret_heading` | `float` | degrees — where the gun/sensor points |
+| `armor_integrity` | `float` | current armor; `0` = destroyed |
+| `weapon_cooldown` | `int` | ticks left until it can fire again |
+| `intent` | `UnitIntents` | the unit's active per-channel intents |
 
-Handy properties/methods:
+Properties & methods:
 
-- `unit.alive` → `armor_integrity > 0`.
+- `unit.alive` → `armor_integrity > 0` (False for wrecks).
 - `unit.can_fire` → `weapon_cooldown == 0 and not intent.weapon.active`.
-- `unit.distance_to(other)` → meters to another unit or a point.
+- `unit.distance_to(other)` → meters to another `UnitState` or any `VecLike`.
+
+### `UnitIntents` (`unit.intent`) and intent channels
+
+Tells you what the unit is currently trying to do, so you can avoid re-issuing
+orders needlessly.
+
+| Field | Type |
+| --- | --- |
+| `intent.mobility` | `IntentState` |
+| `intent.turret` | `IntentState` |
+| `intent.hull` | `IntentState` |
+| `intent.weapon` | `WeaponIntentState` |
+
+`IntentState`:
+
+| Field / method | Type | Notes |
+| --- | --- | --- |
+| `active` | `bool` | is this channel pursuing a target |
+| `target` | `Vec2` | the goal position |
+| `remaining` | `float` | meters left (mobility) |
+| `error` | `float` | degrees off target (turret/hull) |
+| `age` | `int` | ticks since the intent was set |
+| `should_reissue(target, threshold_m=5.0, min_age_ticks=20)` | `bool` | True if inactive, or old enough (`age ≥ min_age_ticks`) and the goal drifted past `threshold_m` |
+
+`WeaponIntentState`: `active: bool`, `min_hit_chance: float`, `age: int`.
 
 ### `ContactSet` (`state.contacts`)
 
-Contacts are what the sensor sees this tick, **sorted nearest-first**.
+Everything the sensor sees this tick, **sorted nearest-first**.
 
-```python
-state.contacts.units          # tuple[UnitState]   — sensed units (enemies AND allies, plus wrecks)
-state.contacts.obstacles      # tuple[Obstacle]
-state.contacts.projectiles    # tuple[ProjectileContact]
+| Member | Type | Notes |
+| --- | --- | --- |
+| `units` | `tuple[UnitState, ...]` | sensed units — enemies AND allies, plus wrecks |
+| `obstacles` | `tuple[Obstacle, ...]` | sensed obstacles |
+| `projectiles` | `tuple[ProjectileContact, ...]` | sensed in-flight shells |
+| iterate / `len(contacts)` | — | iterating yields `units`; `len` is the unit count |
+| `closest_enemy(include_wrecks=False)` | `UnitState \| None` | nearest LIVE enemy; pass `include_wrecks=True` to include destroyed hulls |
 
-state.contacts.closest_enemy()                    # nearest LIVE enemy, or None
-state.contacts.closest_enemy(include_wrecks=True) # nearest enemy incl. destroyed hulls
-```
+> **Wrecks linger.** A destroyed unit stays in `contacts.units` as a wreck until
+> it respawns (if the rule allows). `closest_enemy()` skips wrecks by default —
+> always target through it (or filter on `unit.alive`) so your bot doesn't lock
+> onto a corpse and stall.
 
-> **Wrecks linger.** A destroyed unit stays in the world (and in `contacts.units`)
-> as a wreck until it respawns (if the rule allows). `closest_enemy()` skips
-> wrecks by default — always target through it (or filter on `unit.alive`) so your
-> bot doesn't lock onto a corpse and stop firing.
+### `Obstacle`
 
-`Obstacle`: `id`, `position`, `radius`, `blocks_movement`, `blocks_line_of_sight`.
-Obstacles that block line of sight also block your sensor — use them for cover.
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | `str` | |
+| `position` | `Vec2` | |
+| `radius` | `float` | meters |
+| `blocks_movement` | `bool` | collides with units |
+| `blocks_line_of_sight` | `bool` | blocks your sensor and shots (use for cover) |
 
-`ProjectileContact`: `projectile_id`, `owner_unit_id`, `previous_position`,
-`position`, `radius`, `previous_height`, `height`. The travel direction is
-`position - previous_position` — useful for dodging (see recipes).
+### `ProjectileContact`
 
-### Intents (`unit.intent`)
+| Field | Type | Notes |
+| --- | --- | --- |
+| `projectile_id` | `int` | |
+| `owner_unit_id` | `int` | who fired it (skip your own) |
+| `previous_position` | `Vec2` | last tick's position |
+| `position` | `Vec2` | this tick's position |
+| `radius` | `float` | meters |
+| `previous_height` | `float` | last tick's height (ballistic arc) |
+| `height` | `float` | this tick's height |
 
-Each channel exposes what the unit is currently trying to do, so you can avoid
-re-issuing orders needlessly:
-
-- `intent.mobility` / `.turret` / `.hull` — `IntentState(active, target, remaining,
-  error, age)`. `remaining` is meters left (mobility) and `error` is degrees off
-  (turret/hull). `IntentState.should_reissue(target, threshold_m=5, min_age_ticks=20)`
-  is a helper for "has my goal drifted enough to resend?".
-- `intent.weapon` — `WeaponIntentState(active, min_hit_chance, age)`.
+Travel direction is `position - previous_position` — use it to dodge (see
+recipes).
 
 ### `BattleMap` (`state.map`)
 
-- `map.obstacles` — tuple of `Obstacle` for the whole map.
-- `map.center` — a fixed reference point (currently `(20, 12)`). It is a
+- `map.obstacles` → `tuple[Obstacle, ...]` for the whole map.
+- `map.center` → a fixed reference point, currently `Vec2(20, 12)`. It is a
   convenience rally point, **not** guaranteed to be the geometric center of large
   or custom arenas — prefer computing positions from your own/enemy position when
   you need precision.
 
-### Geometry helpers
+### Geometry (`Vec2`, `distance`)
 
-`Vec2(x, y)` has `.distance_to(other)` and `.offset(x=, y=)`; the module-level
-`distance(a, b)` works on any vec-like pair. For headings, Robolocks uses
-`atan2(dy, dx)` degrees (0° = +x, 90° = +y). You can `import math` for your own
-trig.
+| API | Notes |
+| --- | --- |
+| `Vec2(x, y)` | frozen; `.x`, `.y` |
+| `vec.offset(x=0.0, y=0.0)` | returns a shifted `Vec2` |
+| `vec.distance_to(other)` | meters to any `VecLike` |
+| `distance(a, b)` | module-level; meters between any two `VecLike` |
+| `VecLike` | `Vec2` \| object with `.x`/`.y` \| `{"x", "y"}` dict |
+
+Headings use `atan2(dy, dx)` degrees: `0°` = +x, `90°` = +y. Use `import math`
+for your own trig.
 
 ---
 
-## 4. Movement recipes
+## 4. Sensing
 
-All of these steer with `MoveTo` (hull follows) and keep the gun on target with
-`AimAt` — never `FaceArmorToward` while maneuvering.
+- The sensor is turret-mounted, so `ScanArc(direction=own.turret_heading, ...)`
+  aims it where the gun points. `direction` is an **absolute world angle**, so
+  you can also scan anywhere else (e.g. toward a known enemy) independent of the
+  turret.
+- `width` is clamped to the sensor's field of view; `range` (`0` = max) is clamped
+  to the sensor's range (read the actual numbers in `on_start`, section 6).
+- Obstacles with `blocks_line_of_sight` occlude the sensor — a contact behind
+  cover won't appear.
+- Contacts appear only while a scan arc is active, and it persists (section 1).
 
-**Chase / close in** — drive at the enemy's live position:
+---
+
+## 5. Firing
+
+`FireIfSolution(min_hit_chance)` fires only when **all** hold:
+
+- The weapon is **off cooldown** (after firing it reloads for `reload_ticks`;
+  watch `unit.weapon_cooldown` / `unit.can_fire`).
+- A live, targetable enemy is within **weapon range**.
+- The **turret is aimed** at it within the weapon's aim tolerance — aim error is
+  measured from the turret pivot, so point-blank targets still resolve.
+- The resulting **hit chance ≥ `min_hit_chance`**.
+
+Use `min_hit_chance=0.0` to fire whenever any target is in the solution
+(aggressive), or a higher value (e.g. `0.5`) to hold fire until the shot is good.
+Always pair `FireIfSolution` with `AimAt` — the gun must be on target to fire.
+
+---
+
+## 6. Lifecycle & reading your unit's stats
 
 ```python
-return [AimAt(enemy.position), FireIfSolution(min_hit_chance=0.0), MoveTo(enemy.position)]
+run_bot(on_tick, on_start=None, on_end=None)
 ```
 
-**Hold optimal range** — move to a point `R` meters from the enemy along the line
-to us:
+- `on_tick(state: BattleState) -> Iterable[OrderLike]` — required; every tick.
+- `on_start(spec: UnitSpec | None) -> None` — optional; once before the first
+  tick. `spec` is your full loadout; may be `None` if no start payload arrived.
+- `on_end(result) -> None` — optional; once when the bot is torn down.
+
+```python
+SENSOR_FOV = 120.0
+WEAPON_RANGE = 80.0
+RELOAD = 30
+
+
+def on_start(spec) -> None:
+    global SENSOR_FOV, WEAPON_RANGE, RELOAD
+    if spec is not None:
+        SENSOR_FOV = spec.modules.sensor.fov
+        WEAPON_RANGE = spec.modules.weapon.range
+        RELOAD = spec.modules.weapon.reload_ticks
+```
+
+`spec` (`UnitSpec`) fields: `unit_id`, `team_id`, `name`, `position: Vec2`,
+`hull_heading: float`, `modules: UnitModulesSpec`.
+
+`modules` (`UnitModulesSpec`) carries the exact numbers the engine uses:
+
+| Module | Fields |
+| --- | --- |
+| `mobility` (`MobilitySpec`) | `id`, `max_speed` (m/s), `max_hull_turn` (deg/s) |
+| `turret` (`TurretSpec`) | `id`, `heading` (deg), `max_turn` (deg/s) |
+| `weapon` (`WeaponSpec`) | `id`, `fire_mode` (`"direct"`/`"ballistic"`), `damage`, `penetration` (mm), `range` (m), `muzzle_velocity` (m/s), `muzzle_offset` (`Vec3`), `launch_angle` (deg), `gravity` (m/s²), `blast_radius` (m), `projectile_radius` (m), `aim_tolerance` (deg), `reload_ticks` |
+| `armor` (`ArmorSpec`) | `id`, `integrity`, `front` (mm), `side` (mm), `rear` (mm) |
+| `body` (`BodySpec`) | `id`, `mass` (kg), `shape` (`BodyShapeSpec`: `type`, `radius`, `length`, `width` — meters) |
+| `sensor` (`SensorSpec`) | `id`, `range` (m), `fov` (deg), `refresh_ticks` |
+
+`Vec3` is `x`, `y`, `z` (meters).
+
+---
+
+## 7. Movement recipes
+
+All steer with `MoveTo` (hull follows), keep the gun on target with `AimAt`, and
+scan along the turret. Never `FaceArmorToward` while maneuvering.
+
+**Chase / close in:**
+
+```python
+return [AimAt(enemy.position), ScanArc(direction=own.turret_heading, width=160.0),
+        FireIfSolution(min_hit_chance=0.0), MoveTo(enemy.position)]
+```
+
+**Hold optimal range** — move to a point `R` m from the enemy along the line to us:
 
 ```python
 import math
@@ -218,8 +334,7 @@ target = {"x": enemy.position.x + math.cos(angle) * R, "y": enemy.position.y + m
 return [AimAt(enemy.position), FireIfSolution(min_hit_chance=0.35), MoveTo(target)]
 ```
 
-**Flank** — aim for the side of the enemy's hull (thin armor), following as they
-turn:
+**Flank** — aim for the enemy's hull side (thin armor), following as they turn:
 
 ```python
 import math
@@ -246,8 +361,8 @@ for shell in state.contacts.projectiles:
     return [MoveTo({"x": own.position.x + nx * 7, "y": own.position.y + ny * 7})]
 ```
 
-**Hold and tank** — this is the one place `FaceArmorToward` belongs: stand still
-and angle your front armor at the threat while firing.
+**Hold and tank** — the one place `FaceArmorToward` belongs: stand still and angle
+front armor at the threat while firing:
 
 ```python
 return [FaceArmorToward(enemy.position), AimAt(enemy.position), FireIfSolution(min_hit_chance=0.4)]
@@ -255,59 +370,29 @@ return [FaceArmorToward(enemy.position), AimAt(enemy.position), FireIfSolution(m
 
 ---
 
-## 5. Lifecycle & reading unit stats
-
-Use `on_start` to cache your unit's spec (so you can tune ranges to the loadout):
-
-```python
-from robolocks import BattleState, OrderLike, run_bot
-
-SENSOR_FOV = 120.0
-WEAPON_RANGE = 80.0
-
-
-def on_start(spec) -> None:
-    global SENSOR_FOV, WEAPON_RANGE
-    if spec is not None:
-        SENSOR_FOV = spec.modules.sensor.fov
-        WEAPON_RANGE = spec.modules.weapon.range
-
-
-def on_tick(state: BattleState) -> list[OrderLike]:
-    ...
-
-
-run_bot(on_tick, on_start=on_start)
-```
-
-`spec` is a `UnitSpec` with `modules.{mobility, turret, weapon, armor, body,
-sensor}` — each carries the numbers the engine uses (speeds, turn rates, range,
-reload, armor thickness, etc.). See `sdk/python/robolocks/spec.py` for the exact
-fields.
-
----
-
-## 6. Pitfalls checklist
+## 8. Pitfalls checklist
 
 - **Blind bot?** You never issued a `ScanArc` — `contacts` stays empty. Scan at
   least once; it persists.
 - **Unit won't go where I sent it?** You issued `FaceArmorToward` alongside
-  `MoveTo`. The hull faces the armor target and drives there instead. Drop
-  `FaceArmorToward` while maneuvering.
+  `MoveTo`. Drop `FaceArmorToward` while maneuvering.
+- **Sensor/cone points the wrong way?** The scan direction is what *you* pass to
+  `ScanArc`. For a turret-mounted sensor, pass `own.turret_heading` (and reissue
+  each tick to track the turret through a fight).
 - **Stopped firing mid-battle?** You locked onto a wreck. Use `closest_enemy()`
   (skips wrecks) or check `unit.alive`.
 - **Never fires despite a target?** The turret isn't on target — pair
-  `FireIfSolution` with `AimAt`, and remember the reload cooldown between shots.
-- **Double-fire order?** Submitting two `FireIfSolution` in one tick rejects the
-  shot. Send exactly one.
-- **Non-deterministic bot?** Don't use wall-clock time or unseeded randomness;
-  derive any variation from `state.tick` / your unit id so replays reproduce.
+  `FireIfSolution` with `AimAt`, and mind the reload cooldown (`unit.can_fire`).
+- **Double-fire order?** Two `FireIfSolution` in one tick reject the shot. Send
+  exactly one.
+- **Non-deterministic bot?** No wall-clock time or unseeded randomness; derive any
+  variation from `state.tick` / your unit id so replays reproduce.
 - **Hardcoded map center?** `map.center` is a fixed `(20, 12)` rally point, not
-  the true center of every arena — compute from live positions when it matters.
+  the true center of every arena.
 
 ---
 
-## 7. Starter tactics
+## 9. Starter tactics
 
 The research workbench ships readable, dynamic starting points you can select and
 edit — each is a complete worked example of the recipes above:
@@ -318,5 +403,5 @@ edit — each is a complete worked example of the recipes above:
 - **Flanker** — swing to the weak side.
 - **Evader** — kite at range and dodge shells.
 
-Open one in the bot editor to see a full, runnable implementation. See also
+Open one in the bot editor (the **Guide ↗** link there points back here). See also
 `examples/bots/` for a standalone example.
