@@ -6,7 +6,7 @@ import type { BattleFrame, FieldBoundsFrame, StaticObstacleFrame } from "../type
 import { cn } from "../lib/utils.ts";
 import { createBattleScene, type BattleScene } from "./battleSceneThreeScene.ts";
 
-type CameraMode = "top" | "iso";
+type CameraMode = "top" | "perspective";
 
 export type BattleSceneThreeViewProps = {
   frame: BattleFrame | null;
@@ -16,10 +16,12 @@ export type BattleSceneThreeViewProps = {
 
 // Vertical extent (metres) folded into the camera fit so tall units stay framed.
 const FIELD_VERTICAL_M = 8;
-const FIT_PADDING = 1.1;
-const FIT_BOTTOM_SAFE_AREA = 0.18;
+const CAMERA_FOV_DEG = 50;
+const FIT_PADDING = 1.25;
 const ISO_ELEVATION_DEG = 35.264;
-const ISO_POLAR_ANGLE = THREE.MathUtils.degToRad(90 - ISO_ELEVATION_DEG);
+// Free-orbit tilt limits: stay above the ground and short of straight-down.
+const MIN_POLAR_ANGLE = THREE.MathUtils.degToRad(2);
+const MAX_POLAR_ANGLE = THREE.MathUtils.degToRad(85);
 
 function fieldCenter(field: FieldBoundsFrame): THREE.Vector3 {
   return new THREE.Vector3((field.min.x + field.max.x) / 2, 0, (field.min.y + field.max.y) / 2);
@@ -28,7 +30,7 @@ function fieldCenter(field: FieldBoundsFrame): THREE.Vector3 {
 export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThreeViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const battleSceneRef = useRef<BattleScene | null>(null);
@@ -36,8 +38,8 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
   const frameRef = useRef<BattleFrame | null>(frame);
   const fieldRef = useRef<FieldBoundsFrame>(field);
   const aspectRef = useRef(1);
-  const cameraModeRef = useRef<CameraMode>("iso");
-  const [cameraMode, setCameraMode] = useState<CameraMode>("iso");
+  const cameraModeRef = useRef<CameraMode>("perspective");
+  const [cameraMode, setCameraMode] = useState<CameraMode>("perspective");
 
   frameRef.current = frame;
   fieldRef.current = field;
@@ -59,7 +61,7 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
     host.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    const camera = new THREE.OrthographicCamera(-20, 20, 13, -13, 0.1, 220);
+    const camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEG, 1, 0.1, 4000);
     cameraRef.current = camera;
 
     const renderCurrentScene = () => {
@@ -88,8 +90,11 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
     controls.enablePan = true;
     controls.enableZoom = true;
     controls.screenSpacePanning = true;
-    controls.minZoom = 0.45;
-    controls.maxZoom = 4;
+    controls.enableRotate = true;
+    controls.minPolarAngle = MIN_POLAR_ANGLE;
+    controls.maxPolarAngle = MAX_POLAR_ANGLE;
+    controls.minDistance = 8;
+    controls.maxDistance = 600;
     controls.mouseButtons = {
       LEFT: THREE.MOUSE.ROTATE,
       MIDDLE: THREE.MOUSE.DOLLY,
@@ -99,22 +104,27 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
       ONE: THREE.TOUCH.ROTATE,
       TWO: THREE.TOUCH.DOLLY_PAN,
     };
-    applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current, fieldRef.current);
     controls.addEventListener("change", () => {
       requestRender();
     });
     controls.update();
     controlsRef.current = controls;
 
+    // On resize only update the aspect + projection; do NOT re-run applyCameraMode,
+    // which would yank the camera back to the preset and undo the user's free
+    // navigation. The preset buttons are the only thing that reposition.
     const resize = () => {
       const width = Math.max(1, host.clientWidth);
       const height = Math.max(1, host.clientHeight);
       aspectRef.current = width / height;
-      applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current, fieldRef.current);
+      camera.aspect = Math.max(width / height, 0.01);
+      camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
       requestRender();
     };
 
+    // Frame the field once for the initial mount.
+    applyCameraMode(camera, controls, cameraModeRef.current, host.clientWidth / Math.max(1, host.clientHeight), fieldRef.current);
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(host);
@@ -206,93 +216,58 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
           type="button"
           className={cn(
             "w-[54px] rounded-[5px] border-0 bg-transparent px-0 py-2 text-[10px] font-semibold leading-none text-[var(--text-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
-            cameraMode === "iso" && "bg-[var(--brand)] text-[var(--ink)]",
+            cameraMode === "perspective" && "bg-[var(--brand)] text-[var(--ink)]",
           )}
-          aria-pressed={cameraMode === "iso"}
-          onClick={() => setCameraMode("iso")}
+          aria-pressed={cameraMode === "perspective"}
+          onClick={() => setCameraMode("perspective")}
         >
-          Iso
+          Persp.
         </button>
       </div>
     </div>
   );
 }
 
+// Positions the free-orbit perspective camera for a preset viewpoint (iso or
+// top) framed to the whole field. After this runs the OrbitControls are fully
+// free — the user can rotate, tilt, dolly, and pan from here; the buttons just
+// snap back to a known vantage.
 function applyCameraMode(
-  camera: THREE.OrthographicCamera,
+  camera: THREE.PerspectiveCamera,
   controls: OrbitControls,
   mode: CameraMode,
   aspect: number,
   field: FieldBoundsFrame,
 ): void {
   const center = fieldCenter(field);
-  controls.target.copy(center);
+  camera.up.set(0, 1, 0);
+  camera.aspect = Math.max(aspect, 0.01);
+  const distance = fitDistance(camera, field);
 
-  if (mode === "iso") {
-    const distance = 64;
+  if (mode === "top") {
+    // Near-top-down; a tiny z offset avoids the up-vector/​view-dir singularity.
+    camera.position.set(center.x, center.y + distance, center.z + 0.001);
+  } else {
     const horizontal = distance * Math.cos(THREE.MathUtils.degToRad(ISO_ELEVATION_DEG));
     const height = distance * Math.sin(THREE.MathUtils.degToRad(ISO_ELEVATION_DEG));
     const diagonal = horizontal / Math.sqrt(2);
-    camera.up.set(0, 1, 0);
     camera.position.set(center.x + diagonal, center.y + height, center.z + diagonal);
-    controls.enableRotate = true;
-    controls.minPolarAngle = ISO_POLAR_ANGLE;
-    controls.maxPolarAngle = ISO_POLAR_ANGLE;
-  } else {
-    camera.up.set(0, 0, -1);
-    camera.position.set(center.x, center.y + 58, center.z);
-    controls.enableRotate = false;
-    controls.minPolarAngle = 0.02;
-    controls.maxPolarAngle = 0.02;
   }
 
+  controls.target.copy(center);
   camera.lookAt(center);
-  camera.updateMatrixWorld(true);
-  fitCameraToArena(camera, aspect, field);
   camera.updateProjectionMatrix();
   controls.update();
 }
 
-function fitCameraToArena(camera: THREE.OrthographicCamera, aspect: number, field: FieldBoundsFrame): void {
-  const inverseCameraMatrix = camera.matrixWorldInverse;
-  const corners = [
-    new THREE.Vector3(field.min.x, 0, field.min.y),
-    new THREE.Vector3(field.min.x, 0, field.max.y),
-    new THREE.Vector3(field.max.x, 0, field.min.y),
-    new THREE.Vector3(field.max.x, 0, field.max.y),
-    new THREE.Vector3(field.min.x, FIELD_VERTICAL_M, field.min.y),
-    new THREE.Vector3(field.min.x, FIELD_VERTICAL_M, field.max.y),
-    new THREE.Vector3(field.max.x, FIELD_VERTICAL_M, field.min.y),
-    new THREE.Vector3(field.max.x, FIELD_VERTICAL_M, field.max.y),
-  ];
-
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (const corner of corners) {
-    const local = corner.clone().applyMatrix4(inverseCameraMatrix);
-    minX = Math.min(minX, local.x);
-    maxX = Math.max(maxX, local.x);
-    minY = Math.min(minY, local.y);
-    maxY = Math.max(maxY, local.y);
-  }
-
-  const projectedWidth = Math.max(1, maxX - minX);
-  const projectedHeight = Math.max(1, maxY - minY);
-  const paddedWidth = projectedWidth * FIT_PADDING;
-  const paddedHeight = projectedHeight * FIT_PADDING;
-  const aspectSafe = Math.max(aspect, 0.01);
-  const contentHeight = Math.max(paddedHeight, paddedWidth / aspectSafe);
-  const extraBottom = contentHeight * FIT_BOTTOM_SAFE_AREA;
-  const viewHeight = contentHeight + extraBottom;
-  const viewWidth = viewHeight * aspectSafe;
-  const centerX = (minX + maxX) / 2;
-  const centerY = (minY + maxY) / 2;
-
-  camera.left = centerX - viewWidth / 2;
-  camera.right = centerX + viewWidth / 2;
-  camera.top = centerY + contentHeight / 2;
-  camera.bottom = camera.top - viewHeight;
+// Distance at which the field's bounding sphere fits within the camera frustum
+// (accounting for the narrower of the vertical/horizontal fov), plus padding.
+function fitDistance(camera: THREE.PerspectiveCamera, field: FieldBoundsFrame): number {
+  const width = field.max.x - field.min.x;
+  const depth = field.max.y - field.min.y;
+  const radius = 0.5 * Math.hypot(width, depth, FIELD_VERTICAL_M);
+  const vFov = THREE.MathUtils.degToRad(camera.fov);
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+  const fov = Math.max(0.1, Math.min(vFov, hFov));
+  return (radius / Math.sin(fov / 2)) * FIT_PADDING;
 }

@@ -504,21 +504,134 @@ const LARGE_RECT_RESEARCH_FIELD: FieldBoundsFrame = {
   max: { x: 148, y: 92 },
 };
 
+const CIRCLE_ARENA_FIELD: FieldBoundsFrame = {
+  min: { x: -52, y: -60 },
+  max: { x: 92, y: 84 },
+  shape: { type: "circle", center: { x: 20, y: 12 }, radiusMeters: 72 },
+};
+
+const HEX_ARENA_FIELD: FieldBoundsFrame = {
+  min: { x: -52, y: -39.25 },
+  max: { x: 92, y: 66.75 },
+  shape: {
+    type: "polygon",
+    vertices: [
+      { x: 20, y: -39.25 },
+      { x: 92, y: -11.25 },
+      { x: 92, y: 38.75 },
+      { x: 20, y: 66.75 },
+      { x: -52, y: 38.75 },
+      { x: -52, y: -11.25 },
+    ],
+  },
+};
+
+type ScatterAvoid = { x: number; y: number; radiusMeters: number };
+
+function pointInPolygon(px: number, py: number, verts: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+    const intersects =
+      verts[i].y > py !== verts[j].y > py &&
+      px < ((verts[j].x - verts[i].x) * (py - verts[i].y)) / (verts[j].y - verts[i].y) + verts[i].x;
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function distanceToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared));
+  return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+}
+
+function insideFieldShape(field: FieldBoundsFrame, x: number, y: number, inset: number): boolean {
+  const shape = field.shape;
+  if (shape?.type === "circle") {
+    return Math.hypot(x - shape.center.x, y - shape.center.y) <= shape.radiusMeters - inset;
+  }
+  if (shape?.type === "polygon") {
+    if (!pointInPolygon(x, y, shape.vertices)) {
+      return false;
+    }
+    for (let i = 0; i < shape.vertices.length; i += 1) {
+      const a = shape.vertices[i];
+      const b = shape.vertices[(i + 1) % shape.vertices.length];
+      if (distanceToSegment(x, y, a.x, a.y, b.x, b.y) < inset) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return (
+    x >= field.min.x + inset && x <= field.max.x - inset && y >= field.min.y + inset && y <= field.max.y - inset
+  );
+}
+
+// Scatters cover across the whole play field on a jittered grid, skipping the
+// flag (capture zone) and the spawn/respawn zones so nothing spawns on top of an
+// objective or a unit. Deterministic (index-based jitter) so replays are stable.
+function spreadObstacles(params: {
+  idPrefix: string;
+  field: FieldBoundsFrame;
+  flag: { x: number; y: number };
+  avoid: ScatterAvoid[];
+  spacingM: number;
+  insetM: number;
+  flagClearM: number;
+  radii: number[];
+}): unknown[] {
+  const { idPrefix, field, flag, avoid, spacingM, insetM, flagClearM, radii } = params;
+  const out: unknown[] = [];
+  let index = 0;
+  for (let gx = field.min.x + spacingM; gx < field.max.x; gx += spacingM) {
+    for (let gy = field.min.y + spacingM; gy < field.max.y; gy += spacingM) {
+      const jitterX = ((index * 41) % 17) - 8;
+      const jitterY = ((index * 29) % 15) - 7;
+      index += 1;
+      const x = gx + jitterX;
+      const y = gy + jitterY;
+      if (!insideFieldShape(field, x, y, insetM)) {
+        continue;
+      }
+      if (Math.hypot(x - flag.x, y - flag.y) < flagClearM) {
+        continue;
+      }
+      if (avoid.some((zone) => Math.hypot(x - zone.x, y - zone.y) < zone.radiusMeters + 8)) {
+        continue;
+      }
+      out.push({
+        id: `${idPrefix}_${out.length}`,
+        position: { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 },
+        radiusMeters: radii[out.length % radii.length],
+        blocksMovement: true,
+        blocksLineOfSight: true,
+      });
+    }
+  }
+  return out;
+}
+
 export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
   {
     id: "covered_duel",
     label: "Covered Duel",
     description: "One line-of-sight blocker between a mobile unit and a fixed target.",
     field: LARGE_RECT_RESEARCH_FIELD,
-    obstacles: [
-      {
-        id: "research_cover",
-        position: { x: 20, y: 6 },
-        radiusMeters: 1.5,
-        blocksMovement: true,
-        blocksLineOfSight: true,
-      },
-    ],
+    obstacles: spreadObstacles({
+      idPrefix: "covered",
+      field: LARGE_RECT_RESEARCH_FIELD,
+      flag: { x: 20, y: 12 },
+      avoid: [{ x: -68, y: -28, radiusMeters: 10 }, { x: 108, y: 52, radiusMeters: 10 }],
+      spacingM: 68,
+      insetM: 16,
+      flagClearM: 14,
+      radii: [1.5, 1.3, 1.6],
+    }),
     flagPosition: { x: 20, y: 12 },
     blueSpawn: { x: -68, y: -28, headingDeg: 35 },
     targetSpawn: { x: 108, y: 52, headingDeg: 215 },
@@ -542,15 +655,16 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
     label: "Close Cover",
     description: "Shorter spawn distance with central cover pressure.",
     field: LARGE_RECT_RESEARCH_FIELD,
-    obstacles: [
-      {
-        id: "center_cover",
-        position: { x: 19, y: 12 },
-        radiusMeters: 2.0,
-        blocksMovement: true,
-        blocksLineOfSight: true,
-      },
-    ],
+    obstacles: spreadObstacles({
+      idPrefix: "close_cover",
+      field: LARGE_RECT_RESEARCH_FIELD,
+      flag: { x: 20, y: 12 },
+      avoid: [{ x: -58, y: -22, radiusMeters: 10 }, { x: 98, y: 46, radiusMeters: 10 }],
+      spacingM: 34,
+      insetM: 14,
+      flagClearM: 12,
+      radii: [2.0, 1.6, 1.8, 1.4],
+    }),
     flagPosition: { x: 20, y: 12 },
     blueSpawn: { x: -58, y: -22, headingDeg: 20 },
     targetSpawn: { x: 98, y: 46, headingDeg: 210 },
@@ -562,14 +676,16 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
     label: "Flag Run",
     description: "Staggered cover creates lanes around blockers for capture-route practice.",
     field: LARGE_RECT_RESEARCH_FIELD,
-    obstacles: [
-      { id: "flag_run_north_1", position: { x: 14, y: 17 }, radiusMeters: 1.35, blocksMovement: true, blocksLineOfSight: true },
-      { id: "flag_run_north_2", position: { x: 22, y: 18 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
-      { id: "flag_run_north_3", position: { x: 30, y: 16 }, radiusMeters: 1.25, blocksMovement: true, blocksLineOfSight: true },
-      { id: "flag_run_south_1", position: { x: 12, y: 8 }, radiusMeters: 1.25, blocksMovement: true, blocksLineOfSight: true },
-      { id: "flag_run_south_2", position: { x: 20, y: 6 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
-      { id: "flag_run_south_3", position: { x: 28, y: 8 }, radiusMeters: 1.35, blocksMovement: true, blocksLineOfSight: true },
-    ],
+    obstacles: spreadObstacles({
+      idPrefix: "flag_run",
+      field: LARGE_RECT_RESEARCH_FIELD,
+      flag: { x: 20, y: 12 },
+      avoid: [{ x: -76, y: -38, radiusMeters: 10 }, { x: 116, y: 62, radiusMeters: 10 }],
+      spacingM: 42,
+      insetM: 16,
+      flagClearM: 13,
+      radii: [1.35, 1.45, 1.25, 1.55],
+    }),
     flagPosition: { x: 20, y: 12 },
     blueSpawn: { x: -76, y: -38, headingDeg: 20 },
     targetSpawn: { x: 116, y: 62, headingDeg: 200 },
@@ -580,24 +696,17 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
     id: "brawl_ring",
     label: "Circular Arena",
     description: "A circular obstacle ring keeps both units rotating into close combat.",
-    field: {
-      min: { x: -52, y: -60 },
-      max: { x: 92, y: 84 },
-      shape: { type: "circle", center: { x: 20, y: 12 }, radiusMeters: 72 },
-    },
-    obstacles: [
-      { id: "ring_0", position: { x: 20, y: 5.5 }, radiusMeters: 1.15, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_1", position: { x: 25, y: 6.8 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_2", position: { x: 28.7, y: 10.5 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_3", position: { x: 28.7, y: 15.5 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_4", position: { x: 25, y: 19.2 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_5", position: { x: 20, y: 20.5 }, radiusMeters: 1.15, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_6", position: { x: 15, y: 19.2 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_7", position: { x: 11.3, y: 15.5 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_8", position: { x: 11.3, y: 10.5 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_9", position: { x: 15, y: 6.8 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
-      { id: "ring_center", position: { x: 20, y: 13 }, radiusMeters: 0.9, blocksMovement: true, blocksLineOfSight: true },
-    ],
+    field: CIRCLE_ARENA_FIELD,
+    obstacles: spreadObstacles({
+      idPrefix: "ring",
+      field: CIRCLE_ARENA_FIELD,
+      flag: { x: 20, y: 13 },
+      avoid: [{ x: -40, y: 12, radiusMeters: 9 }, { x: 80, y: 12, radiusMeters: 9 }],
+      spacingM: 30,
+      insetM: 8,
+      flagClearM: 12,
+      radii: [1.15, 1.1, 1.25, 1.0],
+    }),
     flagPosition: { x: 20, y: 13 },
     blueSpawn: { x: -40, y: 12, headingDeg: 0 },
     targetSpawn: { x: 80, y: 12, headingDeg: 180 },
@@ -608,31 +717,17 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
     id: "hex_bastion",
     label: "Polygon Arena",
     description: "Hexagonal strongpoints create polygonal lanes for crossfire and flanking.",
-    field: {
-      min: { x: -52, y: -39.25 },
-      max: { x: 92, y: 66.75 },
-      shape: {
-        type: "polygon",
-        vertices: [
-          { x: 20, y: -39.25 },
-          { x: 92, y: -11.25 },
-          { x: 92, y: 38.75 },
-          { x: 20, y: 66.75 },
-          { x: -52, y: 38.75 },
-          { x: -52, y: -11.25 },
-        ],
-      },
-    },
-    obstacles: [
-      { id: "hex_north", position: { x: 20, y: 6 }, radiusMeters: 1.55, blocksMovement: true, blocksLineOfSight: true },
-      { id: "hex_north_east", position: { x: 28, y: 9.5 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
-      { id: "hex_south_east", position: { x: 28, y: 17.5 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
-      { id: "hex_south", position: { x: 20, y: 21 }, radiusMeters: 1.55, blocksMovement: true, blocksLineOfSight: true },
-      { id: "hex_south_west", position: { x: 12, y: 17.5 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
-      { id: "hex_north_west", position: { x: 12, y: 9.5 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
-      { id: "hex_keep_left", position: { x: 17, y: 13.5 }, radiusMeters: 0.95, blocksMovement: true, blocksLineOfSight: true },
-      { id: "hex_keep_right", position: { x: 23, y: 13.5 }, radiusMeters: 0.95, blocksMovement: true, blocksLineOfSight: true },
-    ],
+    field: HEX_ARENA_FIELD,
+    obstacles: spreadObstacles({
+      idPrefix: "hex",
+      field: HEX_ARENA_FIELD,
+      flag: { x: 20, y: 13.5 },
+      avoid: [{ x: -32, y: -6, radiusMeters: 9 }, { x: 72, y: 34, radiusMeters: 9 }],
+      spacingM: 30,
+      insetM: 9,
+      flagClearM: 12,
+      radii: [1.55, 1.45, 1.25, 1.65],
+    }),
     flagPosition: { x: 20, y: 13.5 },
     blueSpawn: { x: -32, y: -6, headingDeg: 35 },
     targetSpawn: { x: 72, y: 34, headingDeg: 215 },

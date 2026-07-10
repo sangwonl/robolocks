@@ -270,23 +270,20 @@ function createGround(field: FieldBoundsFrame): THREE.Group {
   const fieldWidth = field.max.x - field.min.x;
   const fieldDepth = field.max.y - field.min.y;
   const shape = field.shape;
-  const terrainMaterial = new THREE.MeshStandardMaterial({ color: "#252d24", roughness: 0.92 });
+  // DoubleSide: the polygon floor is built from a Shape whose (x,y) is mapped to
+  // world (x,z), which reverses triangle winding, so we render both faces to keep
+  // it lit and visible from above.
+  const terrainMaterial = new THREE.MeshStandardMaterial({ color: "#252d24", roughness: 0.92, side: THREE.DoubleSide });
 
   let planeGeometry: THREE.BufferGeometry;
   let planeX = centerX;
   let planeZ = centerZ;
-  let gridSize = Math.max(fieldWidth, fieldDepth);
-  let gridX = centerX;
-  let gridZ = centerZ;
   let shapeLabel = "rect";
 
   if (shape?.type === "circle") {
     planeGeometry = new THREE.CircleGeometry(shape.radiusMeters, 96);
     planeX = shape.center.x;
     planeZ = shape.center.y;
-    gridSize = shape.radiusMeters * Math.SQRT2;
-    gridX = shape.center.x;
-    gridZ = shape.center.y;
     shapeLabel = "circle";
   } else if (shape?.type === "polygon" && shape.vertices.length >= 3) {
     const polygonShape = new THREE.Shape();
@@ -296,10 +293,12 @@ function createGround(field: FieldBoundsFrame): THREE.Group {
     }
     polygonShape.closePath();
     planeGeometry = new THREE.ShapeGeometry(polygonShape);
-    planeGeometry.rotateX(-Math.PI / 2);
+    // Map the Shape's (x, y) onto world (x, z) so the floor lands on the same
+    // side as the fence and grid (which use world z = +y). rotateX(-PI/2) would
+    // mirror it to z = -y; +PI/2 keeps z = +y (normal faces down, hence DoubleSide).
+    planeGeometry.rotateX(Math.PI / 2);
     planeX = 0;
     planeZ = 0;
-    gridSize = Math.max(fieldWidth, fieldDepth);
     shapeLabel = "polygon";
   } else {
     const planeWidth = fieldWidth + GROUND_MARGIN_M * 2;
@@ -322,7 +321,7 @@ function createGround(field: FieldBoundsFrame): THREE.Group {
 
   // A ~2m grid over the play field. Shaped fields get clipped line segments so
   // the floor reads as the actual arena, not a rectangular helper underneath it.
-  const grid = createTerrainGrid(field, shapeLabel, gridSize, gridX, gridZ);
+  const grid = createTerrainGrid(field, shapeLabel);
   grid.name = "terrain-grid";
   grid.userData = { shape: shapeLabel };
   group.add(grid);
@@ -335,9 +334,6 @@ const GRID_STEP_M = 2;
 function createTerrainGrid(
   field: FieldBoundsFrame,
   shapeLabel: string,
-  gridSize: number,
-  gridX: number,
-  gridZ: number,
 ): THREE.Object3D {
   if (field.shape?.type === "circle") {
     return createCircleGrid(field.shape.center.x, field.shape.center.y, field.shape.radiusMeters);
@@ -346,11 +342,23 @@ function createTerrainGrid(
     return createPolygonGrid(field.shape.vertices);
   }
 
-  const divisions = Math.max(2, Math.round(gridSize / GRID_STEP_M));
-  const grid = new THREE.GridHelper(gridSize, divisions, "#62705c", "#394137");
-  grid.position.set(gridX, 0, gridZ);
+  // Rectangular field: draw a grid that spans exactly [min, max]. THREE.GridHelper
+  // is always square (size x size), so on a non-square field it overhangs the
+  // fence in the shorter axis; a custom line grid matches the boundary exactly.
+  const grid = createRectGrid(field);
   grid.userData = { shape: shapeLabel };
   return grid;
+}
+
+function createRectGrid(field: FieldBoundsFrame): THREE.LineSegments {
+  const positions: number[] = [];
+  for (let y = firstGridLine(field.min.y); y <= field.max.y + 0.001; y += GRID_STEP_M) {
+    positions.push(field.min.x, 0.002, y, field.max.x, 0.002, y);
+  }
+  for (let x = firstGridLine(field.min.x); x <= field.max.x + 0.001; x += GRID_STEP_M) {
+    positions.push(x, 0.002, field.min.y, x, 0.002, field.max.y);
+  }
+  return createGridLineSegments(positions);
 }
 
 function createCircleGrid(centerX: number, centerZ: number, radius: number): THREE.LineSegments {
