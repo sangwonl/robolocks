@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   CUSTOM_BATTLE_ID,
   SAVED_CUSTOM_ID_PREFIX,
+  SAVED_BOT_LOGIC_ID_PREFIX,
   isSavedCustomId,
+  isSavedBotLogicId,
   RESEARCH_BOT_LOGIC_PRESETS,
   RESEARCH_BATTLE_PRESETS,
   RESEARCH_RULE_PRESETS,
@@ -524,4 +526,10 @@ test("isSavedCustomId distinguishes saved custom ids from presets and the draft"
   assert.equal(isSavedCustomId(`${SAVED_CUSTOM_ID_PREFIX}1`), true);
   assert.equal(isSavedCustomId(CUSTOM_BATTLE_ID), false);
   assert.equal(isSavedCustomId("covered_duel"), false);
+});
+
+test("isSavedBotLogicId distinguishes saved bot logic ids from presets", () => {
+  assert.equal(isSavedBotLogicId(`${SAVED_BOT_LOGIC_ID_PREFIX}1`), true);
+  assert.equal(isSavedBotLogicId("charger"), false);
+  assert.equal(isSavedBotLogicId("custom"), false);
 });

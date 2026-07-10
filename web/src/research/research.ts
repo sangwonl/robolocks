@@ -870,6 +870,17 @@ export function isSavedCustomId(id: string): boolean {
   return id.startsWith(SAVED_CUSTOM_ID_PREFIX);
 }
 
+// A named bot logic (Python source) saved to local storage, selectable like a
+// built-in logic preset and shared across both units.
+export type SavedBotLogic = { id: string; name: string; source: string };
+
+// Saved bot logic ids are prefixed so they never collide with built-in preset ids.
+export const SAVED_BOT_LOGIC_ID_PREFIX = "botsaved_";
+
+export function isSavedBotLogicId(id: string): boolean {
+  return id.startsWith(SAVED_BOT_LOGIC_ID_PREFIX);
+}
+
 export function layoutFromPreset(preset: ResearchBattlePreset): CustomBattleLayout {
   const f = preset.field;
   let shape: "rect" | "circle" = "rect";

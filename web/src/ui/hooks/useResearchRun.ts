@@ -15,12 +15,15 @@ import {
   layoutToBattlePreset,
   CUSTOM_BATTLE_ID,
   SAVED_CUSTOM_ID_PREFIX,
+  SAVED_BOT_LOGIC_ID_PREFIX,
   isSavedCustomId,
+  isSavedBotLogicId,
   type BotLogEntry,
   type CustomBattleLayout,
   type LayoutAction,
   type ResearchRuleParams,
   type SavedCustomBattle,
+  type SavedBotLogic,
 } from "../../research/research.ts";
 
 // Concrete (all-present) rule parameters held in UI state; only the active rule's
@@ -88,6 +91,19 @@ export type UseResearchRunResult = {
   setResearchBotSource: (source: string) => void;
   appliedBotSource: string;
   applyBotSource: () => void;
+  // Named bot logics saved to local storage, selectable in every unit's dropdown.
+  savedBotLogics: SavedBotLogic[];
+  // Name of the active unit's bot logic when it is a saved entry (else empty).
+  activeBotLogicName: string;
+  // The active unit's bot logic is a saved (named) entry.
+  isActiveBotLogicSaved: boolean;
+  // The active unit's editor source differs from its saved entry (unsaved edits).
+  isActiveBotLogicDirty: boolean;
+  // Save the active unit's editor source under a name: new entry, or overwrite the
+  // active saved entry.
+  saveBotLogic: (name: string) => void;
+  // Delete a saved bot logic by id.
+  deleteBotLogic: (id: string) => void;
   researchTickCount: number;
   setResearchTickCount: (tickCount: number) => void;
   botLogs: BotLogEntry[];
@@ -124,6 +140,7 @@ type StoredResearchState = {
   appliedBotSource?: unknown;
   activeBotUnitId?: unknown;
   botLogicByUnit?: unknown;
+  savedBotLogics?: unknown;
   tickCount?: unknown;
   mode?: unknown;
 };
@@ -140,6 +157,7 @@ type NormalizedStoredResearchState = {
   appliedBotSource: string;
   activeBotUnitId: number;
   botLogicByUnit: Record<number, ResearchBotLogicState>;
+  savedBotLogics: SavedBotLogic[];
   tickCount: number;
   mode: ResearchMode;
 };
@@ -151,6 +169,7 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
   const [researchMode, setResearchMode] = useState<ResearchMode>(stored.mode);
   const [activeResearchBotUnitId, setActiveResearchBotUnitId] = useState(stored.activeBotUnitId);
   const [botLogicByUnit, setBotLogicByUnit] = useState<Record<number, ResearchBotLogicState>>(stored.botLogicByUnit);
+  const [savedBotLogics, setSavedBotLogics] = useState<SavedBotLogic[]>(stored.savedBotLogics);
   const [researchBattlePresetId, setResearchBattlePresetId] = useState(stored.battlePresetId);
   const [researchRulePresetId, setResearchRulePresetId] = useState(stored.rulePresetId);
   const [unitPresetByUnit, setUnitPresetByUnit] = useState<Record<number, string>>(stored.unitPresetByUnit);
@@ -264,6 +283,40 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
   const researchBotSource = activeBotLogic.editorSource;
   const appliedBotSource = activeBotLogic.appliedSource;
 
+  const activeSavedBotLogic = savedBotLogics.find((logic) => logic.id === activeBotLogic.presetId);
+  const isActiveBotLogicSaved = activeSavedBotLogic !== undefined;
+  const activeBotLogicName = activeSavedBotLogic?.name ?? "";
+  const isActiveBotLogicDirty = isActiveBotLogicSaved && activeBotLogic.editorSource !== activeSavedBotLogic.source;
+
+  // Save the active unit's editor source as a bot logic: a new named entry, or an
+  // overwrite of the active saved entry.
+  function saveBotLogic(name: string): void {
+    const unitId = activeResearchBotUnitId;
+    const state = botLogicByUnit[unitId] ?? emptyBotLogicState();
+    const source = state.editorSource;
+    const trimmed = name.trim() || defaultBotLogicName(savedBotLogics);
+    if (isSavedBotLogicId(state.presetId)) {
+      setSavedBotLogics((list) => list.map((logic) => (logic.id === state.presetId ? { ...logic, name: trimmed, source } : logic)));
+      return;
+    }
+    const id = `${SAVED_BOT_LOGIC_ID_PREFIX}${nextSavedBotLogicSuffix(savedBotLogics)}`;
+    setSavedBotLogics((list) => [...list, { id, name: trimmed, source }]);
+    setBotLogicByUnit((current) => ({ ...current, [unitId]: { ...(current[unitId] ?? emptyBotLogicState()), presetId: id } }));
+  }
+
+  // Delete a saved bot logic. Units currently using it fall back to an unnamed
+  // custom draft (their source is kept).
+  function deleteBotLogic(id: string): void {
+    setSavedBotLogics((list) => list.filter((logic) => logic.id !== id));
+    setBotLogicByUnit((current) => {
+      const next: Record<number, ResearchBotLogicState> = {};
+      for (const [unitId, state] of Object.entries(current)) {
+        next[Number(unitId)] = state.presetId === id ? { ...state, presetId: "custom" } : state;
+      }
+      return next;
+    });
+  }
+
   // Tear down the worker on unmount so a run in flight never outlives the app.
   useEffect(() => () => teardownWorker(workerRef), []);
 
@@ -280,6 +333,7 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
       appliedBotSource,
       activeBotUnitId: activeResearchBotUnitId,
       botLogicByUnit,
+      savedBotLogics,
       tickCount: researchTickCount,
       mode: researchMode,
     });
@@ -287,6 +341,7 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     appliedBotSource,
     activeResearchBotUnitId,
     botLogicByUnit,
+    savedBotLogics,
     researchBattlePresetId,
     researchBotLogicPresetId,
     researchBotSource,
@@ -325,11 +380,20 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
   }
 
   function setResearchBotLogicPresetId(unitId: number, id: string): void {
+    setActiveResearchBotUnitId(unitId);
+    // A saved bot logic loads its source into the unit (both editor and applied).
+    const saved = savedBotLogics.find((logic) => logic.id === id);
+    if (saved) {
+      setBotLogicByUnit((current) => ({
+        ...current,
+        [unitId]: { presetId: id, editorSource: saved.source, appliedSource: saved.source },
+      }));
+      return;
+    }
     const preset = RESEARCH_BOT_LOGIC_PRESETS.find((candidate) => candidate.id === id);
     if (!preset) {
       return;
     }
-    setActiveResearchBotUnitId(unitId);
     if (preset.id === "custom") {
       setBotLogicByUnit((current) => ({
         ...current,
@@ -463,6 +527,12 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     setResearchBotSource,
     appliedBotSource,
     applyBotSource,
+    savedBotLogics,
+    activeBotLogicName,
+    isActiveBotLogicSaved,
+    isActiveBotLogicDirty,
+    saveBotLogic,
+    deleteBotLogic,
     researchTickCount,
     setResearchTickCount,
     botLogs,
@@ -493,6 +563,7 @@ function readStoredResearchState(): NormalizedStoredResearchState {
     ruleParams: { ...DEFAULT_RULE_PARAMS },
     customBattleLayout: layoutFromPreset(RESEARCH_BATTLE_PRESETS[0]),
     savedCustomBattles: [],
+    savedBotLogics: [],
     botLogicPresetId: "charger",
     editorBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "charger")?.source ?? "",
     appliedBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "charger")?.source ?? "",
@@ -515,11 +586,14 @@ function readStoredResearchState(): NormalizedStoredResearchState {
       fallback.botLogicPresetId,
     );
     const savedCustomBattles = savedCustomBattlesFromStored(parsed, fallback.customBattleLayout);
+    const savedBotLogics = savedBotLogicsFromStored(parsed);
     // A selection may be a built-in preset, the Custom draft, or a saved custom id.
     const battleIds = [...RESEARCH_BATTLE_PRESETS.map((preset) => preset.id), CUSTOM_BATTLE_ID, ...savedCustomBattles.map((battle) => battle.id)];
     const battlePresetId = validPresetId(parsed.battlePresetId, battleIds, fallback.battlePresetId);
     // Selecting a saved custom loads its layout; otherwise keep the working draft.
     const activeSaved = savedCustomBattles.find((battle) => battle.id === battlePresetId);
+    // A unit's bot logic id may be a built-in preset or a saved bot logic id.
+    const botLogicIds = [...RESEARCH_BOT_LOGIC_PRESETS.map((preset) => preset.id), ...savedBotLogics.map((logic) => logic.id)];
     return {
       battlePresetId,
       rulePresetId: validPresetId(parsed.rulePresetId, RESEARCH_RULE_PRESETS.map((preset) => preset.id), fallback.rulePresetId),
@@ -527,11 +601,12 @@ function readStoredResearchState(): NormalizedStoredResearchState {
       ruleParams: ruleParamsFromStored(parsed, fallback),
       customBattleLayout: activeSaved ? activeSaved.layout : customBattleLayoutFromStored(parsed, fallback),
       savedCustomBattles,
+      savedBotLogics,
       botLogicPresetId,
       editorBotSource: typeof parsed.editorBotSource === "string" ? parsed.editorBotSource : fallback.editorBotSource,
       appliedBotSource: typeof parsed.appliedBotSource === "string" ? parsed.appliedBotSource : fallback.appliedBotSource,
       activeBotUnitId: typeof parsed.activeBotUnitId === "number" ? parsed.activeBotUnitId : fallback.activeBotUnitId,
-      botLogicByUnit: botLogicByUnitFromStored(parsed, fallback),
+      botLogicByUnit: botLogicByUnitFromStored(parsed, fallback, botLogicIds),
       tickCount: typeof parsed.tickCount === "number" ? parsed.tickCount : fallback.tickCount,
       // The loaded replay isn't persisted, so "simulating"/"loaded" can't be
       // restored meaningfully; fall back to a preview mode that reflects the config.
@@ -672,10 +747,11 @@ function ruleParamsFromStored(
 function botLogicByUnitFromStored(
   parsed: StoredResearchState,
   fallback: NormalizedStoredResearchState,
+  validIds: string[],
 ): Record<number, ResearchBotLogicState> {
   if (isRecord(parsed.botLogicByUnit)) {
     const entries = Object.entries(parsed.botLogicByUnit)
-      .map(([unitId, value]) => [Number(unitId), botLogicStateFromUnknown(value)] as const)
+      .map(([unitId, value]) => [Number(unitId), botLogicStateFromUnknown(value, validIds)] as const)
       .filter(([unitId]) => Number.isFinite(unitId));
     if (entries.length > 0) {
       return Object.fromEntries(entries);
@@ -684,18 +760,46 @@ function botLogicByUnitFromStored(
   return { ...fallback.botLogicByUnit };
 }
 
-function botLogicStateFromUnknown(value: unknown): ResearchBotLogicState {
+function botLogicStateFromUnknown(value: unknown, validIds: string[]): ResearchBotLogicState {
   const object = isRecord(value) ? value : {};
-  const presetId = validPresetId(
-    object.presetId,
-    RESEARCH_BOT_LOGIC_PRESETS.map((preset) => preset.id),
-    "custom",
-  );
+  // Unknown ids (e.g. a deleted saved logic) fall back to "custom" so the source
+  // stays as an editable draft.
+  const presetId = validPresetId(object.presetId, validIds, "custom");
   return {
     presetId,
     editorSource: typeof object.editorSource === "string" ? object.editorSource : "",
     appliedSource: typeof object.appliedSource === "string" ? object.appliedSource : "",
   };
+}
+
+function savedBotLogicsFromStored(parsed: StoredResearchState): SavedBotLogic[] {
+  const raw = parsed.savedBotLogics;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .filter(isRecord)
+    .filter((logic): logic is Record<string, unknown> & { id: string } => typeof logic.id === "string" && isSavedBotLogicId(logic.id))
+    .map((logic) => ({
+      id: logic.id,
+      name: typeof logic.name === "string" && logic.name.trim() ? logic.name : "Logic",
+      source: typeof logic.source === "string" ? logic.source : "",
+    }));
+}
+
+function defaultBotLogicName(list: SavedBotLogic[]): string {
+  return `Logic ${list.length + 1}`;
+}
+
+function nextSavedBotLogicSuffix(list: SavedBotLogic[]): number {
+  let max = 0;
+  for (const logic of list) {
+    const match = new RegExp(`^${SAVED_BOT_LOGIC_ID_PREFIX}(\\d+)$`).exec(logic.id);
+    if (match) {
+      max = Math.max(max, Number(match[1]));
+    }
+  }
+  return max + 1;
 }
 
 function emptyBotLogicState(): ResearchBotLogicState {

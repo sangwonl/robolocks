@@ -663,6 +663,15 @@ function ResearchDockPanel() {
                             {preset.label}
                           </option>
                         ))}
+                        {research.savedBotLogics.length > 0 && (
+                          <optgroup label="Saved">
+                            {research.savedBotLogics.map((logic) => (
+                              <option key={logic.id} value={logic.id}>
+                                {logic.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                       <span className="u-label w-12 text-right text-[9px]">
                         {dirty ? "edited" : "applied"}
@@ -673,22 +682,78 @@ function ResearchDockPanel() {
             </div>
           </div>
         </div>
-        <Suspense
-          fallback={
-            <div className="u-label grid min-h-60 place-items-center rounded-lg border border-[var(--line)] bg-[var(--surface-inset)] text-[10px]">
-              Loading editor
-            </div>
-          }
-        >
-          <CodeEditor
-            disabled={isLoading}
-            onApply={research.applyBotSource}
-            onValueChange={research.setResearchBotSource}
-            value={research.researchBotSource}
-          />
-        </Suspense>
+        <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-1.5">
+          <BotLogicSaveBar />
+          <Suspense
+            fallback={
+              <div className="u-label grid min-h-60 place-items-center rounded-lg border border-[var(--line)] bg-[var(--surface-inset)] text-[10px]">
+                Loading editor
+              </div>
+            }
+          >
+            <CodeEditor
+              disabled={isLoading}
+              onApply={research.applyBotSource}
+              onValueChange={research.setResearchBotSource}
+              value={research.researchBotSource}
+            />
+          </Suspense>
+        </div>
       </div>
     </section>
+  );
+}
+
+function BotLogicSaveBar() {
+  const { research } = useWorkbenchPanel();
+  const activeUnit = research.activeResearchBotUnitId;
+  const unitName = activeUnit === 1 ? "Blue" : activeUnit === 2 ? "Red" : `Unit ${activeUnit}`;
+  const isSaved = research.isActiveBotLogicSaved;
+  const running = research.isResearchRunning;
+
+  const [nameDraft, setNameDraft] = useState(research.activeBotLogicName);
+  // Reset the name field when the active unit or its logic changes.
+  useEffect(() => {
+    setNameDraft(research.activeBotLogicName);
+  }, [activeUnit, research.researchBotLogicPresetId, research.activeBotLogicName]);
+
+  const nameChanged = isSaved && nameDraft.trim() !== research.activeBotLogicName;
+  const canSave = !running && (!isSaved || research.isActiveBotLogicDirty || nameChanged);
+
+  return (
+    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-dim)]">
+      <span className="u-label text-[10px]">{unitName} logic</span>
+      <input
+        className="min-w-0 flex-[1_1_140px] rounded-md border border-[var(--line-control)] bg-[var(--surface-well)] px-2 py-1 text-[11px] font-semibold text-[var(--text-soft)] disabled:opacity-55"
+        value={nameDraft}
+        placeholder={isSaved ? research.activeBotLogicName : "Name this logic"}
+        disabled={running}
+        onChange={(event) => setNameDraft(event.currentTarget.value)}
+      />
+      {research.isActiveBotLogicDirty && (
+        <span className="text-[10px] text-[var(--brand)]" title="Unsaved changes">
+          ●
+        </span>
+      )}
+      <button
+        type="button"
+        className="rounded-md border border-[var(--line-control)] bg-[var(--surface-well)] px-2 py-1 text-[10px] font-bold text-[var(--text-soft)] disabled:opacity-40"
+        disabled={!canSave}
+        onClick={() => research.saveBotLogic(nameDraft)}
+      >
+        {isSaved ? "Save" : "Save as…"}
+      </button>
+      {isSaved && (
+        <button
+          type="button"
+          className="rounded-md border border-[var(--status-contested-border)] bg-[var(--surface-well)] px-2 py-1 text-[10px] font-bold text-[var(--text-soft)] disabled:opacity-40"
+          disabled={running}
+          onClick={() => research.deleteBotLogic(research.researchBotLogicPresetId)}
+        >
+          Delete
+        </button>
+      )}
+    </div>
   );
 }
 
