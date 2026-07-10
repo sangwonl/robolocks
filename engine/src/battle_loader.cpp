@@ -332,6 +332,7 @@ SensorSpec optional_sensor_component(const nlohmann::json& unit, const ModuleCat
   sensor.range_m = optional_number(*sensor_json, "rangeMeters", sensor.range_m);
   sensor.fov_deg = optional_number(*sensor_json, "fovDegrees", sensor.fov_deg);
   sensor.refresh_ticks = optional_u32(*sensor_json, "refreshTicks", sensor.refresh_ticks);
+  sensor.max_scan_slew_degps = optional_number(*sensor_json, "maxScanSlewDegps", sensor.max_scan_slew_degps);
   return sensor;
 }
 

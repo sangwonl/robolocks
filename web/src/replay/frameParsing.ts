@@ -25,6 +25,8 @@ type UnitPayload = {
   position?: unknown;
   hullHeadingDegrees?: unknown;
   turretHeadingDegrees?: unknown;
+  sensorHeadingDegrees?: unknown;
+  sensorScanActive?: unknown;
   armorIntegrity?: unknown;
   weaponCooldownTicks?: unknown;
   bodyShape?: unknown;
@@ -159,6 +161,9 @@ function parseUnit(payload: unknown): UnitFrame {
     position: { x: position.x, y: position.y },
     hullHeadingDegrees: unit.hullHeadingDegrees,
     turretHeadingDegrees: unit.turretHeadingDegrees,
+    // Fall back to the turret heading for replays predating the sensor-heading field.
+    sensorHeadingDegrees: typeof unit.sensorHeadingDegrees === "number" ? unit.sensorHeadingDegrees : unit.turretHeadingDegrees,
+    sensorScanActive: unit.sensorScanActive === true,
     armorIntegrity: unit.armorIntegrity,
     weaponCooldownTicks: typeof unit.weaponCooldownTicks === "number" ? unit.weaponCooldownTicks : 0,
     bodyShape: parseBodyShape(unit.bodyShape),

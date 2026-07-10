@@ -26,6 +26,7 @@ class BattleRunner {
 
  private:
   std::vector<StaticObstacle> obstacles_;
+  double tick_dt_sec_ = 1.0 / 60.0;
   BattleSimulation simulation_;
   SensorSystem sensor_system_;
   WorldSnapshot snapshot_;

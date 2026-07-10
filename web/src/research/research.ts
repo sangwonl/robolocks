@@ -1166,6 +1166,8 @@ function setupUnitFromConfig(payload: unknown): UnitFrame {
     position: { x, y },
     hullHeadingDegrees: headingDeg,
     turretHeadingDegrees: headingDeg,
+    sensorHeadingDegrees: headingDeg,
+    sensorScanActive: false,
     armorIntegrity: modules.armor.integrity,
     weaponCooldownTicks: 0,
     bodyShape: modules.body.shape ?? { type: "circle", radiusMeters: 1 },

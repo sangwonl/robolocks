@@ -15,6 +15,10 @@ struct SensorSpec {
   double range_m = 1000.0;
   double fov_deg = 360.0;
   Tick refresh_ticks = 1;
+  // Max rate the scan direction can slew left/right (deg per second). The scan
+  // cannot snap instantly to a requested direction; it turns toward it capped by
+  // this rate, like the turret's max turn rate.
+  double max_scan_slew_degps = 360.0;
 };
 
 struct TransformSpec {

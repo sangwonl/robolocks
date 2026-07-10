@@ -1199,7 +1199,11 @@ function scanArcParams(unit: UnitFrame, action: ScanAction | undefined, _mount: 
   // requests is still an absolute world angle; subtracting the turret heading here
   // and rotating the mesh by the turret heading in applyScanArcTransform nets back
   // to that absolute direction.
-  const rawDirectionDegrees = action?.directionDegrees ?? unit.turretHeadingDegrees;
+  // Draw the cone at the actual (slew-limited) scan direction from the snapshot,
+  // not the raw requested direction, so the cone visibly slews instead of snapping.
+  const rawDirectionDegrees = unit.sensorScanActive
+    ? unit.sensorHeadingDegrees
+    : (action?.directionDegrees ?? unit.turretHeadingDegrees);
   const directionDegrees = rawDirectionDegrees - unit.turretHeadingDegrees;
   const widthDegrees = Math.max(0, Math.min(action?.widthDegrees ?? unit.modules.sensor.fovDegrees, unit.modules.sensor.fovDegrees));
   return {

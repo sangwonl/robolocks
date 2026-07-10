@@ -45,6 +45,9 @@ struct UnitSnapshot {
   Vec2 position;
   double hull_heading_deg = 0.0;
   double turret_heading_deg = 0.0;
+  // Actual (slew-limited) scan direction and whether a scan is active this tick.
+  double sensor_heading_deg = 0.0;
+  bool sensor_scan_active = false;
   double armor_integrity = 100.0;
   Tick weapon_cooldown_ticks = 0;
   BodyShapeType body_shape_type = BodyShapeType::Circle;

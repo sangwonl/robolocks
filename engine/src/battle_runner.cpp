@@ -9,6 +9,7 @@ namespace robolocks {
 
 BattleRunner::BattleRunner(BattleConfig config)
     : obstacles_(config.obstacles),
+      tick_dt_sec_(config.tick_dt_sec),
       simulation_(config),
       sensor_system_(sensor_components_from_battle_config(config), std::vector<StaticObstacle>(config.obstacles)),
       snapshot_(simulation_.snapshot()) {
@@ -17,6 +18,7 @@ BattleRunner::BattleRunner(BattleConfig config)
 
 BattleRunner::BattleRunner(BattleConfig config, std::vector<ControllerBinding> controllers)
     : obstacles_(config.obstacles),
+      tick_dt_sec_(config.tick_dt_sec),
       simulation_(config),
       sensor_system_(sensor_components_from_battle_config(config), std::vector<StaticObstacle>(config.obstacles)),
       snapshot_(simulation_.snapshot()),
@@ -54,6 +56,15 @@ StepResult BattleRunner::step_once() {
 StepResult BattleRunner::step_once(const std::vector<UnitOrders>& orders_by_unit) {
   auto result = simulation_.step(orders_by_unit);
   apply_scan_orders(orders_by_unit);
+  // Slew each unit's scan toward its requested direction, then surface the actual
+  // (slew-limited) scan direction on the snapshot so the replay/render matches
+  // what the sensor actually sees.
+  sensor_system_.advance_scan(tick_dt_sec_);
+  for (auto& unit : result.snapshot.units) {
+    const auto scan = sensor_system_.scan_state_for(unit.unit_id);
+    unit.sensor_scan_active = scan.active;
+    unit.sensor_heading_deg = scan.active ? scan.direction_deg : unit.turret_heading_deg;
+  }
   snapshot_ = result.snapshot;
   return result;
 }

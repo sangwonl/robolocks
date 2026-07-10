@@ -21,6 +21,8 @@
       },
       "hullHeadingDegrees": 33.0,
       "turretHeadingDegrees": 47.0,
+      "sensorHeadingDegrees": 0.0,
+      "sensorScanActive": false,
       "armorIntegrity": 88.5,
       "weaponCooldownTicks": 4,
       "bodyShape": {
@@ -128,6 +130,8 @@
       },
       "hullHeadingDegrees": 190.0,
       "turretHeadingDegrees": 205.0,
+      "sensorHeadingDegrees": 0.0,
+      "sensorScanActive": false,
       "armorIntegrity": 62.0,
       "weaponCooldownTicks": 12,
       "bodyShape": {

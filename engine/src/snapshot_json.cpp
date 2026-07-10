@@ -170,6 +170,8 @@ nlohmann::ordered_json unit_snapshot_to_json(const UnitSnapshot& unit) {
     {"position", vec2_to_json(unit.position)},
     {"hullHeadingDegrees", unit.hull_heading_deg},
     {"turretHeadingDegrees", unit.turret_heading_deg},
+    {"sensorHeadingDegrees", unit.sensor_heading_deg},
+    {"sensorScanActive", unit.sensor_scan_active},
     {"armorIntegrity", unit.armor_integrity},
     {"weaponCooldownTicks", unit.weapon_cooldown_ticks},
     {"bodyShape", body_shape_to_json(

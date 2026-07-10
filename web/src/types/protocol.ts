@@ -28,6 +28,9 @@ export type UnitFrame = {
   position: Vec2;
   hullHeadingDegrees: number;
   turretHeadingDegrees: number;
+  // Actual (slew-limited) scan direction and whether a scan is active this tick.
+  sensorHeadingDegrees: number;
+  sensorScanActive: boolean;
   armorIntegrity: number;
   weaponCooldownTicks: number;
   bodyShape: BodyShapeFrame;

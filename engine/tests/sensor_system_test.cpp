@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <robolocks/math.hpp>
 #include <robolocks/sensor_system.hpp>
 
 TEST_CASE("sensor system filters contacts by module range and field of view") {
@@ -264,4 +265,89 @@ TEST_CASE("sensor system reports obstacle and projectile contacts inside scan vo
   REQUIRE(observation.contacts.obstacles[0].id == "visible_cover");
   REQUIRE(observation.contacts.projectiles.size() == 1);
   REQUIRE(observation.contacts.projectiles[0].projectile_id == 7);
+}
+
+TEST_CASE("sensor scan direction slews toward the request at the module rate") {
+  robolocks::SensorSystem sensors({
+    robolocks::UnitSensorComponent{
+      .unit_id = robolocks::UnitId{1},
+      .component = robolocks::SensorSpec{.range_m = 100.0, .fov_deg = 360.0, .refresh_ticks = 1, .max_scan_slew_degps = 360.0},
+    },
+  });
+
+  // First scan orients instantly (initial mounting).
+  sensors.set_scan_arc(robolocks::UnitId{1}, robolocks::ScanArcOrder{.direction_deg = 0.0, .width_deg = 30.0});
+  auto s0 = sensors.scan_state_for(robolocks::UnitId{1});
+  REQUIRE(s0.active);
+  REQUIRE(s0.direction_deg < 1e-6);
+  REQUIRE(s0.direction_deg > -1e-6);
+
+  // Request a 180-degree swing. At 360 deg/s and dt = 1/60s the cap is 6 deg/tick,
+  // so one tick must NOT snap to 180.
+  sensors.set_scan_arc(robolocks::UnitId{1}, robolocks::ScanArcOrder{.direction_deg = 180.0, .width_deg = 30.0});
+  sensors.advance_scan(1.0 / 60.0);
+  auto s1 = sensors.scan_state_for(robolocks::UnitId{1});
+  REQUIRE(s1.direction_deg > 0.0);
+  REQUIRE(s1.direction_deg <= 6.0 + 1e-6);
+}
+
+TEST_CASE("sensor refreshTicks holds contacts between refreshes") {
+  robolocks::SensorSystem sensors({
+    robolocks::UnitSensorComponent{
+      .unit_id = robolocks::UnitId{1},
+      .component = robolocks::SensorSpec{.range_m = 100.0, .fov_deg = 360.0, .refresh_ticks = 3, .max_scan_slew_degps = 360.0},
+    },
+  });
+  sensors.set_scan_arc(robolocks::UnitId{1}, robolocks::ScanArcOrder{.direction_deg = 0.0, .width_deg = 360.0});
+
+  auto make_snapshot = [](robolocks::Tick tick, robolocks::Vec2 enemy_pos) {
+    robolocks::WorldSnapshot snapshot;
+    snapshot.tick = tick;
+    snapshot.units = {
+      robolocks::UnitSnapshot{.unit_id = robolocks::UnitId{1}, .team_id = 1, .position = robolocks::Vec2{0.0, 0.0}, .armor_integrity = 100.0},
+      robolocks::UnitSnapshot{.unit_id = robolocks::UnitId{2}, .team_id = 2, .position = enemy_pos, .armor_integrity = 100.0},
+    };
+    return snapshot;
+  };
+
+  // Tick 0: enemy in range -> detected and cached.
+  auto obs0 = sensors.build_observation(make_snapshot(0, robolocks::Vec2{5.0, 0.0}), robolocks::UnitId{1});
+  REQUIRE(obs0.contacts.units.size() == 1);
+
+  // Tick 1 (before refresh window elapses): enemy moved far away, but the cached
+  // contact is held.
+  auto obs1 = sensors.build_observation(make_snapshot(1, robolocks::Vec2{500.0, 0.0}), robolocks::UnitId{1});
+  REQUIRE(obs1.contacts.units.size() == 1);
+
+  // Tick 3 (>= refresh_ticks since last refresh): re-scans, enemy now out of range.
+  auto obs3 = sensors.build_observation(make_snapshot(3, robolocks::Vec2{500.0, 0.0}), robolocks::UnitId{1});
+  REQUIRE(obs3.contacts.units.empty());
+}
+
+TEST_CASE("sensor scan rotates smoothly (no reversal) when the request outpaces the slew rate") {
+  robolocks::SensorSystem sensors({
+    robolocks::UnitSensorComponent{
+      .unit_id = robolocks::UnitId{1},
+      .component = robolocks::SensorSpec{.range_m = 100.0, .fov_deg = 360.0, .refresh_ticks = 1, .max_scan_slew_degps = 360.0},
+    },
+  });
+
+  double request = 0.0;
+  sensors.set_scan_arc(robolocks::UnitId{1}, robolocks::ScanArcOrder{.direction_deg = 0.0, .width_deg = 160.0});
+  sensors.advance_scan(1.0 / 60.0);
+  double prev = sensors.scan_state_for(robolocks::UnitId{1}).direction_deg;
+
+  // Request +10 deg/tick, well above the 6 deg/tick cap. Every tick the scan must
+  // advance in the SAME direction (no 180-degree wrap reversal) and never exceed
+  // the per-tick cap.
+  for (int i = 0; i < 90; i += 1) {
+    request += 10.0;
+    sensors.set_scan_arc(robolocks::UnitId{1}, robolocks::ScanArcOrder{.direction_deg = request, .width_deg = 160.0});
+    sensors.advance_scan(1.0 / 60.0);
+    const double cur = sensors.scan_state_for(robolocks::UnitId{1}).direction_deg;
+    const double step = robolocks::shortest_angle_delta_deg(prev, cur);
+    REQUIRE(step > 0.0);
+    REQUIRE(step <= 6.0 + 1e-6);
+    prev = cur;
+  }
 }

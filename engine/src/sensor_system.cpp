@@ -119,7 +119,7 @@ SensorSystem::SensorSystem(std::vector<UnitSensorComponent> sensors) : sensors_(
 SensorSystem::SensorSystem(std::vector<UnitSensorComponent> sensors, std::vector<StaticObstacle> obstacles)
     : sensors_(std::move(sensors)), obstacles_(std::move(obstacles)) {}
 
-Observation SensorSystem::build_observation(const WorldSnapshot& snapshot, UnitId self_id) const {
+Observation SensorSystem::build_observation(const WorldSnapshot& snapshot, UnitId self_id) {
   Observation observation;
   observation.tick = snapshot.tick;
   observation.self_id = self_id;
@@ -128,93 +128,124 @@ Observation SensorSystem::build_observation(const WorldSnapshot& snapshot, UnitI
   if (self == nullptr) {
     return observation;
   }
-  observation.self = *self;
+  observation.self = *self;  // own state is always fresh
+
+  const UnitScanArcState* scan_state = scan_arc_state_for(self_id);
+  if (scan_state == nullptr || !scan_state->initialized) {
+    return observation;  // no active scan yet
+  }
 
   const SensorSpec sensor = sensor_for(self_id);
-  const ScanArcOrder* scan_arc = scan_arc_for(self_id);
-  if (scan_arc != nullptr) {
+  UnitSensorCache& cache = cache_for(self_id);
+  const Tick refresh_ticks = sensor.refresh_ticks > 0 ? sensor.refresh_ticks : 1;
+  const bool refresh_due = !cache.has_cache || (snapshot.tick - cache.last_refresh_tick) >= refresh_ticks;
+
+  if (refresh_due) {
+    ContactSetObservation contacts;
     const Vec2 sensor_origin = sensor_origin_for_unit(*self);
-    const double scan_direction_deg = scan_arc->direction_deg;
-    const double scan_width_deg = std::min(std::abs(scan_arc->width_deg), sensor.fov_deg);
-    const double effective_range_m = scan_arc->range_m > 0.0
-      ? std::min(scan_arc->range_m, sensor.range_m)
+    const double scan_direction_deg = normalize_angle_deg(scan_state->current_direction_deg);  // slew-limited
+    const double scan_width_deg = std::min(std::abs(scan_state->scan_arc.width_deg), sensor.fov_deg);
+    const double effective_range_m = scan_state->scan_arc.range_m > 0.0
+      ? std::min(scan_state->scan_arc.range_m, sensor.range_m)
       : sensor.range_m;
     for (const auto& unit : snapshot.units) {
       if (unit.unit_id == self_id) {
         continue;
       }
-      if (!is_inside_scan_volume(
-        sensor_origin,
-        unit.position,
-        effective_range_m,
-        scan_direction_deg,
-        scan_width_deg
-      )) {
+      if (!is_inside_scan_volume(sensor_origin, unit.position, effective_range_m, scan_direction_deg, scan_width_deg)) {
         continue;
       }
       if (line_of_sight_blocked(sensor_origin, unit.position, obstacles_)) {
         continue;
       }
-      observation.contacts.units.push_back(contact_from_snapshot(*self, unit));
+      contacts.units.push_back(contact_from_snapshot(*self, unit));
     }
     for (const auto& obstacle : obstacles_) {
-      if (!is_inside_scan_volume(
-        sensor_origin,
-        obstacle.position,
-        effective_range_m,
-        scan_direction_deg,
-        scan_width_deg
-      )) {
+      if (!is_inside_scan_volume(sensor_origin, obstacle.position, effective_range_m, scan_direction_deg, scan_width_deg)) {
         continue;
       }
       if (line_of_sight_blocked(sensor_origin, obstacle.position, obstacles_, &obstacle)) {
         continue;
       }
-      observation.contacts.obstacles.push_back(obstacle);
+      contacts.obstacles.push_back(obstacle);
     }
     for (const auto& projectile : snapshot.projectiles) {
-      if (!is_inside_scan_volume(
-        sensor_origin,
-        projectile.position,
-        effective_range_m,
-        scan_direction_deg,
-        scan_width_deg
-      )) {
+      if (!is_inside_scan_volume(sensor_origin, projectile.position, effective_range_m, scan_direction_deg, scan_width_deg)) {
         continue;
       }
       if (line_of_sight_blocked(sensor_origin, projectile.position, obstacles_)) {
         continue;
       }
-      observation.contacts.projectiles.push_back(projectile);
+      contacts.projectiles.push_back(projectile);
     }
-    std::sort(observation.contacts.units.begin(), observation.contacts.units.end(),
+    std::sort(contacts.units.begin(), contacts.units.end(),
       [&](const ContactObservation& a, const ContactObservation& b) {
         return distance(sensor_origin, a.position) < distance(sensor_origin, b.position);
       });
-    std::sort(observation.contacts.obstacles.begin(), observation.contacts.obstacles.end(),
+    std::sort(contacts.obstacles.begin(), contacts.obstacles.end(),
       [&](const StaticObstacle& a, const StaticObstacle& b) {
         return distance(sensor_origin, a.position) < distance(sensor_origin, b.position);
       });
-    std::sort(observation.contacts.projectiles.begin(), observation.contacts.projectiles.end(),
+    std::sort(contacts.projectiles.begin(), contacts.projectiles.end(),
       [&](const ProjectileSnapshot& a, const ProjectileSnapshot& b) {
         return distance(sensor_origin, a.position) < distance(sensor_origin, b.position);
       });
+    cache.contacts = std::move(contacts);
+    cache.has_cache = true;
+    cache.last_refresh_tick = snapshot.tick;
   }
 
+  observation.contacts = cache.contacts;  // fresh this tick, or held since last refresh
   return observation;
 }
 
-void SensorSystem::set_scan_arc(UnitId unit_id, const ScanArcOrder& scan_arc) {
-  for (auto& active_scan_arc : scan_arcs_) {
-    if (active_scan_arc.unit_id == unit_id) {
-      active_scan_arc.scan_arc = scan_arc;
-      return;
+void SensorSystem::advance_scan(double tick_dt_sec) {
+  for (auto& state : scan_arcs_) {
+    if (!state.initialized) {
+      continue;
+    }
+    const SensorSpec sensor = sensor_for(state.unit_id);
+    const double max_delta = sensor.max_scan_slew_degps * tick_dt_sec;
+    // Slew linearly toward the unwrapped target. Because both values are
+    // unwrapped, a request rotating faster than the slew rate lags smoothly at
+    // max rate instead of reversing when the error passes 180 degrees.
+    const double diff = state.target_direction_deg - state.current_direction_deg;
+    if (std::abs(diff) <= max_delta) {
+      state.current_direction_deg = state.target_direction_deg;
+    } else {
+      state.current_direction_deg += diff > 0.0 ? max_delta : -max_delta;
     }
   }
-  scan_arcs_.push_back(UnitScanArcState{
-    .unit_id = unit_id,
-    .scan_arc = scan_arc,
-  });
+}
+
+SensorSystem::ScanState SensorSystem::scan_state_for(UnitId unit_id) const {
+  const UnitScanArcState* state = scan_arc_state_for(unit_id);
+  if (state == nullptr || !state->initialized) {
+    return ScanState{};
+  }
+  return ScanState{.active = true, .direction_deg = normalize_angle_deg(state->current_direction_deg)};
+}
+
+void SensorSystem::set_scan_arc(UnitId unit_id, const ScanArcOrder& scan_arc) {
+  const double requested_norm = normalize_angle_deg(scan_arc.direction_deg);
+  UnitScanArcState* state = scan_arc_state_for(unit_id);
+  if (state == nullptr) {
+    // First scan for this unit orients instantly (initial mounting).
+    scan_arcs_.push_back(UnitScanArcState{
+      .unit_id = unit_id,
+      .scan_arc = scan_arc,
+      .current_direction_deg = requested_norm,
+      .target_direction_deg = requested_norm,
+      .prev_requested_deg = requested_norm,
+      .initialized = true,
+    });
+    return;
+  }
+  // Accumulate the shortest change in the requested direction into the unwrapped
+  // target; the current direction slews toward it in advance_scan.
+  state->target_direction_deg += shortest_angle_delta_deg(state->prev_requested_deg, requested_norm);
+  state->prev_requested_deg = requested_norm;
+  state->scan_arc = scan_arc;  // width/range
 }
 
 SensorSpec SensorSystem::sensor_for(UnitId unit_id) const {
@@ -226,13 +257,32 @@ SensorSpec SensorSystem::sensor_for(UnitId unit_id) const {
   return SensorSpec{};
 }
 
-const ScanArcOrder* SensorSystem::scan_arc_for(UnitId unit_id) const {
-  for (const auto& scan_arc : scan_arcs_) {
+SensorSystem::UnitScanArcState* SensorSystem::scan_arc_state_for(UnitId unit_id) {
+  for (auto& scan_arc : scan_arcs_) {
     if (scan_arc.unit_id == unit_id) {
-      return &scan_arc.scan_arc;
+      return &scan_arc;
     }
   }
   return nullptr;
+}
+
+const SensorSystem::UnitScanArcState* SensorSystem::scan_arc_state_for(UnitId unit_id) const {
+  for (const auto& scan_arc : scan_arcs_) {
+    if (scan_arc.unit_id == unit_id) {
+      return &scan_arc;
+    }
+  }
+  return nullptr;
+}
+
+SensorSystem::UnitSensorCache& SensorSystem::cache_for(UnitId unit_id) {
+  for (auto& cache : caches_) {
+    if (cache.unit_id == unit_id) {
+      return cache;
+    }
+  }
+  caches_.push_back(UnitSensorCache{.unit_id = unit_id, .last_refresh_tick = 0, .has_cache = false, .contacts = {}});
+  return caches_.back();
 }
 
 std::vector<UnitSensorComponent> sensor_components_from_battle_config(const BattleConfig& config) {

@@ -175,6 +175,8 @@
       "x": 12.5,
       "y": 7.25
     },
+    "sensorHeadingDegrees": 0.0,
+    "sensorScanActive": false,
     "teamId": 1,
     "turretHeadingDegrees": 47.0,
     "unitId": 1,
