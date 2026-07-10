@@ -94,11 +94,11 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
   assert.equal(receivedConfig.units[0].modules.weapon.blastRadiusMeters, 2.5);
   assert.equal(receivedConfig.rule.mode, "capture_point");
   assert.equal(receivedConfig.rule.captureZones[0].id, "alpha");
-  assert.equal(receivedConfig.rule.captureZones[0].holdTicks, 90);
+  assert.equal(receivedConfig.rule.captureZones[0].holdTicks, 180);
   assert.deepEqual(receivedConfig.rule.respawn.spawnPoints[0].position, RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "open_range").blueRespawnZone.position);
   assert.equal(receivedConfig.rule.respawn.spawnPoints[1].headingDegrees, RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "open_range").targetRespawnZone.headingDeg);
   assert.equal(replay.type, "robolocks.replay.v1");
-  assert.equal(replay.tickRate, 30);
+  assert.equal(replay.tickRate, 60);
   assert.equal(replay.obstacles[0].id, "research_cover");
   assert.equal(replay.frames.length, 3);
   assert.equal(replay.frames[0].tick, 0);
@@ -207,7 +207,7 @@ test("createResearchSetupReplay builds a paused one-frame replay from battle con
   const frame = replay.frames[0];
 
   assert.equal(replay.type, "robolocks.replay.v1");
-  assert.equal(replay.tickRate, 30);
+  assert.equal(replay.tickRate, 60);
   assert.equal(replay.frames.length, 1);
   assert.equal(frame.tick, 0);
   assert.equal(frame.units.length, 2);
@@ -246,7 +246,7 @@ test("createResearchBattleConfigJson selects timed rule preset", () => {
   assert.equal(config.battleId, "research_close_cover_scout_optics_vs_scout_optics_timed_team");
   assert.equal(config.rule.mode, "timed_deathmatch");
   assert.equal(config.rule.teamMode, "team");
-  assert.equal(config.rule.timeLimitTicks, 300);
+  assert.equal(config.rule.timeLimitTicks, 600);
   assert.equal(config.rule.respawn.enabled, true);
   assert.deepEqual(config.rule.respawn.spawnPoints[0].position, RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "close_cover").blueRespawnZone.position);
   assert.deepEqual(config.rule.respawn.spawnPoints[1].position, RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "close_cover").targetRespawnZone.position);
@@ -494,12 +494,16 @@ test("layoutReducer add/move/resize/remove obstacle with field clamp", () => {
   assert.equal(removed.obstacles.length, 0);
 });
 
-test("layoutReducer setShape circle squares the radius and config uses custom layout", () => {
-  const base = { field: { shape: "rect", cx: 4, cy: 2, rx: 30, ry: 18 }, obstacles: [{ id: "obs_0", x: 4, y: 2, radius: 1.5 }], flag: { x: 4, y: 2 }, blueSpawn: { x: -20, y: 0, headingDeg: 0 }, targetSpawn: { x: 28, y: 0, headingDeg: 180 } };
+test("layoutReducer setShape circle squares the radius and clamps contents inside", () => {
+  // blueSpawn starts outside the resulting circle (r=18 around (4,2)).
+  const base = { field: { shape: "rect", cx: 4, cy: 2, rx: 30, ry: 18 }, obstacles: [{ id: "obs_0", x: 4, y: 2, radius: 1.5 }], flag: { x: 4, y: 2 }, blueSpawn: { x: -20, y: 0, headingDeg: 0 }, targetSpawn: { x: 10, y: 0, headingDeg: 180 } };
   const circle = layoutReducer(base, { type: "setShape", shape: "circle" });
   assert.equal(circle.field.shape, "circle");
   assert.equal(circle.field.rx, 18); // min(rx, ry)
   assert.equal(circle.field.ry, 18);
+  // The out-of-circle spawn is pulled onto the boundary.
+  assert.ok(Math.hypot(circle.blueSpawn.x - 4, circle.blueSpawn.y - 2) <= 18 + 1e-6);
+  assert.ok(circle.blueSpawn.x > -20);
 
   const config = JSON.parse(createResearchBattleConfigJson({
     battlePresetId: CUSTOM_BATTLE_ID,
@@ -509,17 +513,18 @@ test("layoutReducer setShape circle squares the radius and config uses custom la
   }));
   assert.equal(config.field.shape.type, "circle");
   assert.equal(config.obstacles.length, 1);
-  assert.equal(config.units[0].spawn.x, -20);
 });
 
-test("layoutReducer moveField repositions the field boundary only", () => {
+test("layoutReducer moveField pulls contents that fall outside back into the field", () => {
   const base = { field: { shape: "rect", cx: 0, cy: 0, rx: 20, ry: 12 }, obstacles: [{ id: "obs_0", x: 5, y: 3, radius: 1.5 }], flag: { x: 2, y: 1 }, blueSpawn: { x: -10, y: 0, headingDeg: 0 }, targetSpawn: { x: 10, y: 0, headingDeg: 180 } };
   const moved = layoutReducer(base, { type: "moveField", cx: 30, cy: -8 });
   assert.equal(moved.field.cx, 30);
   assert.equal(moved.field.cy, -8);
-  // Contents keep their world position.
-  assert.deepEqual(moved.obstacles[0], base.obstacles[0]);
-  assert.deepEqual(moved.flag, base.flag);
+  // New rect bounds: x in [10, 50], y in [-20, 4]. Contents left outside are clamped in.
+  assert.equal(moved.obstacles[0].x, 10);
+  assert.equal(moved.obstacles[0].y, 3);
+  assert.equal(moved.flag.x, 10);
+  assert.equal(moved.blueSpawn.x, 10);
 });
 
 test("isSavedCustomId distinguishes saved custom ids from presets and the draft", () => {

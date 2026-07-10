@@ -832,9 +832,10 @@ function ResearchRunOverlay({
         <span className="research-overlay-spinner" aria-hidden="true" />
         <span className="text-[13px] font-semibold text-[var(--text)]">{stageLabel}</span>
         {showTicks ? (
-          <span className="u-label text-[var(--text-muted)]">
-            tick {progress?.tick ?? 0} / {progress?.totalTicks}
-          </span>
+          <div className="grid gap-0.5">
+            <span className="text-[13px] font-semibold tabular-nums text-[var(--text)]">tick {progress?.tick ?? 0}</span>
+            <span className="u-label text-[9px] text-[var(--text-muted)]">runs until the rule decides · deadline {progress?.totalTicks}</span>
+          </div>
         ) : null}
         <Button type="button" variant="secondary" onClick={onCancel} className="mt-1">
           Cancel

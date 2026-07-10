@@ -121,7 +121,7 @@ export function PlaybackControls({
           </Button>
         </div>
         <label className="grid min-w-0 grid-cols-[56px_minmax(0,1fr)] items-center gap-2 text-[11px] font-semibold text-[var(--text-dim)] [font-variant-numeric:tabular-nums]">
-          <span className="whitespace-nowrap">{frameCount > 0 ? `${currentIndex + 1}/${frameCount}` : "0/0"}</span>
+          <span className="whitespace-nowrap">{frameCount > 0 ? `${currentIndex}/${maxIndex}` : "0/0"}</span>
           <input
             className="mx-2 w-[calc(100%_-_16px)] accent-[var(--brand)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
             type="range"

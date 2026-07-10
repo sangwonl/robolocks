@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { BattleReplay } from "../../replay/replay";
 import {
   DEFAULT_RESEARCH_BOT_SOURCE,
+  MAX_RESEARCH_TICKS,
   NO_OP_BOT_SOURCE,
   RESEARCH_BOT_LOGIC_PRESETS,
   RESEARCH_BATTLE_PRESETS,
@@ -36,8 +37,9 @@ export type ResearchRuleParamState = {
 
 const DEFAULT_RULE_PARAMS: ResearchRuleParamState = {
   killLimit: 3,
-  timeLimitTicks: 300,
-  captureHoldTicks: 90,
+  // Tick-denominated durations assume the 60Hz research tick rate.
+  timeLimitTicks: 600,
+  captureHoldTicks: 180,
 };
 import {
   parseWorkerMessage,
@@ -126,8 +128,12 @@ export type ResearchBotLogicState = {
 };
 
 const STORAGE_KEY = "robolocks.research.v1";
+// Bumped when tick-denominated persisted values need rescaling. v2 doubled every
+// tick duration for the 30Hz -> 60Hz research tick-rate change.
+const RESEARCH_SCHEMA_VERSION = 2;
 
 type StoredResearchState = {
+  schemaVersion?: unknown;
   battlePresetId?: unknown;
   rulePresetId?: unknown;
   unitPresetId?: unknown;          // legacy single-unit preset (migrated to unitPresetByUnit)
@@ -179,7 +185,12 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
   // The working layout differs from what is saved (or is an unnamed draft that has
   // never been saved). Not persisted: unsaved edits are lost on reload by design.
   const [isCustomBattleDirty, setIsCustomBattleDirty] = useState(stored.battlePresetId === CUSTOM_BATTLE_ID);
-  const [researchTickCount, setResearchTickCount] = useState(stored.tickCount);
+  const [researchTickCount, setResearchTickCountRaw] = useState(stored.tickCount);
+  // The tick count is the deadline cap; keep it within the engine's supported range
+  // so the displayed value always matches what actually runs.
+  function setResearchTickCount(value: number): void {
+    setResearchTickCountRaw(clampTickCount(value));
+  }
   const [botLogs, setBotLogs] = useState<BotLogEntry[]>([]);
   const [isResearchRunning, setIsResearchRunning] = useState(false);
   const [researchProgress, setResearchProgress] = useState<ResearchProgress | null>(null);
@@ -322,6 +333,7 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
 
   useEffect(() => {
     writeStoredResearchState({
+      schemaVersion: RESEARCH_SCHEMA_VERSION,
       battlePresetId: researchBattlePresetId,
       rulePresetId: researchRulePresetId,
       unitPresetByUnit,
@@ -572,7 +584,7 @@ function readStoredResearchState(): NormalizedStoredResearchState {
       1: stateFromPresetId("charger"),
       2: stateFromPresetId("orbiter"),
     },
-    tickCount: 10000,
+    tickCount: MAX_RESEARCH_TICKS,
     mode: "empty",
   };
   if (typeof window === "undefined") {
@@ -580,6 +592,23 @@ function readStoredResearchState(): NormalizedStoredResearchState {
   }
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}") as StoredResearchState;
+    // One-time migration: pre-v2 state stored tick durations at 30Hz. Double the
+    // tick-denominated values so the real-time deadlines survive the 60Hz switch.
+    const storedVersion = typeof parsed.schemaVersion === "number" ? parsed.schemaVersion : 1;
+    if (storedVersion < RESEARCH_SCHEMA_VERSION) {
+      if (typeof parsed.tickCount === "number") {
+        parsed.tickCount = parsed.tickCount * 2;
+      }
+      if (isRecord(parsed.ruleParams)) {
+        const ruleParams = parsed.ruleParams;
+        if (typeof ruleParams.timeLimitTicks === "number") {
+          ruleParams.timeLimitTicks = ruleParams.timeLimitTicks * 2;
+        }
+        if (typeof ruleParams.captureHoldTicks === "number") {
+          ruleParams.captureHoldTicks = ruleParams.captureHoldTicks * 2;
+        }
+      }
+    }
     const botLogicPresetId = validPresetId(
       parsed.botLogicPresetId,
       RESEARCH_BOT_LOGIC_PRESETS.map((preset) => preset.id),
@@ -607,7 +636,7 @@ function readStoredResearchState(): NormalizedStoredResearchState {
       appliedBotSource: typeof parsed.appliedBotSource === "string" ? parsed.appliedBotSource : fallback.appliedBotSource,
       activeBotUnitId: typeof parsed.activeBotUnitId === "number" ? parsed.activeBotUnitId : fallback.activeBotUnitId,
       botLogicByUnit: botLogicByUnitFromStored(parsed, fallback, botLogicIds),
-      tickCount: typeof parsed.tickCount === "number" ? parsed.tickCount : fallback.tickCount,
+      tickCount: typeof parsed.tickCount === "number" ? clampTickCount(parsed.tickCount) : fallback.tickCount,
       // The loaded replay isn't persisted, so "simulating"/"loaded" can't be
       // restored meaningfully; fall back to a preview mode that reflects the config.
       mode: isResearchMode(parsed.mode) && parsed.mode !== "simulating" && parsed.mode !== "loaded" ? parsed.mode : fallback.mode,
@@ -622,6 +651,13 @@ function writeStoredResearchState(state: StoredResearchState): void {
     return;
   }
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function clampTickCount(value: number): number {
+  if (!Number.isFinite(value)) {
+    return MAX_RESEARCH_TICKS;
+  }
+  return Math.max(1, Math.min(MAX_RESEARCH_TICKS, Math.floor(value)));
 }
 
 function validPresetId(value: unknown, validIds: string[], fallback: unknown): string {

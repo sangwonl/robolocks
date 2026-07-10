@@ -291,7 +291,7 @@ export type ResearchRunOptions = {
 
 // Emit a `simulating` progress event at most this often so a long run does not
 // flood postMessage; the final tick is always reported.
-const SIMULATION_PROGRESS_INTERVAL = 10;
+const SIMULATION_PROGRESS_INTERVAL = 20;
 
 export type BotLogEntry = {
   tick: number;
@@ -412,7 +412,7 @@ export async function runResearchInBrowser(options: ResearchRunOptions): Promise
     return {
       replay: {
         type: "robolocks.replay.v1",
-        tickRate: 30,
+        tickRate: 60,
         obstacles: runner.staticObstacles(),
         frames: applyConfiguredFieldShape(frames, configuredFieldShape),
       },
@@ -429,8 +429,8 @@ export async function runResearchInBrowser(options: ResearchRunOptions): Promise
 export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
   battleId: "research_duel_v0",
   seed: 1,
-  tickRate: 30,
-  tickLimit: 9000,
+  tickRate: 60,
+  tickLimit: 18000,
   obstacles: [
     {
       id: "research_cover",
@@ -449,7 +449,7 @@ export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
       modules: {
         mobility: { id: "tracked_chassis_mk1", maxSpeedMetersPerSecond: 6.0, maxHullTurnDegreesPerSecond: 120.0 },
         turret: { id: "light_turret_mk1", maxTurnDegreesPerSecond: 180.0 },
-        weapon: { id: "slow_cannon_test", damage: 25.0, penetrationMillimeters: 120.0, rangeMeters: 80.0, muzzleVelocityMetersPerSecond: 20.0, muzzleOffsetMeters: { x: 3.6, y: 0.0, z: 1.65 }, projectileRadiusMeters: 0.08, reloadTicks: 90 },
+        weapon: { id: "slow_cannon_test", damage: 25.0, penetrationMillimeters: 120.0, rangeMeters: 80.0, muzzleVelocityMetersPerSecond: 20.0, muzzleOffsetMeters: { x: 3.6, y: 0.0, z: 1.65 }, projectileRadiusMeters: 0.08, reloadTicks: 180 },
         armor: { id: "rolled_armor_mk1", integrity: 100.0, frontMillimeters: 100.0, sideMillimeters: 70.0, rearMillimeters: 45.0 },
         body: { id: "medium_hull_mk1", massKilograms: 30000.0, shape: { type: "box", radiusMeters: 1.2, lengthMeters: 5.6, widthMeters: 2.8 } },
         sensor: { id: "visual_optic_mk1", rangeMeters: 60.0, fovDegrees: 120.0, refreshTicks: 1 },
@@ -463,7 +463,7 @@ export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
       modules: {
         mobility: { id: "fixed_target_chassis", maxSpeedMetersPerSecond: 0.0, maxHullTurnDegreesPerSecond: 60.0 },
         turret: { id: "light_turret_mk1", maxTurnDegreesPerSecond: 180.0 },
-        weapon: { id: "slow_cannon_test", damage: 25.0, penetrationMillimeters: 120.0, rangeMeters: 80.0, muzzleVelocityMetersPerSecond: 20.0, muzzleOffsetMeters: { x: 3.6, y: 0.0, z: 1.65 }, projectileRadiusMeters: 0.08, reloadTicks: 90 },
+        weapon: { id: "slow_cannon_test", damage: 25.0, penetrationMillimeters: 120.0, rangeMeters: 80.0, muzzleVelocityMetersPerSecond: 20.0, muzzleOffsetMeters: { x: 3.6, y: 0.0, z: 1.65 }, projectileRadiusMeters: 0.08, reloadTicks: 180 },
         armor: { id: "rolled_armor_mk1", integrity: 100.0, frontMillimeters: 100.0, sideMillimeters: 70.0, rearMillimeters: 45.0 },
         body: { id: "medium_hull_mk1", massKilograms: 30000.0, shape: { type: "box", radiusMeters: 1.2, lengthMeters: 5.6, widthMeters: 2.8 } },
         sensor: { id: "visual_optic_mk1", rangeMeters: 60.0, fovDegrees: 120.0, refreshTicks: 1 },
@@ -477,11 +477,11 @@ export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
     mode: "kill_limit_deathmatch",
     teamMode: "team",
     killLimit: 3,
-    timeLimitTicks: 9000,
+    timeLimitTicks: 18000,
     respawn: {
       enabled: true,
-      cooldownTicks: 90,
-      invulnerableTicks: 30,
+      cooldownTicks: 180,
+      invulnerableTicks: 60,
       spawnPoints: [
         { id: "blue_research_spawn", teamId: 1, position: { x: 4, y: 5 }, radiusMeters: 2.5, headingDegrees: 35 },
         { id: "target_research_spawn", teamId: 2, position: { x: 34, y: 18 }, radiusMeters: 2.5, headingDegrees: 215 },
@@ -493,7 +493,7 @@ export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
 const STANDARD_MODULES: ResearchUnitModulesConfig = {
   mobility: { id: "tracked_chassis_mk1", maxSpeedMetersPerSecond: 6.0, maxHullTurnDegreesPerSecond: 120.0 },
   turret: { id: "light_turret_mk1", maxTurnDegreesPerSecond: 180.0 },
-  weapon: { id: "slow_cannon_test", damage: 25.0, penetrationMillimeters: 120.0, rangeMeters: 80.0, muzzleVelocityMetersPerSecond: 20.0, muzzleOffsetMeters: { x: 3.6, y: 0.0, z: 1.65 }, projectileRadiusMeters: 0.08, reloadTicks: 90 },
+  weapon: { id: "slow_cannon_test", damage: 25.0, penetrationMillimeters: 120.0, rangeMeters: 80.0, muzzleVelocityMetersPerSecond: 20.0, muzzleOffsetMeters: { x: 3.6, y: 0.0, z: 1.65 }, projectileRadiusMeters: 0.08, reloadTicks: 180 },
   armor: { id: "rolled_armor_mk1", integrity: 100.0, frontMillimeters: 100.0, sideMillimeters: 70.0, rearMillimeters: 45.0 },
   body: { id: "medium_hull_mk1", massKilograms: 30000.0, shape: { type: "box", radiusMeters: 1.2, lengthMeters: 5.6, widthMeters: 2.8 } },
   sensor: { id: "visual_optic_mk1", rangeMeters: 60.0, fovDegrees: 120.0, refreshTicks: 1 },
@@ -750,7 +750,7 @@ export const RESEARCH_UNIT_PRESETS: ResearchUnitPreset[] = [
     modules: {
       ...STANDARD_MODULES,
       mobility: { id: "heavy_tracks_v0", maxSpeedMetersPerSecond: 3.2, maxHullTurnDegreesPerSecond: 70.0 },
-      weapon: { ...STANDARD_MODULES.weapon, id: "heavy_cannon_v0", damage: 42.0, penetrationMillimeters: 150.0, muzzleVelocityMetersPerSecond: 28.0, reloadTicks: 120 },
+      weapon: { ...STANDARD_MODULES.weapon, id: "heavy_cannon_v0", damage: 42.0, penetrationMillimeters: 150.0, muzzleVelocityMetersPerSecond: 28.0, reloadTicks: 240 },
       armor: { id: "heavy_armor_v0", integrity: 150.0, frontMillimeters: 160.0, sideMillimeters: 95.0, rearMillimeters: 60.0 },
       body: { id: "heavy_hull_v0", massKilograms: 47000.0, shape: { type: "box", radiusMeters: 1.45, lengthMeters: 6.4, widthMeters: 3.2 } },
     },
@@ -762,7 +762,7 @@ export const RESEARCH_UNIT_PRESETS: ResearchUnitPreset[] = [
     modules: {
       ...STANDARD_MODULES,
       mobility: { id: "slow_chassis_test", maxSpeedMetersPerSecond: 3.0, maxHullTurnDegreesPerSecond: 60.0 },
-      weapon: { id: "howitzer_test", fireMode: "ballistic", damage: 30.0, penetrationMillimeters: 65.0, rangeMeters: 95.0, muzzleVelocityMetersPerSecond: 36.0, muzzleOffsetMeters: { x: 3.3, y: 0.0, z: 1.8 }, launchAngleDegrees: 45.0, gravityMetersPerSecondSquared: 9.81, blastRadiusMeters: 2.5, projectileRadiusMeters: 0.12, aimToleranceDegrees: 8.0, reloadTicks: 105 },
+      weapon: { id: "howitzer_test", fireMode: "ballistic", damage: 30.0, penetrationMillimeters: 65.0, rangeMeters: 95.0, muzzleVelocityMetersPerSecond: 36.0, muzzleOffsetMeters: { x: 3.3, y: 0.0, z: 1.8 }, launchAngleDegrees: 45.0, gravityMetersPerSecondSquared: 9.81, blastRadiusMeters: 2.5, projectileRadiusMeters: 0.12, aimToleranceDegrees: 8.0, reloadTicks: 210 },
     },
   },
   {
@@ -788,11 +788,11 @@ export const RESEARCH_RULE_PRESETS: ResearchRulePreset[] = [
       mode: "kill_limit_deathmatch",
       teamMode: "team",
       killLimit: 3,
-      timeLimitTicks: 9000,
+      timeLimitTicks: 18000,
       respawn: {
         enabled: true,
-        cooldownTicks: 90,
-        invulnerableTicks: 30,
+        cooldownTicks: 180,
+        invulnerableTicks: 60,
       },
     },
   },
@@ -803,11 +803,11 @@ export const RESEARCH_RULE_PRESETS: ResearchRulePreset[] = [
     rule: {
       mode: "timed_deathmatch",
       teamMode: "team",
-      timeLimitTicks: 300,
+      timeLimitTicks: 600,
       respawn: {
         enabled: true,
-        cooldownTicks: 60,
-        invulnerableTicks: 30,
+        cooldownTicks: 120,
+        invulnerableTicks: 60,
       },
     },
   },
@@ -818,19 +818,19 @@ export const RESEARCH_RULE_PRESETS: ResearchRulePreset[] = [
     rule: {
       mode: "capture_point",
       teamMode: "team",
-      timeLimitTicks: 9000,
+      timeLimitTicks: 18000,
       captureZones: [
         {
           id: "alpha",
           position: { x: 20, y: 12 },
           radiusMeters: 3.5,
-          holdTicks: 90,
+          holdTicks: 180,
         },
       ],
       respawn: {
         enabled: true,
-        cooldownTicks: 90,
-        invulnerableTicks: 30,
+        cooldownTicks: 180,
+        invulnerableTicks: 60,
       },
     },
   },
@@ -1005,18 +1005,41 @@ export function layoutReducer(layout: CustomBattleLayout, action: LayoutAction):
         return layout;
       }
       const radius = Math.min(layout.field.rx, layout.field.ry);
-      return { ...layout, field: { ...layout.field, shape: action.shape, ...(action.shape === "circle" ? { rx: radius, ry: radius } : {}) } };
+      const field = { ...layout.field, shape: action.shape, ...(action.shape === "circle" ? { rx: radius, ry: radius } : {}) };
+      return clampContentsToField({ ...layout, field });
     }
     case "resizeField": {
       const rx = Math.max(MIN_FIELD_HALF_M, action.rx);
       const ry = Math.max(MIN_FIELD_HALF_M, action.ry);
-      return { ...layout, field: { ...layout.field, rx, ry: layout.field.shape === "circle" ? rx : ry } };
+      const field = { ...layout.field, rx, ry: layout.field.shape === "circle" ? rx : ry };
+      return clampContentsToField({ ...layout, field });
     }
     case "moveField":
-      return { ...layout, field: { ...layout.field, cx: action.cx, cy: action.cy } };
+      return clampContentsToField({ ...layout, field: { ...layout.field, cx: action.cx, cy: action.cy } });
     default:
       return layout;
   }
+}
+
+// Keep obstacles, the flag, and both spawns inside the field. Applied after the
+// field is reshaped/resized/moved so custom battles never place units or cover
+// outside the boundary (the engine would otherwise clamp units in on tick 1,
+// making them look like they started outside the wall).
+function clampContentsToField(layout: CustomBattleLayout): CustomBattleLayout {
+  const { field } = layout;
+  const flag = clampPointToField(field, layout.flag.x, layout.flag.y);
+  const blue = clampPointToField(field, layout.blueSpawn.x, layout.blueSpawn.y);
+  const target = clampPointToField(field, layout.targetSpawn.x, layout.targetSpawn.y);
+  return {
+    ...layout,
+    obstacles: layout.obstacles.map((o) => {
+      const { x, y } = clampPointToField(field, o.x, o.y);
+      return { ...o, x, y };
+    }),
+    flag,
+    blueSpawn: { ...layout.blueSpawn, x: blue.x, y: blue.y },
+    targetSpawn: { ...layout.targetSpawn, x: target.x, y: target.y },
+  };
 }
 
 // Editable rule parameters. Only the field matching the active rule's mode is
@@ -1059,7 +1082,7 @@ export function createResearchBattleConfigJson(options: {
   return JSON.stringify({
     battleId: `research_${battlePreset.id}_${bluePreset.id}_vs_${redPreset.id}_${rulePreset.id}`,
     seed: 1,
-    tickRate: 30,
+    tickRate: 60,
     tickLimit,
     field: cloneJson(battlePreset.field),
     obstacles: cloneJson(battlePreset.obstacles),
@@ -1122,7 +1145,7 @@ export function createResearchSetupReplay(battleConfigJson: string): BattleRepla
   };
   return {
     type: "robolocks.replay.v1",
-    tickRate: typeof config.tickRate === "number" ? config.tickRate : 30,
+    tickRate: typeof config.tickRate === "number" ? config.tickRate : 60,
     obstacles: Array.isArray(config.obstacles) ? cloneJson(config.obstacles) as BattleReplay["obstacles"] : [],
     frames: [frame],
   };
@@ -1426,11 +1449,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // fixed run length (matches stop as soon as the rule decides). Kept in one place
 // so the loop bound, the engine deadline (config tickLimit), and the UI input
 // max all agree — a mismatch makes the run stop before the deadline, unresolved.
-export const MAX_RESEARCH_TICKS = 9000;
+export const MAX_RESEARCH_TICKS = 18000; // 18000 ticks = 5 minutes at 60Hz
 
 function normalizeTickCount(value: number): number {
   if (!Number.isFinite(value)) {
-    return 180;
+    return 360;
   }
   return Math.max(1, Math.min(MAX_RESEARCH_TICKS, Math.floor(value)));
 }
