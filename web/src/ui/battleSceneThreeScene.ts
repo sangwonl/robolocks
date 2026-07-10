@@ -269,28 +269,158 @@ function createGround(field: FieldBoundsFrame): THREE.Group {
   const centerZ = (field.min.y + field.max.y) / 2;
   const fieldWidth = field.max.x - field.min.x;
   const fieldDepth = field.max.y - field.min.y;
-  const planeWidth = fieldWidth + GROUND_MARGIN_M * 2;
-  const planeDepth = fieldDepth + GROUND_MARGIN_M * 2;
+  const shape = field.shape;
+  const terrainMaterial = new THREE.MeshStandardMaterial({ color: "#252d24", roughness: 0.92 });
+
+  let planeGeometry: THREE.BufferGeometry;
+  let planeX = centerX;
+  let planeZ = centerZ;
+  let gridSize = Math.max(fieldWidth, fieldDepth);
+  let gridX = centerX;
+  let gridZ = centerZ;
+  let shapeLabel = "rect";
+
+  if (shape?.type === "circle") {
+    planeGeometry = new THREE.CircleGeometry(shape.radiusMeters, 96);
+    planeX = shape.center.x;
+    planeZ = shape.center.y;
+    gridSize = shape.radiusMeters * Math.SQRT2;
+    gridX = shape.center.x;
+    gridZ = shape.center.y;
+    shapeLabel = "circle";
+  } else if (shape?.type === "polygon" && shape.vertices.length >= 3) {
+    const polygonShape = new THREE.Shape();
+    polygonShape.moveTo(shape.vertices[0].x, shape.vertices[0].y);
+    for (const vertex of shape.vertices.slice(1)) {
+      polygonShape.lineTo(vertex.x, vertex.y);
+    }
+    polygonShape.closePath();
+    planeGeometry = new THREE.ShapeGeometry(polygonShape);
+    planeGeometry.rotateX(-Math.PI / 2);
+    planeX = 0;
+    planeZ = 0;
+    gridSize = Math.max(fieldWidth, fieldDepth);
+    shapeLabel = "polygon";
+  } else {
+    const planeWidth = fieldWidth + GROUND_MARGIN_M * 2;
+    const planeDepth = fieldDepth + GROUND_MARGIN_M * 2;
+    planeGeometry = new THREE.PlaneGeometry(planeWidth, planeDepth);
+  }
 
   const plane = new THREE.Mesh(
-    new THREE.PlaneGeometry(planeWidth, planeDepth),
-    new THREE.MeshStandardMaterial({ color: "#252d24", roughness: 0.92 }),
+    planeGeometry,
+    terrainMaterial,
   );
   plane.name = "terrain-plane";
-  plane.rotation.x = -Math.PI / 2;
-  plane.position.set(centerX, -0.03, centerZ);
+  if (shape?.type !== "polygon") {
+    plane.rotation.x = -Math.PI / 2;
+  }
+  plane.position.set(planeX, -0.03, planeZ);
+  plane.userData = { shape: shapeLabel };
   plane.receiveShadow = true;
   group.add(plane);
 
-  // A ~2m grid over the play field, sized so the lines land on whole-metre steps.
-  const gridSize = Math.max(fieldWidth, fieldDepth);
-  const divisions = Math.max(2, Math.round(gridSize / 2));
-  const grid = new THREE.GridHelper(gridSize, divisions, "#62705c", "#394137");
+  // A ~2m grid over the play field. Shaped fields get clipped line segments so
+  // the floor reads as the actual arena, not a rectangular helper underneath it.
+  const grid = createTerrainGrid(field, shapeLabel, gridSize, gridX, gridZ);
   grid.name = "terrain-grid";
-  grid.position.set(centerX, 0, centerZ);
+  grid.userData = { shape: shapeLabel };
   group.add(grid);
 
   return group;
+}
+
+const GRID_STEP_M = 2;
+
+function createTerrainGrid(
+  field: FieldBoundsFrame,
+  shapeLabel: string,
+  gridSize: number,
+  gridX: number,
+  gridZ: number,
+): THREE.Object3D {
+  if (field.shape?.type === "circle") {
+    return createCircleGrid(field.shape.center.x, field.shape.center.y, field.shape.radiusMeters);
+  }
+  if (field.shape?.type === "polygon" && field.shape.vertices.length >= 3) {
+    return createPolygonGrid(field.shape.vertices);
+  }
+
+  const divisions = Math.max(2, Math.round(gridSize / GRID_STEP_M));
+  const grid = new THREE.GridHelper(gridSize, divisions, "#62705c", "#394137");
+  grid.position.set(gridX, 0, gridZ);
+  grid.userData = { shape: shapeLabel };
+  return grid;
+}
+
+function createCircleGrid(centerX: number, centerZ: number, radius: number): THREE.LineSegments {
+  const positions: number[] = [];
+  for (let offset = -radius; offset <= radius + 0.001; offset += GRID_STEP_M) {
+    const extent = Math.sqrt(Math.max(0, radius * radius - offset * offset));
+    positions.push(centerX - extent, 0.002, centerZ + offset, centerX + extent, 0.002, centerZ + offset);
+    positions.push(centerX + offset, 0.002, centerZ - extent, centerX + offset, 0.002, centerZ + extent);
+  }
+  return createGridLineSegments(positions);
+}
+
+function createPolygonGrid(vertices: { x: number; y: number }[]): THREE.LineSegments {
+  const minX = Math.min(...vertices.map((vertex) => vertex.x));
+  const maxX = Math.max(...vertices.map((vertex) => vertex.x));
+  const minY = Math.min(...vertices.map((vertex) => vertex.y));
+  const maxY = Math.max(...vertices.map((vertex) => vertex.y));
+  const positions: number[] = [];
+
+  for (let y = firstGridLine(minY); y <= maxY + 0.001; y += GRID_STEP_M) {
+    const xs = polygonLineIntersections(vertices, "horizontal", y);
+    for (let index = 0; index + 1 < xs.length; index += 2) {
+      positions.push(xs[index], 0.002, y, xs[index + 1], 0.002, y);
+    }
+  }
+  for (let x = firstGridLine(minX); x <= maxX + 0.001; x += GRID_STEP_M) {
+    const ys = polygonLineIntersections(vertices, "vertical", x);
+    for (let index = 0; index + 1 < ys.length; index += 2) {
+      positions.push(x, 0.002, ys[index], x, 0.002, ys[index + 1]);
+    }
+  }
+
+  return createGridLineSegments(positions);
+}
+
+function firstGridLine(min: number): number {
+  return Math.ceil(min / GRID_STEP_M) * GRID_STEP_M;
+}
+
+function polygonLineIntersections(
+  vertices: { x: number; y: number }[],
+  axis: "horizontal" | "vertical",
+  value: number,
+): number[] {
+  const intersections: number[] = [];
+  for (let index = 0; index < vertices.length; index += 1) {
+    const a = vertices[index];
+    const b = vertices[(index + 1) % vertices.length];
+    if (axis === "horizontal") {
+      if ((a.y <= value && b.y > value) || (b.y <= value && a.y > value)) {
+        const t = (value - a.y) / (b.y - a.y);
+        intersections.push(a.x + (b.x - a.x) * t);
+      }
+    } else if ((a.x <= value && b.x > value) || (b.x <= value && a.x > value)) {
+      const t = (value - a.x) / (b.x - a.x);
+      intersections.push(a.y + (b.y - a.y) * t);
+    }
+  }
+  return intersections.sort((a, b) => a - b);
+}
+
+function createGridLineSegments(positions: number[]): THREE.LineSegments {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  const material = new THREE.LineBasicMaterial({
+    color: "#4f5c4a",
+    transparent: true,
+    opacity: 0.72,
+  });
+  return new THREE.LineSegments(geometry, material);
 }
 
 // A visible fence around the exact play field so the player can see where units
@@ -316,7 +446,7 @@ function createBoundary(field: FieldBoundsFrame): THREE.Group {
     opacity: 0.85,
   });
 
-  const makeRail = (name: string, sx: number, sz: number, x: number, z: number): THREE.Mesh => {
+  const makeRectRail = (name: string, sx: number, sz: number, x: number, z: number): THREE.Mesh => {
     const rail = new THREE.Mesh(new THREE.BoxGeometry(sx, BOUNDARY_HEIGHT_M, sz), material);
     rail.name = name;
     rail.position.set(x, BOUNDARY_HEIGHT_M / 2, z);
@@ -325,19 +455,77 @@ function createBoundary(field: FieldBoundsFrame): THREE.Group {
     return rail;
   };
 
-  const span = BOUNDARY_THICKNESS_M;
-  const fullWidth = width + span;
-  group.add(makeRail("boundary-north", fullWidth, span, centerX, field.min.y));
-  group.add(makeRail("boundary-south", fullWidth, span, centerX, field.max.y));
-  group.add(makeRail("boundary-west", span, depth, field.min.x, centerZ));
-  group.add(makeRail("boundary-east", span, depth, field.max.x, centerZ));
+  const makeSegmentRail = (
+    name: string,
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+  ): THREE.Mesh => {
+    const dx = end.x - start.x;
+    const dz = end.y - start.y;
+    const length = Math.hypot(dx, dz);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(length, BOUNDARY_HEIGHT_M, BOUNDARY_THICKNESS_M), material);
+    rail.name = name;
+    rail.position.set((start.x + end.x) / 2, BOUNDARY_HEIGHT_M / 2, (start.y + end.y) / 2);
+    rail.rotation.y = -Math.atan2(dz, dx);
+    rail.castShadow = false;
+    rail.receiveShadow = true;
+    return rail;
+  };
 
-  group.userData = {
+  const span = BOUNDARY_THICKNESS_M;
+  const baseUserData = {
     minX: field.min.x,
     minY: field.min.y,
     maxX: field.max.x,
     maxY: field.max.y,
   };
+
+  const shape = field.shape;
+  if (shape?.type === "circle") {
+    const segmentCount = 48;
+    const points = Array.from({ length: segmentCount }, (_, index) => {
+      const angle = (index / segmentCount) * Math.PI * 2;
+      return {
+        x: shape.center.x + Math.cos(angle) * shape.radiusMeters,
+        y: shape.center.y + Math.sin(angle) * shape.radiusMeters,
+      };
+    });
+    for (let index = 0; index < points.length; index += 1) {
+      group.add(makeSegmentRail(`boundary-circle-${index}`, points[index], points[(index + 1) % points.length]));
+    }
+    group.userData = {
+      ...baseUserData,
+      shape: "circle",
+      centerX: shape.center.x,
+      centerY: shape.center.y,
+      radiusMeters: shape.radiusMeters,
+    };
+    return group;
+  }
+
+  if (shape?.type === "polygon" && shape.vertices.length >= 3) {
+    for (let index = 0; index < shape.vertices.length; index += 1) {
+      group.add(makeSegmentRail(
+        `boundary-polygon-${index}`,
+        shape.vertices[index],
+        shape.vertices[(index + 1) % shape.vertices.length],
+      ));
+    }
+    group.userData = {
+      ...baseUserData,
+      shape: "polygon",
+      vertexCount: shape.vertices.length,
+    };
+    return group;
+  }
+
+  const fullWidth = width + span;
+  group.add(makeRectRail("boundary-north", fullWidth, span, centerX, field.min.y));
+  group.add(makeRectRail("boundary-south", fullWidth, span, centerX, field.max.y));
+  group.add(makeRectRail("boundary-west", span, depth, field.min.x, centerZ));
+  group.add(makeRectRail("boundary-east", span, depth, field.max.x, centerZ));
+
+  group.userData = baseUserData;
   return group;
 }
 
@@ -352,7 +540,7 @@ function createLights(): THREE.Group {
   const key = new THREE.DirectionalLight("#f4f1d0", 2.4);
   key.name = "key-light";
   key.position.set(12, 24, 8);
-  key.castShadow = true;
+  key.castShadow = false;
   group.add(key);
 
   return group;

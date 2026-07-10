@@ -243,7 +243,7 @@ void BattleSimulation::run_projectile_phase(
   auto weapon_events = projectiles_.resolve_weapon_fire(tick_, units_, fire_order_counts);
   events.insert(events.end(), weapon_events.begin(), weapon_events.end());
 
-  auto projectile_events = projectiles_.advance_projectiles(tick_, tick_dt_sec_, units_);
+  auto projectile_events = projectiles_.advance_projectiles(tick_, tick_dt_sec_, units_, bounds_, obstacles_);
   events.insert(events.end(), projectile_events.begin(), projectile_events.end());
 }
 

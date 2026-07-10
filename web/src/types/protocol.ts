@@ -193,9 +193,24 @@ export type ProjectileFrame = {
   heightMeters: number;
 };
 
+export type FieldShapeFrame =
+  | {
+      type: "rect";
+    }
+  | {
+      type: "circle";
+      center: Vec2;
+      radiusMeters: number;
+    }
+  | {
+      type: "polygon";
+      vertices: Vec2[];
+    };
+
 export type FieldBoundsFrame = {
   min: Vec2;
   max: Vec2;
+  shape?: FieldShapeFrame;
 };
 
 export type BattleFrame = {

@@ -24,6 +24,62 @@ function outcomeReasonLabel(reason: string): string {
   }
 }
 
+function teamLabel(teamId: number): string {
+  if (teamId === 1) {
+    return "Blue";
+  }
+  if (teamId === 2) {
+    return "Red";
+  }
+  return `Team ${teamId}`;
+}
+
+export function playbackStatusText(frame: BattleFrame | null): string {
+  if (!frame) {
+    return "No replay";
+  }
+
+  const { outcome, scores, captureZones } = frame.ruleState;
+  if (outcome.finished) {
+    const reason = outcomeReasonLabel(outcome.reason);
+    if (outcome.winnerTeamId > 0) {
+      return `${teamLabel(outcome.winnerTeamId)} won - ${reason}`;
+    }
+    if (outcome.winnerUnitId > 0) {
+      return `Unit ${outcome.winnerUnitId} won - ${reason}`;
+    }
+    return `Draw - ${reason}`;
+  }
+
+  const contestedZone = captureZones.find((zone) => zone.contested);
+  if (contestedZone) {
+    return `${contestedZone.id} contested`;
+  }
+  const ownedZone = captureZones.find((zone) => zone.ownerTeamId > 0);
+  if (ownedZone) {
+    return `${teamLabel(ownedZone.ownerTeamId)} controls ${ownedZone.id} ${ownedZone.heldTicks}/${ownedZone.holdTicksRequired}`;
+  }
+
+  const teamScores = new Map<number, number>();
+  for (const score of scores) {
+    teamScores.set(score.teamId, (teamScores.get(score.teamId) ?? 0) + score.kills);
+  }
+  const ordered = [...teamScores.entries()].sort((a, b) => b[1] - a[1]);
+  if (ordered.length >= 2) {
+    const [leaderTeamId, leaderKills] = ordered[0];
+    const [, runnerUpKills] = ordered[1];
+    if (leaderKills > runnerUpKills) {
+      return `${teamLabel(leaderTeamId)} leads ${leaderKills}-${runnerUpKills}`;
+    }
+    return `Tied ${leaderKills}-${runnerUpKills}`;
+  }
+  if (ordered.length === 1) {
+    const [teamId, kills] = ordered[0];
+    return `${teamLabel(teamId)} ${kills} kills`;
+  }
+  return "Running";
+}
+
 export function RuleSummary({ frame }: RuleSummaryProps) {
   if (!frame) {
     return (

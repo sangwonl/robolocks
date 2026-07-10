@@ -11,10 +11,19 @@ export type ResearchBotLogicPreset = {
   source: string;
 };
 
-const ADVANCE_FIRE_BOT_SOURCE = `from robolocks import (
+// Movement model note (drives every bot below):
+//   * A unit moves FORWARD along its hull heading; MoveTo(target) makes the hull
+//     steer toward that target, so to go somewhere you just MoveTo there.
+//   * FaceArmorToward(x) overrides hull steering to face x, so it fights MoveTo.
+//     Use it only while standing still (angling armor), never while maneuvering.
+//   * AimAt drives the TURRET independently, so a unit can move any direction and
+//     still keep its gun on target and fire.
+// The tactics below therefore steer with MoveTo alone and let the turret fire,
+// re-homing on the enemy's live position every tick for genuinely dynamic motion.
+
+const CHARGER_BOT_SOURCE = `from robolocks import (
     AimAt,
     BattleState,
-    FaceArmorToward,
     FireIfSolution,
     MoveTo,
     OrderLike,
@@ -22,106 +31,188 @@ const ADVANCE_FIRE_BOT_SOURCE = `from robolocks import (
     run_bot,
 )
 
-SENSOR_FOV_DEG = 160.0
-
-
-def on_start(spec) -> None:
-    global SENSOR_FOV_DEG
-    if spec is not None:
-        SENSOR_FOV_DEG = spec.modules.sensor.fov
+# Charger: rush the closest enemy and brawl point-blank. Driving straight at them
+# keeps our thick front armor pointed their way while the turret fires. We re-home
+# on the enemy's live position every tick, so we chase a moving target.
 
 
 def on_tick(state: BattleState) -> list[OrderLike]:
     own = state.own_unit
     enemy = state.contacts.closest_enemy()
-
-    if enemy:
-        return [
-            FaceArmorToward(enemy.position),
-            AimAt(enemy.position),
-            FireIfSolution(min_hit_chance=0.6),
-            MoveTo({"x": 17.0, "y": 12.0}),
-        ]
-
+    if not enemy:
+        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
     return [
-        MoveTo(state.map.center),
-        ScanArc(direction=own.hull_heading, width=SENSOR_FOV_DEG),
-    ]
-
-
-def on_end(result) -> None:
-    pass
-
-
-run_bot(on_tick, on_start=on_start, on_end=on_end)
-`;
-
-const HOLD_LINE_BOT_SOURCE = `from robolocks import (
-    AimAt,
-    BattleState,
-    FaceArmorToward,
-    FireIfSolution,
-    MoveTo,
-    OrderLike,
-    ScanArc,
-    run_bot,
-)
-
-# Hold a central firing line while aiming from cover pressure.
-HOLD_POINT = {"x": 17.0, "y": 12.0}
-
-
-def on_tick(state: BattleState) -> list[OrderLike]:
-    enemy = state.contacts.closest_enemy()
-    own = state.own_unit
-
-    if enemy:
-        return [
-            FaceArmorToward(enemy.position),
-            AimAt(enemy.position),
-            FireIfSolution(min_hit_chance=0.55),
-            MoveTo(HOLD_POINT),
-        ]
-
-    return [
-        MoveTo(HOLD_POINT),
-        ScanArc(direction=own.hull_heading, width=140.0),
+        AimAt(enemy.position),
+        FireIfSolution(min_hit_chance=0.0),
+        MoveTo(enemy.position),
     ]
 
 
 run_bot(on_tick)
 `;
 
-const KITE_BOT_SOURCE = `from robolocks import (
+const SKIRMISHER_BOT_SOURCE = `from robolocks import (
     AimAt,
     BattleState,
-    FaceArmorToward,
     FireIfSolution,
     MoveTo,
     OrderLike,
     ScanArc,
     run_bot,
 )
+import math
+
+# Skirmisher: keep the enemy inside a preferred range band. Too far -> close in;
+# too close -> give ground; inside the band -> hold. Steers with MoveTo only so
+# the hull follows the movement while the turret keeps the gun on target.
+OPTIMAL_M = 18.0
+BAND_M = 4.0
+
+
+def on_tick(state: BattleState) -> list[OrderLike]:
+    own = state.own_unit
+    enemy = state.contacts.closest_enemy()
+    if not enemy:
+        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
+
+    dx = own.position.x - enemy.position.x
+    dy = own.position.y - enemy.position.y
+    dist = math.hypot(dx, dy) or 1.0
+    orders: list[OrderLike] = [AimAt(enemy.position), FireIfSolution(min_hit_chance=0.4)]
+
+    if abs(dist - OPTIMAL_M) > BAND_M:
+        # Re-establish the standoff by moving to a point OPTIMAL_M from the enemy
+        # along the line between us.
+        ux, uy = dx / dist, dy / dist
+        orders.append(MoveTo({"x": enemy.position.x + ux * OPTIMAL_M, "y": enemy.position.y + uy * OPTIMAL_M}))
+    return orders
+
+
+run_bot(on_tick)
+`;
+
+const ORBITER_BOT_SOURCE = `from robolocks import (
+    AimAt,
+    BattleState,
+    FireIfSolution,
+    MoveTo,
+    OrderLike,
+    ScanArc,
+    run_bot,
+)
+import math
+
+# Orbiter: circle the enemy at a fixed radius, sliding around the ring (strafe).
+# Constant lateral motion makes us a hard target for slow shells while the turret
+# keeps firing inward. Each tick we aim a step further around the circle.
+RADIUS_M = 18.0
+STEP_DEG = 26.0
+
+
+def on_tick(state: BattleState) -> list[OrderLike]:
+    own = state.own_unit
+    enemy = state.contacts.closest_enemy()
+    if not enemy:
+        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
+
+    angle = math.atan2(own.position.y - enemy.position.y, own.position.x - enemy.position.x)
+    angle += math.radians(STEP_DEG)  # advance counter-clockwise around the enemy
+    target = {
+        "x": enemy.position.x + math.cos(angle) * RADIUS_M,
+        "y": enemy.position.y + math.sin(angle) * RADIUS_M,
+    }
+    return [AimAt(enemy.position), FireIfSolution(min_hit_chance=0.35), MoveTo(target)]
+
+
+run_bot(on_tick)
+`;
+
+const FLANKER_BOT_SOURCE = `from robolocks import (
+    AimAt,
+    BattleState,
+    FireIfSolution,
+    MoveTo,
+    OrderLike,
+    ScanArc,
+    run_bot,
+)
+import math
+
+# Flanker: work around to the enemy's side, where armor is thin, instead of
+# trading blows head-on. We aim for a point off the flank we are already nearer
+# to; as the enemy turns to face us, that point moves, so it becomes a continuous
+# chase around them while the turret keeps firing.
+FLANK_M = 15.0
+
+
+def on_tick(state: BattleState) -> list[OrderLike]:
+    own = state.own_unit
+    enemy = state.contacts.closest_enemy()
+    if not enemy:
+        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
+
+    hull = math.radians(enemy.hull_heading)
+    # Perpendicular to the enemy's facing = their left/right side.
+    px, py = -math.sin(hull), math.cos(hull)
+    # Commit to whichever flank we are already on.
+    if (own.position.x - enemy.position.x) * px + (own.position.y - enemy.position.y) * py < 0.0:
+        px, py = -px, -py
+    target = {"x": enemy.position.x + px * FLANK_M, "y": enemy.position.y + py * FLANK_M}
+    return [AimAt(enemy.position), FireIfSolution(min_hit_chance=0.4), MoveTo(target)]
+
+
+run_bot(on_tick)
+`;
+
+const EVADER_BOT_SOURCE = `from robolocks import (
+    AimAt,
+    BattleState,
+    FireIfSolution,
+    MoveTo,
+    OrderLike,
+    ScanArc,
+    run_bot,
+)
+import math
+
+# Evader: fight at long range and dance. If a shell is inbound, sidestep across
+# its path; otherwise hold distance and back off when the enemy closes. The turret
+# stays on target, so we keep firing while dodging.
+KEEP_M = 26.0
+DODGE_M = 7.0
 
 
 def on_tick(state: BattleState) -> list[OrderLike]:
     own = state.own_unit
     enemy = state.contacts.closest_enemy()
 
-    if not enemy:
-        return [
-            MoveTo(state.map.center),
-            ScanArc(direction=own.hull_heading, width=170.0),
-        ]
+    # 1) Dodge the nearest inbound shell (step perpendicular to its travel).
+    for shell in state.contacts.projectiles:
+        if shell.owner_unit_id == state.self_id:
+            continue
+        vx = shell.position.x - shell.previous_position.x
+        vy = shell.position.y - shell.previous_position.y
+        speed = math.hypot(vx, vy)
+        if speed < 1e-6:
+            continue
+        nx, ny = -vy / speed, vx / speed  # perpendicular to the shell's path
+        if (own.position.x - shell.position.x) * nx + (own.position.y - shell.position.y) * ny < 0.0:
+            nx, ny = -nx, -ny  # sidestep away from the shell
+        dodge = {"x": own.position.x + nx * DODGE_M, "y": own.position.y + ny * DODGE_M}
+        if enemy:
+            return [AimAt(enemy.position), FireIfSolution(min_hit_chance=0.5), MoveTo(dodge)]
+        return [MoveTo(dodge)]
 
-    retreat_x = 8.0 if enemy.position.x > own.position.x else 32.0
-    retreat_y = max(4.0, min(20.0, own.position.y + (own.position.y - enemy.position.y) * 0.6))
-    return [
-        FaceArmorToward(enemy.position),
-        AimAt(enemy.position),
-        FireIfSolution(min_hit_chance=0.5),
-        MoveTo({"x": retreat_x, "y": retreat_y}),
-    ]
+    # 2) No incoming fire: hold long range, retreat if crowded.
+    if not enemy:
+        return [MoveTo(state.map.center), ScanArc(direction=own.hull_heading, width=160.0)]
+    dx = own.position.x - enemy.position.x
+    dy = own.position.y - enemy.position.y
+    dist = math.hypot(dx, dy) or 1.0
+    orders: list[OrderLike] = [AimAt(enemy.position), FireIfSolution(min_hit_chance=0.5)]
+    if dist < KEEP_M:
+        orders.append(MoveTo({"x": enemy.position.x + dx / dist * KEEP_M, "y": enemy.position.y + dy / dist * KEEP_M}))
+    return orders
 
 
 run_bot(on_tick)
@@ -135,22 +226,34 @@ export const RESEARCH_BOT_LOGIC_PRESETS: ResearchBotLogicPreset[] = [
     source: "",
   },
   {
-    id: "advance_fire",
-    label: "Advance Fire",
-    description: "Advance toward center, scan, face armor, aim, and fire when a target is available.",
-    source: ADVANCE_FIRE_BOT_SOURCE,
+    id: "charger",
+    label: "Charger — rush & brawl",
+    description: "Charges the closest enemy and fights point-blank, chasing their live position.",
+    source: CHARGER_BOT_SOURCE,
   },
   {
-    id: "hold_line",
-    label: "Hold Line",
-    description: "Hold a central firing line while keeping frontal armor toward the closest enemy.",
-    source: HOLD_LINE_BOT_SOURCE,
+    id: "skirmisher",
+    label: "Skirmisher — hold range",
+    description: "Keeps the enemy in a preferred range band, closing or backing off to hold the standoff.",
+    source: SKIRMISHER_BOT_SOURCE,
   },
   {
-    id: "kite",
-    label: "Kite",
-    description: "Back away from contact while aiming and firing when the solution is good enough.",
-    source: KITE_BOT_SOURCE,
+    id: "orbiter",
+    label: "Orbiter — circle & strafe",
+    description: "Circles the enemy at a set radius, strafing constantly while the turret fires inward.",
+    source: ORBITER_BOT_SOURCE,
+  },
+  {
+    id: "flanker",
+    label: "Flanker — hit the weak side",
+    description: "Swings around to the enemy's flank to attack their thinner side armor, chasing as they turn.",
+    source: FLANKER_BOT_SOURCE,
+  },
+  {
+    id: "evader",
+    label: "Evader — kite & dodge",
+    description: "Fights at long range and sidesteps incoming shells, backing off when the enemy closes.",
+    source: EVADER_BOT_SOURCE,
   },
   {
     id: "custom",
@@ -160,7 +263,7 @@ export const RESEARCH_BOT_LOGIC_PRESETS: ResearchBotLogicPreset[] = [
   },
 ];
 
-export const DEFAULT_RESEARCH_BOT_SOURCE = ADVANCE_FIRE_BOT_SOURCE;
+export const DEFAULT_RESEARCH_BOT_SOURCE = CHARGER_BOT_SOURCE;
 
 export const NO_OP_BOT_SOURCE = `from robolocks import (
     BattleState,
@@ -220,9 +323,19 @@ export type ResearchBattlePreset = {
   id: string;
   label: string;
   description: string;
+  field: FieldBoundsFrame;
   obstacles: unknown[];
+  flagPosition: { x: number; y: number };
   blueSpawn: { x: number; y: number; headingDeg: number };
   targetSpawn: { x: number; y: number; headingDeg: number };
+  blueRespawnZone: ResearchRespawnZone;
+  targetRespawnZone: ResearchRespawnZone;
+};
+
+type ResearchRespawnZone = {
+  position: { x: number; y: number };
+  radiusMeters: number;
+  headingDeg: number;
 };
 
 export type ResearchUnitPreset = {
@@ -253,6 +366,7 @@ type ResearchUnitModulesConfig = {
 export async function runResearchInBrowser(options: ResearchRunOptions): Promise<ResearchRunResult> {
   const tickCount = normalizeTickCount(options.tickCount);
   const battleConfigJson = options.battleConfigJson ?? DEFAULT_RESEARCH_BATTLE_CONFIG_JSON;
+  const configuredFieldShape = fieldShapeFromBattleConfigJson(battleConfigJson);
   const onProgress = options.onProgress ?? (() => {});
   const createBotRuntime = options.createBotRuntime ?? ((botSource, botId) => createPyodideBotRuntime(botSource, botId, onProgress));
   const botSourcesByUnit = botSourcesByUnitFromConfig(battleConfigJson, options.botSource, options.botSourcesByUnit);
@@ -300,7 +414,7 @@ export async function runResearchInBrowser(options: ResearchRunOptions): Promise
         type: "robolocks.replay.v1",
         tickRate: 30,
         obstacles: runner.staticObstacles(),
-        frames,
+        frames: applyConfiguredFieldShape(frames, configuredFieldShape),
       },
       logs,
     };
@@ -385,9 +499,9 @@ const STANDARD_MODULES: ResearchUnitModulesConfig = {
   sensor: { id: "visual_optic_mk1", rangeMeters: 60.0, fovDegrees: 120.0, refreshTicks: 1 },
 };
 
-const FIXED_TARGET_MODULES: ResearchUnitModulesConfig = {
-  ...STANDARD_MODULES,
-  mobility: { id: "fixed_target_chassis", maxSpeedMetersPerSecond: 0.0, maxHullTurnDegreesPerSecond: 60.0 },
+const LARGE_RECT_RESEARCH_FIELD: FieldBoundsFrame = {
+  min: { x: -108, y: -68 },
+  max: { x: 148, y: 92 },
 };
 
 export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
@@ -395,6 +509,7 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
     id: "covered_duel",
     label: "Covered Duel",
     description: "One line-of-sight blocker between a mobile unit and a fixed target.",
+    field: LARGE_RECT_RESEARCH_FIELD,
     obstacles: [
       {
         id: "research_cover",
@@ -404,21 +519,29 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
         blocksLineOfSight: true,
       },
     ],
-    blueSpawn: { x: 4, y: 5, headingDeg: 35 },
-    targetSpawn: { x: 34, y: 18, headingDeg: 215 },
+    flagPosition: { x: 20, y: 12 },
+    blueSpawn: { x: -68, y: -28, headingDeg: 35 },
+    targetSpawn: { x: 108, y: 52, headingDeg: 215 },
+    blueRespawnZone: { position: { x: -68, y: -28 }, radiusMeters: 10, headingDeg: 35 },
+    targetRespawnZone: { position: { x: 108, y: 52 }, radiusMeters: 10, headingDeg: 215 },
   },
   {
     id: "open_range",
     label: "Open Range",
     description: "No cover, useful for weapon timing and sensor checks.",
+    field: LARGE_RECT_RESEARCH_FIELD,
     obstacles: [],
-    blueSpawn: { x: 5, y: 12, headingDeg: 0 },
-    targetSpawn: { x: 34, y: 12, headingDeg: 180 },
+    flagPosition: { x: 20, y: 12 },
+    blueSpawn: { x: -70, y: 12, headingDeg: 0 },
+    targetSpawn: { x: 110, y: 12, headingDeg: 180 },
+    blueRespawnZone: { position: { x: -70, y: 12 }, radiusMeters: 12, headingDeg: 0 },
+    targetRespawnZone: { position: { x: 110, y: 12 }, radiusMeters: 12, headingDeg: 180 },
   },
   {
     id: "close_cover",
     label: "Close Cover",
     description: "Shorter spawn distance with central cover pressure.",
+    field: LARGE_RECT_RESEARCH_FIELD,
     obstacles: [
       {
         id: "center_cover",
@@ -428,8 +551,93 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
         blocksLineOfSight: true,
       },
     ],
-    blueSpawn: { x: 9, y: 9, headingDeg: 20 },
-    targetSpawn: { x: 29, y: 16, headingDeg: 210 },
+    flagPosition: { x: 20, y: 12 },
+    blueSpawn: { x: -58, y: -22, headingDeg: 20 },
+    targetSpawn: { x: 98, y: 46, headingDeg: 210 },
+    blueRespawnZone: { position: { x: -58, y: -22 }, radiusMeters: 10, headingDeg: 20 },
+    targetRespawnZone: { position: { x: 98, y: 46 }, radiusMeters: 10, headingDeg: 210 },
+  },
+  {
+    id: "flag_run",
+    label: "Flag Run",
+    description: "Staggered cover creates lanes around blockers for capture-route practice.",
+    field: LARGE_RECT_RESEARCH_FIELD,
+    obstacles: [
+      { id: "flag_run_north_1", position: { x: 14, y: 17 }, radiusMeters: 1.35, blocksMovement: true, blocksLineOfSight: true },
+      { id: "flag_run_north_2", position: { x: 22, y: 18 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
+      { id: "flag_run_north_3", position: { x: 30, y: 16 }, radiusMeters: 1.25, blocksMovement: true, blocksLineOfSight: true },
+      { id: "flag_run_south_1", position: { x: 12, y: 8 }, radiusMeters: 1.25, blocksMovement: true, blocksLineOfSight: true },
+      { id: "flag_run_south_2", position: { x: 20, y: 6 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
+      { id: "flag_run_south_3", position: { x: 28, y: 8 }, radiusMeters: 1.35, blocksMovement: true, blocksLineOfSight: true },
+    ],
+    flagPosition: { x: 20, y: 12 },
+    blueSpawn: { x: -76, y: -38, headingDeg: 20 },
+    targetSpawn: { x: 116, y: 62, headingDeg: 200 },
+    blueRespawnZone: { position: { x: -76, y: -38 }, radiusMeters: 10, headingDeg: 20 },
+    targetRespawnZone: { position: { x: 116, y: 62 }, radiusMeters: 10, headingDeg: 200 },
+  },
+  {
+    id: "brawl_ring",
+    label: "Circular Arena",
+    description: "A circular obstacle ring keeps both units rotating into close combat.",
+    field: {
+      min: { x: -52, y: -60 },
+      max: { x: 92, y: 84 },
+      shape: { type: "circle", center: { x: 20, y: 12 }, radiusMeters: 72 },
+    },
+    obstacles: [
+      { id: "ring_0", position: { x: 20, y: 5.5 }, radiusMeters: 1.15, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_1", position: { x: 25, y: 6.8 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_2", position: { x: 28.7, y: 10.5 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_3", position: { x: 28.7, y: 15.5 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_4", position: { x: 25, y: 19.2 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_5", position: { x: 20, y: 20.5 }, radiusMeters: 1.15, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_6", position: { x: 15, y: 19.2 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_7", position: { x: 11.3, y: 15.5 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_8", position: { x: 11.3, y: 10.5 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_9", position: { x: 15, y: 6.8 }, radiusMeters: 1.1, blocksMovement: true, blocksLineOfSight: true },
+      { id: "ring_center", position: { x: 20, y: 13 }, radiusMeters: 0.9, blocksMovement: true, blocksLineOfSight: true },
+    ],
+    flagPosition: { x: 20, y: 13 },
+    blueSpawn: { x: -40, y: 12, headingDeg: 0 },
+    targetSpawn: { x: 80, y: 12, headingDeg: 180 },
+    blueRespawnZone: { position: { x: -40, y: 12 }, radiusMeters: 9, headingDeg: 0 },
+    targetRespawnZone: { position: { x: 80, y: 12 }, radiusMeters: 9, headingDeg: 180 },
+  },
+  {
+    id: "hex_bastion",
+    label: "Polygon Arena",
+    description: "Hexagonal strongpoints create polygonal lanes for crossfire and flanking.",
+    field: {
+      min: { x: -52, y: -39.25 },
+      max: { x: 92, y: 66.75 },
+      shape: {
+        type: "polygon",
+        vertices: [
+          { x: 20, y: -39.25 },
+          { x: 92, y: -11.25 },
+          { x: 92, y: 38.75 },
+          { x: 20, y: 66.75 },
+          { x: -52, y: 38.75 },
+          { x: -52, y: -11.25 },
+        ],
+      },
+    },
+    obstacles: [
+      { id: "hex_north", position: { x: 20, y: 6 }, radiusMeters: 1.55, blocksMovement: true, blocksLineOfSight: true },
+      { id: "hex_north_east", position: { x: 28, y: 9.5 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
+      { id: "hex_south_east", position: { x: 28, y: 17.5 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
+      { id: "hex_south", position: { x: 20, y: 21 }, radiusMeters: 1.55, blocksMovement: true, blocksLineOfSight: true },
+      { id: "hex_south_west", position: { x: 12, y: 17.5 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
+      { id: "hex_north_west", position: { x: 12, y: 9.5 }, radiusMeters: 1.45, blocksMovement: true, blocksLineOfSight: true },
+      { id: "hex_keep_left", position: { x: 17, y: 13.5 }, radiusMeters: 0.95, blocksMovement: true, blocksLineOfSight: true },
+      { id: "hex_keep_right", position: { x: 23, y: 13.5 }, radiusMeters: 0.95, blocksMovement: true, blocksLineOfSight: true },
+    ],
+    flagPosition: { x: 20, y: 13.5 },
+    blueSpawn: { x: -32, y: -6, headingDeg: 35 },
+    targetSpawn: { x: 72, y: 34, headingDeg: 215 },
+    blueRespawnZone: { position: { x: -32, y: -6 }, radiusMeters: 9, headingDeg: 35 },
+    targetRespawnZone: { position: { x: 72, y: 34 }, radiusMeters: 9, headingDeg: 215 },
   },
 ];
 
@@ -510,8 +718,8 @@ export const RESEARCH_RULE_PRESETS: ResearchRulePreset[] = [
   },
   {
     id: "capture_alpha",
-    label: "Capture Alpha",
-    description: "Hold the central capture zone for 90 ticks to win.",
+    label: "Capture Flag",
+    description: "Hold the battlefield flag for 90 ticks to win.",
     rule: {
       mode: "capture_point",
       teamMode: "team",
@@ -532,13 +740,6 @@ export const RESEARCH_RULE_PRESETS: ResearchRulePreset[] = [
     },
   },
 ];
-
-// Play field for research battles. Centered on (20, 12) — the map center the
-// bots rally to (see the Python SDK's BattleMap.center) — and sized well beyond
-// the spawn footprint (x in [4, 34], y in [5, 18]) so units have room to
-// maneuver instead of pinning against the boundary. The engine clamps units to
-// this box and the renderer draws the visible boundary from it.
-const RESEARCH_FIELD = { min: { x: -12, y: -8 }, max: { x: 52, y: 32 } };
 
 export function createResearchBattleConfigJson(options: {
   battlePresetId: string;
@@ -563,7 +764,7 @@ export function createResearchBattleConfigJson(options: {
     seed: 1,
     tickRate: 30,
     tickLimit,
-    field: cloneJson(RESEARCH_FIELD),
+    field: cloneJson(battlePreset.field),
     obstacles: cloneJson(battlePreset.obstacles),
     units: [
       {
@@ -726,7 +927,64 @@ function setupFieldFromConfig(payload: unknown): FieldBoundsFrame {
   if (bounds.max.x <= bounds.min.x || bounds.max.y <= bounds.min.y) {
     return fallback;
   }
-  return bounds;
+  const shape = setupFieldShapeFromConfig(payload.shape);
+  return shape ? { ...bounds, shape } : bounds;
+}
+
+function setupFieldShapeFromConfig(payload: unknown): FieldBoundsFrame["shape"] | undefined {
+  const shape = isRecord(payload) ? payload : {};
+  if (shape.type === "rect") {
+    return { type: "rect" };
+  }
+  if (shape.type === "circle" && typeof shape.radiusMeters === "number" && shape.radiusMeters > 0) {
+    const center = isRecord(shape.center) ? shape.center : {};
+    return {
+      type: "circle",
+      center: {
+        x: typeof center.x === "number" ? center.x : 0,
+        y: typeof center.y === "number" ? center.y : 0,
+      },
+      radiusMeters: shape.radiusMeters,
+    };
+  }
+  if (shape.type === "polygon" && Array.isArray(shape.vertices) && shape.vertices.length >= 3) {
+    return {
+      type: "polygon",
+      vertices: shape.vertices.map((payload) => {
+        const vertex = isRecord(payload) ? payload : {};
+        return {
+          x: typeof vertex.x === "number" ? vertex.x : 0,
+          y: typeof vertex.y === "number" ? vertex.y : 0,
+        };
+      }),
+    };
+  }
+  return undefined;
+}
+
+function fieldShapeFromBattleConfigJson(battleConfigJson: string): FieldBoundsFrame["shape"] | undefined {
+  try {
+    const config = JSON.parse(battleConfigJson) as { field?: unknown };
+    return isRecord(config.field) ? setupFieldShapeFromConfig(config.field.shape) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function applyConfiguredFieldShape(
+  frames: BattleFrame[],
+  shape: FieldBoundsFrame["shape"] | undefined,
+): BattleFrame[] {
+  if (!shape) {
+    return frames;
+  }
+  return frames.map((frame) => ({
+    ...frame,
+    field: {
+      ...(frame.field ?? { min: { x: 0, y: 0 }, max: { x: 40, y: 24 } }),
+      shape: cloneJson(shape),
+    },
+  }));
 }
 
 function setupCaptureZonesFromRule(payload: unknown): BattleFrame["ruleState"]["captureZones"] {
@@ -753,22 +1011,28 @@ function setupCaptureZonesFromRule(payload: unknown): BattleFrame["ruleState"]["
 
 function createRuleConfig(rulePreset: ResearchRulePreset, battlePreset: ResearchBattlePreset): ResearchRuleConfig {
   const rule = cloneJson(rulePreset.rule);
+  if (Array.isArray(rule.captureZones)) {
+    rule.captureZones = rule.captureZones.map((zone) => ({
+      ...(isRecord(zone) ? zone : {}),
+      position: { x: battlePreset.flagPosition.x, y: battlePreset.flagPosition.y },
+    }));
+  }
   const respawn = rule.respawn;
   if (isRecord(respawn) && respawn.enabled === true) {
     respawn.spawnPoints = [
       {
         id: "blue_research_spawn",
         teamId: 1,
-        position: { x: battlePreset.blueSpawn.x, y: battlePreset.blueSpawn.y },
-        radiusMeters: 2.5,
-        headingDegrees: battlePreset.blueSpawn.headingDeg,
+        position: { x: battlePreset.blueRespawnZone.position.x, y: battlePreset.blueRespawnZone.position.y },
+        radiusMeters: battlePreset.blueRespawnZone.radiusMeters,
+        headingDegrees: battlePreset.blueRespawnZone.headingDeg,
       },
       {
         id: "target_research_spawn",
         teamId: 2,
-        position: { x: battlePreset.targetSpawn.x, y: battlePreset.targetSpawn.y },
-        radiusMeters: 2.5,
-        headingDegrees: battlePreset.targetSpawn.headingDeg,
+        position: { x: battlePreset.targetRespawnZone.position.x, y: battlePreset.targetRespawnZone.position.y },
+        radiusMeters: battlePreset.targetRespawnZone.radiusMeters,
+        headingDegrees: battlePreset.targetRespawnZone.headingDeg,
       },
     ];
   }

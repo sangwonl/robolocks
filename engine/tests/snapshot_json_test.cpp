@@ -40,6 +40,13 @@ robolocks::UnitSnapshot make_unit() {
 TEST_CASE("snapshot_to_json emits the frame schema") {
   robolocks::WorldSnapshot snapshot;
   snapshot.tick = 7;
+  snapshot.bounds = robolocks::BattleBounds{
+    .min = robolocks::Vec2{0.0, 0.0},
+    .max = robolocks::Vec2{40.0, 40.0},
+    .shape = robolocks::BattleBoundsShape::Circle,
+    .center = robolocks::Vec2{20.0, 20.0},
+    .radius_m = 16.0,
+  };
   snapshot.units.push_back(make_unit());
   snapshot.projectiles.push_back(robolocks::ProjectileSnapshot{
     .projectile_id = 3,
@@ -50,6 +57,9 @@ TEST_CASE("snapshot_to_json emits the frame schema") {
   const auto frame = robolocks::snapshot_to_json(snapshot);
 
   REQUIRE(frame.at("tick") == snapshot.tick);
+  REQUIRE(frame.at("field").at("shape").at("type") == "circle");
+  REQUIRE(frame.at("field").at("shape").at("center").at("x") == 20.0);
+  REQUIRE(frame.at("field").at("shape").at("radiusMeters") == 16.0);
   REQUIRE(frame.at("units").at(0).at("unitId") == 1);
   REQUIRE(frame.at("units").at(0).at("name") == "blue_1");
   REQUIRE(frame.at("units").at(0).at("teamId") == 1);

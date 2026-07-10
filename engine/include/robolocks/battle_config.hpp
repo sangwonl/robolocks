@@ -121,9 +121,19 @@ struct BodySpec {
   double mass_kg = 30000.0;
 };
 
+enum class BattleBoundsShape {
+  Rect,
+  Circle,
+  Polygon,
+};
+
 struct BattleBounds {
   Vec2 min = Vec2{0.0, 0.0};
   Vec2 max = Vec2{40.0, 24.0};
+  BattleBoundsShape shape = BattleBoundsShape::Rect;
+  Vec2 center = Vec2{20.0, 12.0};
+  double radius_m = 12.0;
+  std::vector<Vec2> vertices;
 };
 
 struct StaticObstacle {

@@ -1100,6 +1100,90 @@ TEST_CASE("battle_simulation advances fired projectiles before applying damage")
   REQUIRE(third.events[0].code == "armor_damage");
 }
 
+TEST_CASE("battle_simulation retires fired projectiles that hit obstacles") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{0.0, 5.0}, 0.0, 100.0, 0.0, 0.0),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{20.0, 5.0}, 0.0, 100.0, 180.0, 180.0),
+  };
+  config.units[0].weapon.muzzle_velocity_mps = 10.0;
+  config.units[0].weapon.projectile_radius_m = 0.1;
+  config.units[1].body.shape.radius_m = 1.0;
+  config.obstacles = {
+    robolocks::StaticObstacle{
+      .id = "cover",
+      .position = robolocks::Vec2{5.0, 5.0},
+      .radius_m = 1.0,
+      .blocks_movement = true,
+    },
+  };
+
+  robolocks::BattleSimulation battle_simulation(config);
+  const auto result = battle_simulation.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{20.0, 5.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+
+  REQUIRE(result.snapshot.projectiles.empty());
+  REQUIRE(result.snapshot.units[1].armor_integrity == Catch::Approx(100.0));
+  REQUIRE(result.events.size() == 2);
+  REQUIRE(result.events[0].code == "weapon_fired");
+  REQUIRE(result.events[1].code == "projectile_obstacle_collision");
+  REQUIRE(result.events[1].message == "Projectile hit obstacle cover.");
+  REQUIRE(result.events[1].payload.projectile_id == 1);
+}
+
+TEST_CASE("battle_simulation retires fired projectiles that leave bounds") {
+  robolocks::BattleConfig config;
+  config.tick_dt_sec = 1.0;
+  config.bounds = robolocks::BattleBounds{
+    .min = robolocks::Vec2{0.0, 0.0},
+    .max = robolocks::Vec2{10.0, 10.0},
+  };
+  config.units = {
+    make_unit(robolocks::UnitId{1}, "Blue", robolocks::Vec2{8.0, 5.0}, 0.0, 100.0, 0.0, 0.0),
+    make_unit(robolocks::UnitId{2}, "Red", robolocks::Vec2{20.0, 5.0}, 0.0, 100.0, 180.0, 180.0),
+  };
+  config.units[0].weapon.muzzle_velocity_mps = 10.0;
+  config.units[0].weapon.projectile_radius_m = 0.1;
+
+  robolocks::BattleSimulation battle_simulation(config);
+  const auto result = battle_simulation.step({
+    robolocks::UnitOrders{
+      robolocks::UnitId{1},
+      {
+        robolocks::Order{
+          .kind = robolocks::OrderKind::AimAt,
+          .payload = robolocks::AimAtOrder{robolocks::Vec2{20.0, 5.0}},
+        },
+        robolocks::Order{
+          .kind = robolocks::OrderKind::FireIfSolution,
+          .payload = robolocks::FireIfSolutionOrder{0.6},
+        },
+      },
+    },
+  });
+
+  REQUIRE(result.snapshot.projectiles.empty());
+  REQUIRE(result.events.size() == 2);
+  REQUIRE(result.events[0].code == "weapon_fired");
+  REQUIRE(result.events[1].code == "projectile_boundary_collision");
+  REQUIRE(result.events[1].message == "Projectile left the battle bounds.");
+  REQUIRE(result.events[1].payload.projectile_id == 1);
+}
+
 TEST_CASE("battle_simulation spawns fired projectiles from the weapon muzzle") {
   robolocks::BattleConfig config;
   config.tick_dt_sec = 1.0;

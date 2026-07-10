@@ -136,6 +136,26 @@ TEST_CASE("battle loader parses an explicit play field") {
   REQUIRE(loaded.config.bounds.max.y == Catch::Approx(32.0));
 }
 
+TEST_CASE("battle loader parses a circular play field shape") {
+  const auto loaded = robolocks::load_battle_from_json_string(
+    battle_json_with_field(R"json("field": {"min": {"x": 0, "y": 0}, "max": {"x": 40, "y": 40}, "shape": {"type": "circle", "center": {"x": 20, "y": 20}, "radiusMeters": 16}},)json")
+  );
+  REQUIRE(loaded.config.bounds.shape == robolocks::BattleBoundsShape::Circle);
+  REQUIRE(loaded.config.bounds.center.x == Catch::Approx(20.0));
+  REQUIRE(loaded.config.bounds.center.y == Catch::Approx(20.0));
+  REQUIRE(loaded.config.bounds.radius_m == Catch::Approx(16.0));
+}
+
+TEST_CASE("battle loader parses a polygon play field shape") {
+  const auto loaded = robolocks::load_battle_from_json_string(
+    battle_json_with_field(R"json("field": {"min": {"x": 0, "y": 0}, "max": {"x": 40, "y": 32}, "shape": {"type": "polygon", "vertices": [{"x": 20, "y": 2}, {"x": 36, "y": 10}, {"x": 32, "y": 26}, {"x": 8, "y": 26}, {"x": 4, "y": 10}]}},)json")
+  );
+  REQUIRE(loaded.config.bounds.shape == robolocks::BattleBoundsShape::Polygon);
+  REQUIRE(loaded.config.bounds.vertices.size() == 5);
+  REQUIRE(loaded.config.bounds.vertices[0].x == Catch::Approx(20.0));
+  REQUIRE(loaded.config.bounds.vertices[4].y == Catch::Approx(10.0));
+}
+
 TEST_CASE("battle loader falls back to the default field when omitted") {
   const auto loaded = robolocks::load_battle_from_json_string(battle_json_with_field(""));
   REQUIRE(loaded.config.bounds.min.x == Catch::Approx(0.0));

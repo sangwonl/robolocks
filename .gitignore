@@ -7,7 +7,9 @@ web/dist/
 .emsdk/
 web/public/wasm/*
 !web/public/wasm/.gitkeep
+!web/public/wasm/robolocks_wasm.wasm
 web/public/pyodide/*
 !web/public/pyodide/.gitkeep
 web/src/generated/robolocks_wasm.js
+!web/src/generated/robolocks_wasm.js
 web/src/research/pythonSdkFiles.generated.ts

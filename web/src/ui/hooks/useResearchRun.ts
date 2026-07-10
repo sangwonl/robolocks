@@ -333,15 +333,15 @@ function readStoredResearchState(): NormalizedStoredResearchState {
     battlePresetId: RESEARCH_BATTLE_PRESETS[0]?.id ?? "",
     rulePresetId: RESEARCH_RULE_PRESETS[0]?.id ?? "",
     unitPresetId: RESEARCH_UNIT_PRESETS[0]?.id ?? "",
-    botLogicPresetId: "advance_fire",
-    editorBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "advance_fire")?.source ?? "",
-    appliedBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "advance_fire")?.source ?? "",
+    botLogicPresetId: "charger",
+    editorBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "charger")?.source ?? "",
+    appliedBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "charger")?.source ?? "",
     activeBotUnitId: 1,
     botLogicByUnit: {
-      1: stateFromPresetId("advance_fire"),
-      2: stateFromPresetId("hold_line"),
+      1: stateFromPresetId("charger"),
+      2: stateFromPresetId("orbiter"),
     },
-    tickCount: 180,
+    tickCount: 10000,
     mode: "empty",
   };
   if (typeof window === "undefined") {

@@ -37,6 +37,13 @@ class ProjectileSystem {
     double tick_dt_sec,
     std::vector<UnitState>& units
   );
+  std::vector<Event> advance_projectiles(
+    Tick tick,
+    double tick_dt_sec,
+    std::vector<UnitState>& units,
+    const BattleBounds& bounds,
+    const std::vector<StaticObstacle>& obstacles
+  );
 
  private:
   std::vector<ProjectileState> projectiles_;

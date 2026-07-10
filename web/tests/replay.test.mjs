@@ -167,6 +167,35 @@ test("replay parser reads the play field bounds from a frame", () => {
   assert.deepEqual(replay.frames[0].field, { min: { x: -12, y: -8 }, max: { x: 52, y: 32 } });
 });
 
+test("replay parser preserves shaped play field metadata", () => {
+  const replay = parseBattleReplay(minimalReplay({
+    field: {
+      min: { x: 0, y: 0 },
+      max: { x: 40, y: 32 },
+      shape: {
+        type: "polygon",
+        vertices: [
+          { x: 20, y: 2 },
+          { x: 36, y: 10 },
+          { x: 32, y: 26 },
+          { x: 8, y: 26 },
+          { x: 4, y: 10 },
+        ],
+      },
+    },
+  }));
+  assert.deepEqual(replay.frames[0].field.shape, {
+    type: "polygon",
+    vertices: [
+      { x: 20, y: 2 },
+      { x: 36, y: 10 },
+      { x: 32, y: 26 },
+      { x: 8, y: 26 },
+      { x: 4, y: 10 },
+    ],
+  });
+});
+
 test("replay parser defaults the field to the 40x24 arena when omitted", () => {
   const replay = parseBattleReplay(minimalReplay({}));
   assert.deepEqual(replay.frames[0].field, { min: { x: 0, y: 0 }, max: { x: 40, y: 24 } });

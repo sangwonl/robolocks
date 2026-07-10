@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -71,7 +72,89 @@ Vec2 clamp_circle_to_bounds(Vec2 position, const BattleBounds& bounds, double ra
   };
 }
 
+double dot2(Vec2 a, Vec2 b) {
+  return a.x * b.x + a.y * b.y;
+}
+
+Vec2 subtract(Vec2 a, Vec2 b) {
+  return Vec2{a.x - b.x, a.y - b.y};
+}
+
+Vec2 add(Vec2 a, Vec2 b) {
+  return Vec2{a.x + b.x, a.y + b.y};
+}
+
+Vec2 scale(Vec2 value, double factor) {
+  return Vec2{value.x * factor, value.y * factor};
+}
+
+Vec2 closest_point_on_segment(Vec2 point, Vec2 a, Vec2 b) {
+  const Vec2 ab = subtract(b, a);
+  const double ab_len_sq = dot2(ab, ab);
+  if (ab_len_sq <= 1e-9) {
+    return a;
+  }
+  const double t = clamp(dot2(subtract(point, a), ab) / ab_len_sq, 0.0, 1.0);
+  return add(a, scale(ab, t));
+}
+
+bool point_in_polygon(Vec2 point, const std::vector<Vec2>& vertices) {
+  bool inside = false;
+  for (std::size_t i = 0, j = vertices.size() - 1; i < vertices.size(); j = i++) {
+    const Vec2 a = vertices[i];
+    const Vec2 b = vertices[j];
+    const bool crosses = ((a.y > point.y) != (b.y > point.y)) &&
+      (point.x < (b.x - a.x) * (point.y - a.y) / ((b.y - a.y) == 0.0 ? 1e-9 : (b.y - a.y)) + a.x);
+    if (crosses) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+Vec2 closest_point_on_polygon(Vec2 point, const std::vector<Vec2>& vertices) {
+  Vec2 closest = vertices.front();
+  double closest_dist_sq = std::numeric_limits<double>::infinity();
+  for (std::size_t i = 0; i < vertices.size(); ++i) {
+    const Vec2 candidate = closest_point_on_segment(point, vertices[i], vertices[(i + 1) % vertices.size()]);
+    const Vec2 delta = subtract(point, candidate);
+    const double dist_sq = dot2(delta, delta);
+    if (dist_sq < closest_dist_sq) {
+      closest = candidate;
+      closest_dist_sq = dist_sq;
+    }
+  }
+  return closest;
+}
+
+double body_bounds_radius(const PhysicsBody& body) {
+  if (!has_box_shape(body)) {
+    return body.shape.radius_m;
+  }
+  const double half_length = body.shape.length_m * 0.5;
+  const double half_width = body.shape.width_m * 0.5;
+  return std::sqrt(half_length * half_length + half_width * half_width);
+}
+
 Vec2 clamp_body_to_bounds(const PhysicsBody& body, const BattleBounds& bounds) {
+  if (bounds.shape == BattleBoundsShape::Circle) {
+    const double body_radius = body_bounds_radius(body);
+    const Vec2 delta = subtract(body.position, bounds.center);
+    const double distance_from_center = length(delta);
+    const double max_distance = std::max(0.0, bounds.radius_m - body_radius);
+    if (distance_from_center <= max_distance || distance_from_center <= 1e-9) {
+      return body.position;
+    }
+    return add(bounds.center, scale(delta, max_distance / distance_from_center));
+  }
+
+  if (bounds.shape == BattleBoundsShape::Polygon && bounds.vertices.size() >= 3) {
+    if (point_in_polygon(body.position, bounds.vertices)) {
+      return body.position;
+    }
+    return closest_point_on_polygon(body.position, bounds.vertices);
+  }
+
   if (!has_box_shape(body)) {
     return clamp_circle_to_bounds(body.position, bounds, body.shape.radius_m);
   }

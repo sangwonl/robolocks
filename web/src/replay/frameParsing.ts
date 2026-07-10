@@ -559,7 +559,7 @@ function parseAction(payload: unknown): BattleAction {
 }
 
 function parseField(payload: unknown): FieldBoundsFrame {
-  const field = payload as { min?: unknown; max?: unknown };
+  const field = payload as { min?: unknown; max?: unknown; shape?: unknown };
   if (typeof field !== "object" || field === null) {
     return DEFAULT_FIELD;
   }
@@ -570,7 +570,32 @@ function parseField(payload: unknown): FieldBoundsFrame {
   if (max.x <= min.x || max.y <= min.y) {
     return DEFAULT_FIELD;
   }
-  return { min, max };
+  const shape = parseFieldShape(field.shape);
+  return shape ? { min, max, shape } : { min, max };
+}
+
+function parseFieldShape(payload: unknown): FieldBoundsFrame["shape"] | undefined {
+  const shape = payload as { type?: unknown; center?: unknown; radiusMeters?: unknown; vertices?: unknown };
+  if (typeof shape !== "object" || shape === null) {
+    return undefined;
+  }
+  if (shape.type === "rect") {
+    return { type: "rect" };
+  }
+  if (shape.type === "circle" && typeof shape.radiusMeters === "number" && shape.radiusMeters > 0) {
+    return {
+      type: "circle",
+      center: parseVec(shape.center, "Invalid field circle center"),
+      radiusMeters: shape.radiusMeters,
+    };
+  }
+  if (shape.type === "polygon" && Array.isArray(shape.vertices) && shape.vertices.length >= 3) {
+    return {
+      type: "polygon",
+      vertices: shape.vertices.map((vertex) => parseVec(vertex, "Invalid field polygon vertex")),
+    };
+  }
+  return undefined;
 }
 
 function parseVec(payload: unknown, errorMessage: string): { x: number; y: number } {

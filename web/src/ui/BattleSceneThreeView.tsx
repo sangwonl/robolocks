@@ -16,7 +16,8 @@ export type BattleSceneThreeViewProps = {
 
 // Vertical extent (metres) folded into the camera fit so tall units stay framed.
 const FIELD_VERTICAL_M = 8;
-const FIT_PADDING = 1.12;
+const FIT_PADDING = 1.1;
+const FIT_BOTTOM_SAFE_AREA = 0.18;
 const ISO_ELEVATION_DEG = 35.264;
 const ISO_POLAR_ANGLE = THREE.MathUtils.degToRad(90 - ISO_ELEVATION_DEG);
 
@@ -31,6 +32,7 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
   const controlsRef = useRef<OrbitControls | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const battleSceneRef = useRef<BattleScene | null>(null);
+  const requestRenderRef = useRef<(() => void) | null>(null);
   const frameRef = useRef<BattleFrame | null>(frame);
   const fieldRef = useRef<FieldBoundsFrame>(field);
   const aspectRef = useRef(1);
@@ -52,7 +54,7 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = false;
     renderer.domElement.className = "block h-full w-full";
     host.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -68,6 +70,18 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
         renderer.render(scene, camera);
       }
     };
+    let renderQueued = false;
+    const requestRender = () => {
+      if (renderQueued) {
+        return;
+      }
+      renderQueued = true;
+      requestAnimationFrame(() => {
+        renderQueued = false;
+        renderCurrentScene();
+      });
+    };
+    requestRenderRef.current = requestRender;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = false;
@@ -87,7 +101,7 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
     };
     applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current, fieldRef.current);
     controls.addEventListener("change", () => {
-      renderCurrentScene();
+      requestRender();
     });
     controls.update();
     controlsRef.current = controls;
@@ -98,7 +112,7 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
       aspectRef.current = width / height;
       applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current, fieldRef.current);
       renderer.setSize(width, height, false);
-      renderCurrentScene();
+      requestRender();
     };
 
     resize();
@@ -113,6 +127,7 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
       rendererRef.current = null;
       cameraRef.current = null;
       controlsRef.current = null;
+      requestRenderRef.current = null;
     };
   }, []);
 
@@ -128,7 +143,7 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
     applyCameraMode(camera, controls, cameraMode, aspectRef.current, fieldRef.current);
     if (renderer && scene) {
       battleSceneRef.current?.faceCamera(camera);
-      renderer.render(scene, camera);
+      requestRenderRef.current?.();
     }
   }, [cameraMode]);
 
@@ -141,13 +156,12 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
     battleSceneRef.current = battleScene;
     sceneRef.current = battleScene.scene;
     battleScene.sync(frameRef.current);
-    const renderer = rendererRef.current;
     const camera = cameraRef.current;
     const controls = controlsRef.current;
-    if (renderer && camera && controls) {
+    if (camera && controls) {
       applyCameraMode(camera, controls, cameraModeRef.current, aspectRef.current, field);
       battleScene.faceCamera(camera);
-      renderer.render(battleScene.scene, camera);
+      requestRenderRef.current?.();
     }
     return () => {
       battleScene.dispose();
@@ -164,16 +178,15 @@ export function BattleSceneThreeView({ frame, obstacles, field }: BattleSceneThr
       return;
     }
     battleScene.sync(frame);
-    const renderer = rendererRef.current;
     const camera = cameraRef.current;
-    if (renderer && camera) {
+    if (camera) {
       battleScene.faceCamera(camera);
-      renderer.render(battleScene.scene, camera);
+      requestRenderRef.current?.();
     }
   }, [frame]);
 
   return (
-    <div ref={hostRef} className="relative block h-full w-full" aria-label="Battle scene viewport">
+    <div ref={hostRef} className="absolute inset-0 min-h-0 min-w-0" aria-label="Battle scene viewport">
       <div
         className="absolute right-3 top-3 z-[2] grid grid-cols-[repeat(2,54px)] gap-1 rounded-lg border border-[var(--brand-border-menu)] bg-[var(--overlay)] p-1 backdrop-blur-md"
         aria-label="Camera mode"
@@ -266,13 +279,20 @@ function fitCameraToArena(camera: THREE.OrthographicCamera, aspect: number, fiel
     maxY = Math.max(maxY, local.y);
   }
 
-  const projectedWidth = Math.max(1, Math.max(Math.abs(minX), Math.abs(maxX)) * 2) * FIT_PADDING;
-  const projectedHeight = Math.max(1, Math.max(Math.abs(minY), Math.abs(maxY)) * 2) * FIT_PADDING;
-  const viewHeight = Math.max(projectedHeight, projectedWidth / Math.max(aspect, 0.01));
-  const viewWidth = viewHeight * Math.max(aspect, 0.01);
+  const projectedWidth = Math.max(1, maxX - minX);
+  const projectedHeight = Math.max(1, maxY - minY);
+  const paddedWidth = projectedWidth * FIT_PADDING;
+  const paddedHeight = projectedHeight * FIT_PADDING;
+  const aspectSafe = Math.max(aspect, 0.01);
+  const contentHeight = Math.max(paddedHeight, paddedWidth / aspectSafe);
+  const extraBottom = contentHeight * FIT_BOTTOM_SAFE_AREA;
+  const viewHeight = contentHeight + extraBottom;
+  const viewWidth = viewHeight * aspectSafe;
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
 
-  camera.left = -viewWidth / 2;
-  camera.right = viewWidth / 2;
-  camera.top = viewHeight / 2;
-  camera.bottom = -viewHeight / 2;
+  camera.left = centerX - viewWidth / 2;
+  camera.right = centerX + viewWidth / 2;
+  camera.top = centerY + contentHeight / 2;
+  camera.bottom = camera.top - viewHeight;
 }

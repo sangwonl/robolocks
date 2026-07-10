@@ -22,6 +22,59 @@ TEST_CASE("physics system uses the jolt 3d backend") {
   REQUIRE(physics.uses_3d_backend());
 }
 
+TEST_CASE("physics system clamps units to circular battle bounds") {
+  robolocks::PhysicsSystem physics(robolocks::BattleBounds{
+    .min = robolocks::Vec2{0.0, 0.0},
+    .max = robolocks::Vec2{40.0, 40.0},
+    .shape = robolocks::BattleBoundsShape::Circle,
+    .center = robolocks::Vec2{20.0, 20.0},
+    .radius_m = 10.0,
+  });
+
+  std::vector<robolocks::PhysicsBody> bodies = {
+    robolocks::PhysicsBody{
+      .unit_id = robolocks::UnitId{1},
+      .position = robolocks::Vec2{35.0, 20.0},
+      .shape = robolocks::BodyShapeSpec{.radius_m = 1.0},
+      .mass_kg = 1000.0,
+    },
+  };
+
+  physics.resolve(robolocks::Tick{1}, bodies);
+
+  REQUIRE(distance(bodies[0].position, robolocks::Vec2{20.0, 20.0}) <= Catch::Approx(9.0).margin(0.001));
+}
+
+TEST_CASE("physics system clamps units to polygon battle bounds") {
+  robolocks::PhysicsSystem physics(robolocks::BattleBounds{
+    .min = robolocks::Vec2{0.0, 0.0},
+    .max = robolocks::Vec2{40.0, 30.0},
+    .shape = robolocks::BattleBoundsShape::Polygon,
+    .vertices = {
+      robolocks::Vec2{20.0, 2.0},
+      robolocks::Vec2{36.0, 10.0},
+      robolocks::Vec2{32.0, 26.0},
+      robolocks::Vec2{8.0, 26.0},
+      robolocks::Vec2{4.0, 10.0},
+    },
+  });
+
+  std::vector<robolocks::PhysicsBody> bodies = {
+    robolocks::PhysicsBody{
+      .unit_id = robolocks::UnitId{1},
+      .position = robolocks::Vec2{39.0, 15.0},
+      .shape = robolocks::BodyShapeSpec{.radius_m = 1.0},
+      .mass_kg = 1000.0,
+    },
+  };
+
+  physics.resolve(robolocks::Tick{1}, bodies);
+
+  REQUIRE(bodies[0].position.x < 36.5);
+  REQUIRE(bodies[0].position.y >= 10.0);
+  REQUIRE(bodies[0].position.y <= 26.0);
+}
+
 TEST_CASE("physics system resolves collisions by inverse mass and emits contact events") {
   robolocks::PhysicsSystem physics(robolocks::BattleBounds{
     .min = robolocks::Vec2{0.0, 0.0},

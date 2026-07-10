@@ -2,6 +2,7 @@
 
 #include <robolocks/json_field.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -48,6 +49,16 @@ Vec3 required_vec3(const nlohmann::json& object, const char* key) {
     .x = required_number(vec, "x"),
     .y = required_number(vec, "y"),
     .z = required_number(vec, "z"),
+  };
+}
+
+Vec2 required_inline_vec2(const nlohmann::json& object, const char* field_label) {
+  if (!object.is_object()) {
+    throw std::runtime_error(std::string("Expected vector field: ") + field_label);
+  }
+  return Vec2{
+    .x = required_number(object, "x", field_label),
+    .y = required_number(object, "y", field_label),
   };
 }
 
@@ -458,7 +469,7 @@ const nlohmann::json& required_units_array(const nlohmann::json& data) {
 }
 
 // Optional play-field bounds. When omitted the engine keeps its built-in default
-// (see BattleBounds). Shape: {"field": {"min": {x, y}, "max": {x, y}}}.
+// (see BattleBounds). Shape: {"field": {"min": {x, y}, "max": {x, y}, "shape": ...}}.
 std::optional<BattleBounds> optional_field_bounds(const nlohmann::json& data) {
   if (!data.contains("field")) {
     return std::nullopt;
@@ -472,7 +483,46 @@ std::optional<BattleBounds> optional_field_bounds(const nlohmann::json& data) {
   if (max.x <= min.x || max.y <= min.y) {
     throw std::runtime_error("field.max must be greater than field.min on both axes");
   }
-  return BattleBounds{.min = min, .max = max};
+  BattleBounds bounds{
+    .min = min,
+    .max = max,
+    .shape = BattleBoundsShape::Rect,
+    .center = Vec2{(min.x + max.x) * 0.5, (min.y + max.y) * 0.5},
+    .radius_m = std::min(max.x - min.x, max.y - min.y) * 0.5,
+    .vertices = {},
+  };
+  if (!field.contains("shape")) {
+    return bounds;
+  }
+  const auto& shape = field.at("shape");
+  if (!shape.is_object()) {
+    throw std::runtime_error("Expected object field: field.shape");
+  }
+  const std::string type = required_string(shape, "type", "field.shape");
+  if (type == "rect") {
+    bounds.shape = BattleBoundsShape::Rect;
+    return bounds;
+  }
+  if (type == "circle") {
+    bounds.shape = BattleBoundsShape::Circle;
+    bounds.center = required_vec2(shape, "center", "field.shape.center");
+    bounds.radius_m = required_positive_number(shape, "radiusMeters");
+    return bounds;
+  }
+  if (type == "polygon") {
+    if (!shape.contains("vertices") || !shape.at("vertices").is_array()) {
+      throw std::runtime_error("Expected array field: field.shape.vertices");
+    }
+    for (const auto& vertex : shape.at("vertices")) {
+      bounds.vertices.push_back(required_inline_vec2(vertex, "field.shape.vertices"));
+    }
+    if (bounds.vertices.size() < 3) {
+      throw std::runtime_error("field.shape.vertices must contain at least three points");
+    }
+    bounds.shape = BattleBoundsShape::Polygon;
+    return bounds;
+  }
+  throw std::runtime_error("Unknown field.shape.type: " + type);
 }
 
 }  // namespace

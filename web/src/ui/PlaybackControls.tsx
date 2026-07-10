@@ -1,6 +1,8 @@
-import { Pause, Play, RotateCcw, SkipBack, SkipForward } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from "lucide-react";
 
 import { Button } from "../components/ui/button.tsx";
+import type { BattleFrame } from "../types/protocol.ts";
+import { playbackStatusText } from "./RuleSummary.tsx";
 import { PLAYBACK_SPEEDS, type PlaybackSpeed } from "./hooks/useReplayPlayback.ts";
 
 export type PlaybackControlsProps = {
@@ -8,6 +10,7 @@ export type PlaybackControlsProps = {
   canStepBackward: boolean;
   canStepForward: boolean;
   currentIndex: number;
+  frame: BattleFrame | null;
   frameCount: number;
   isPlaying: boolean;
   onNext: () => void;
@@ -24,6 +27,7 @@ export function PlaybackControls({
   canStepBackward,
   canStepForward,
   currentIndex,
+  frame,
   frameCount,
   isPlaying,
   onNext,
@@ -37,89 +41,97 @@ export function PlaybackControls({
   const maxIndex = Math.max(0, frameCount - 1);
   return (
     <div
-      className="absolute bottom-3 left-1/2 z-[3] grid w-[min(360px,calc(100%_-_24px))] -translate-x-1/2 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-[10px] border border-[var(--brand-border)] bg-[var(--overlay-strong)] p-1.5 shadow-[0_14px_42px_var(--shadow)] backdrop-blur-md"
+      className="absolute bottom-3 left-1/2 z-[3] grid w-[min(440px,calc(100%_-_24px))] -translate-x-1/2 gap-2 rounded-[10px] border border-[var(--brand-border)] bg-[var(--overlay-strong)] p-2.5 shadow-[0_14px_42px_var(--shadow)] backdrop-blur-md"
       aria-label="Replay playback controls"
     >
-      <div className="flex gap-1 [&_button]:min-w-7 [&_svg]:h-[13px] [&_svg]:w-[13px]">
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon"
-          disabled={frameCount === 0 || currentIndex === 0}
-          aria-label="Reset replay"
-          title="Reset"
-          onClick={onReset}
-        >
-          <RotateCcw aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon"
-          disabled={!canStepBackward}
-          aria-label="Previous frame"
-          aria-keyshortcuts="ArrowLeft"
-          title="Previous frame (Left arrow)"
-          onClick={onPrev}
-        >
-          <SkipBack aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          variant="default"
-          size="icon"
-          disabled={!canPlay}
-          aria-label={isPlaying ? "Pause replay" : "Play replay"}
-          aria-pressed={isPlaying}
-          aria-keyshortcuts="Space"
-          title={isPlaying ? "Pause (Space)" : "Play (Space)"}
-          onClick={onPlayPause}
-        >
-          {isPlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon"
-          disabled={!canStepForward}
-          aria-label="Next frame"
-          aria-keyshortcuts="ArrowRight"
-          title="Next frame (Right arrow)"
-          onClick={onNext}
-        >
-          <SkipForward aria-hidden="true" />
-        </Button>
+      <div className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--surface-well)] px-2 py-1 text-center text-[11px] font-semibold leading-tight text-[var(--text-soft)]">
+        <span className="block truncate">{playbackStatusText(frame)}</span>
       </div>
-      <label className="grid grid-cols-[42px_minmax(0,1fr)] items-center gap-2 text-[11px] font-semibold text-[var(--text-dim)] [font-variant-numeric:tabular-nums]">
-        <span>{frameCount > 0 ? `${currentIndex + 1}/${frameCount}` : "0/0"}</span>
-        <input
-          className="w-full accent-[var(--brand)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-          type="range"
-          min={0}
-          max={maxIndex}
-          value={Math.min(currentIndex, maxIndex)}
-          disabled={frameCount <= 1}
-          onChange={(event) => onSeek(Number(event.currentTarget.value))}
-        />
-      </label>
-      <label
-        className="col-span-full grid grid-cols-[42px_minmax(0,1fr)] items-center gap-2 text-[11px] font-semibold text-[var(--text-dim)]"
-        aria-label="Playback speed"
-      >
+
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
+        <div className="flex gap-1 [&_button]:min-w-7 [&_svg]:h-[13px] [&_svg]:w-[13px]">
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            disabled={frameCount === 0 || currentIndex === 0}
+            aria-label="Reset replay"
+            title="Reset"
+            onClick={onReset}
+          >
+            <RotateCcw aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            disabled={!canStepBackward}
+            aria-label="Previous frame"
+            aria-keyshortcuts="ArrowLeft"
+            title="Previous frame (Left arrow)"
+            onClick={onPrev}
+          >
+            <ChevronLeft aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="default"
+            size="icon"
+            disabled={!canPlay}
+            aria-label={isPlaying ? "Pause replay" : "Play replay"}
+            aria-pressed={isPlaying}
+            aria-keyshortcuts="Space"
+            title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+            onClick={onPlayPause}
+          >
+            {isPlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            disabled={!canStepForward}
+            aria-label="Next frame"
+            aria-keyshortcuts="ArrowRight"
+            title="Next frame (Right arrow)"
+            onClick={onNext}
+          >
+            <ChevronRight aria-hidden="true" />
+          </Button>
+        </div>
+        <label className="grid min-w-0 grid-cols-[56px_minmax(0,1fr)] items-center gap-2 text-[11px] font-semibold text-[var(--text-dim)] [font-variant-numeric:tabular-nums]">
+          <span className="whitespace-nowrap">{frameCount > 0 ? `${currentIndex + 1}/${frameCount}` : "0/0"}</span>
+          <input
+            className="mx-2 w-[calc(100%_-_16px)] accent-[var(--brand)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            type="range"
+            min={0}
+            max={maxIndex}
+            value={Math.min(currentIndex, maxIndex)}
+            disabled={frameCount <= 1}
+            onChange={(event) => onSeek(Number(event.currentTarget.value))}
+          />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-2 text-[11px] font-semibold text-[var(--text-dim)]">
         <span>Speed</span>
-        <select
-          className="w-full rounded-md border border-[var(--brand-border)] bg-[var(--surface-well)] px-1 py-0.5 text-[11px] font-semibold text-[var(--text-soft)] [font-variant-numeric:tabular-nums] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:opacity-50"
-          value={String(speed)}
-          disabled={!canPlay}
-          onChange={(event) => onSpeedChange(Number(event.currentTarget.value) as PlaybackSpeed)}
-        >
+        <div className="grid grid-cols-4 gap-1" role="group" aria-label="Playback speed">
           {PLAYBACK_SPEEDS.map((option) => (
-            <option key={option} value={option}>
+            <Button
+              key={option}
+              type="button"
+              variant={speed === option ? "default" : "secondary"}
+              size="sm"
+              disabled={!canPlay}
+              aria-pressed={speed === option}
+              onClick={() => onSpeedChange(option)}
+              className="[font-variant-numeric:tabular-nums]"
+            >
               {option}x
-            </option>
+            </Button>
           ))}
-        </select>
-      </label>
+        </div>
+      </div>
     </div>
   );
 }

@@ -330,12 +330,30 @@ nlohmann::ordered_json snapshot_to_json(const WorldSnapshot& snapshot) {
     projectiles.push_back(projectile_to_json(projectile));
   }
 
+  nlohmann::ordered_json field = {
+    {"min", {{"x", snapshot.bounds.min.x}, {"y", snapshot.bounds.min.y}}},
+    {"max", {{"x", snapshot.bounds.max.x}, {"y", snapshot.bounds.max.y}}},
+  };
+  if (snapshot.bounds.shape == BattleBoundsShape::Circle) {
+    field["shape"] = {
+      {"type", "circle"},
+      {"center", {{"x", snapshot.bounds.center.x}, {"y", snapshot.bounds.center.y}}},
+      {"radiusMeters", snapshot.bounds.radius_m},
+    };
+  } else if (snapshot.bounds.shape == BattleBoundsShape::Polygon) {
+    nlohmann::ordered_json vertices = nlohmann::ordered_json::array();
+    for (const auto& vertex : snapshot.bounds.vertices) {
+      vertices.push_back({{"x", vertex.x}, {"y", vertex.y}});
+    }
+    field["shape"] = {
+      {"type", "polygon"},
+      {"vertices", std::move(vertices)},
+    };
+  }
+
   return nlohmann::ordered_json{
     {"tick", snapshot.tick},
-    {"field", {
-      {"min", {{"x", snapshot.bounds.min.x}, {"y", snapshot.bounds.min.y}}},
-      {"max", {{"x", snapshot.bounds.max.x}, {"y", snapshot.bounds.max.y}}},
-    }},
+    {"field", std::move(field)},
     {"units", std::move(units)},
     {"projectiles", std::move(projectiles)},
     {"events", nlohmann::ordered_json::array()},

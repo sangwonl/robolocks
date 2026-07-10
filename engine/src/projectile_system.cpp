@@ -98,6 +98,101 @@ std::uint32_t team_for_unit(const std::vector<UnitState>& units, UnitId unit_id)
   return 0;
 }
 
+bool point_inside_polygon(Vec2 point, const std::vector<Vec2>& vertices) {
+  bool inside = false;
+  for (std::size_t i = 0, j = vertices.size() - 1; i < vertices.size(); j = i++) {
+    const Vec2 a = vertices[i];
+    const Vec2 b = vertices[j];
+    const bool crosses = ((a.y > point.y) != (b.y > point.y)) &&
+      (point.x < (b.x - a.x) * (point.y - a.y) / ((b.y - a.y) == 0.0 ? 1e-9 : (b.y - a.y)) + a.x);
+    if (crosses) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+bool projectile_inside_bounds(const ProjectileState& projectile, const BattleBounds& bounds) {
+  if (bounds.shape == BattleBoundsShape::Circle) {
+    return distance(projectile.position, bounds.center) <= bounds.radius_m;
+  }
+  if (bounds.shape == BattleBoundsShape::Polygon && bounds.vertices.size() >= 3) {
+    return point_inside_polygon(projectile.position, bounds.vertices);
+  }
+  return projectile.position.x >= bounds.min.x
+    && projectile.position.x <= bounds.max.x
+    && projectile.position.y >= bounds.min.y
+    && projectile.position.y <= bounds.max.y;
+}
+
+std::optional<Event> resolve_environment_collision(
+  Tick tick,
+  const ProjectileState& projectile,
+  const BattleBounds& bounds,
+  const std::vector<StaticObstacle>& obstacles
+) {
+  for (const auto& obstacle : obstacles) {
+    if (!obstacle.blocks_movement && !obstacle.blocks_line_of_sight) {
+      continue;
+    }
+    if (!segment_intersects_circle(
+      projectile.previous_position,
+      projectile.position,
+      obstacle.position,
+      obstacle.radius_m + projectile.radius_m
+    )) {
+      continue;
+    }
+    return Event{
+      .tick = tick,
+      .unit_id = projectile.owner_unit_id,
+      .code = "projectile_obstacle_collision",
+      .message = "Projectile hit obstacle " + obstacle.id + ".",
+      .payload = EventPayload{
+        .projectile_id = projectile.projectile_id,
+        .source_unit_id = projectile.owner_unit_id,
+        .target_unit_id = UnitId{},
+        .source_team_id = 0,
+        .target_team_id = 0,
+        .damage_type = "environment",
+        .armor_facing = "",
+        .damage = 0.0,
+        .remaining_armor = 0.0,
+        .penetration_mm = 0.0,
+        .armor_mm = 0.0,
+        .impact_distance_m = 0.0,
+        .blast_radius_m = 0.0,
+      },
+    };
+  }
+
+  if (!projectile_inside_bounds(projectile, bounds)) {
+    return Event{
+      .tick = tick,
+      .unit_id = projectile.owner_unit_id,
+      .code = "projectile_boundary_collision",
+      .message = "Projectile left the battle bounds.",
+      .payload = EventPayload{
+        .projectile_id = projectile.projectile_id,
+        .source_unit_id = projectile.owner_unit_id,
+        .target_unit_id = UnitId{},
+        .source_team_id = 0,
+        .target_team_id = 0,
+        .damage_type = "environment",
+        .armor_facing = "",
+        .damage = 0.0,
+        .remaining_armor = 0.0,
+        .penetration_mm = 0.0,
+        .armor_mm = 0.0,
+        .impact_distance_m = 0.0,
+        .blast_radius_m = 0.0,
+      },
+    };
+  }
+
+  return std::nullopt;
+}
+
 Event destroyed_event(
   Tick tick,
   UnitId source_unit_id,
@@ -476,6 +571,29 @@ std::vector<Event> ProjectileSystem::advance_projectiles(
   double tick_dt_sec,
   std::vector<UnitState>& units
 ) {
+  return advance_projectiles(
+    tick,
+    tick_dt_sec,
+    units,
+    BattleBounds{
+      .min = Vec2{-1e9, -1e9},
+      .max = Vec2{1e9, 1e9},
+      .shape = BattleBoundsShape::Rect,
+      .center = Vec2{0.0, 0.0},
+      .radius_m = 1e9,
+      .vertices = {},
+    },
+    {}
+  );
+}
+
+std::vector<Event> ProjectileSystem::advance_projectiles(
+  Tick tick,
+  double tick_dt_sec,
+  std::vector<UnitState>& units,
+  const BattleBounds& bounds,
+  const std::vector<StaticObstacle>& obstacles
+) {
   std::vector<Event> events;
   std::vector<ProjectileState> active_projectiles;
   active_projectiles.reserve(projectiles_.size());
@@ -493,6 +611,11 @@ std::vector<Event> ProjectileSystem::advance_projectiles(
       projectile.position.y + direction.y * travel_distance,
     };
     projectile.remaining_range_m -= travel_distance;
+
+    if (const auto environment_event = resolve_environment_collision(tick, projectile, bounds, obstacles)) {
+      events.push_back(*environment_event);
+      continue;
+    }
 
     const bool consumed = projectile.fire_mode == WeaponFireMode::Ballistic
       ? resolve_ballistic_flight(tick, tick_dt_sec, units, projectile, events)

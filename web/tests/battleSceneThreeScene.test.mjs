@@ -67,6 +67,66 @@ test("battle scene builds a visible boundary and ground sized from the play fiel
   battle.dispose();
 });
 
+test("battle scene builds a circular boundary from the play field shape", () => {
+  const field = {
+    min: { x: 0, y: 0 },
+    max: { x: 40, y: 40 },
+    shape: { type: "circle", center: { x: 20, y: 20 }, radiusMeters: 16 },
+  };
+  const battle = createBattleScene({ obstacles: [], field });
+
+  const boundary = battle.scene.getObjectByName("field-boundary");
+  assert.ok(boundary, "boundary group should exist");
+  assert.equal(boundary.userData.shape, "circle");
+  assert.ok(boundary.getObjectByName("boundary-circle-0"));
+  assert.equal(boundary.getObjectByName("boundary-east"), undefined);
+  const plane = battle.scene.getObjectByName("terrain-plane");
+  assert.ok(plane);
+  assert.equal(plane.userData.shape, "circle");
+  assert.equal(plane.geometry.type, "CircleGeometry");
+  const grid = battle.scene.getObjectByName("terrain-grid");
+  assert.ok(grid);
+  assert.equal(grid.userData.shape, "circle");
+  assert.equal(grid.type, "LineSegments");
+
+  battle.dispose();
+});
+
+test("battle scene builds a polygon boundary from the play field shape", () => {
+  const field = {
+    min: { x: 0, y: 0 },
+    max: { x: 40, y: 32 },
+    shape: {
+      type: "polygon",
+      vertices: [
+        { x: 20, y: 2 },
+        { x: 36, y: 10 },
+        { x: 32, y: 26 },
+        { x: 8, y: 26 },
+        { x: 4, y: 10 },
+      ],
+    },
+  };
+  const battle = createBattleScene({ obstacles: [], field });
+
+  const boundary = battle.scene.getObjectByName("field-boundary");
+  assert.ok(boundary, "boundary group should exist");
+  assert.equal(boundary.userData.shape, "polygon");
+  assert.ok(boundary.getObjectByName("boundary-polygon-0"));
+  assert.ok(boundary.getObjectByName("boundary-polygon-4"));
+  assert.equal(boundary.getObjectByName("boundary-east"), undefined);
+  const plane = battle.scene.getObjectByName("terrain-plane");
+  assert.ok(plane);
+  assert.equal(plane.userData.shape, "polygon");
+  assert.equal(plane.geometry.type, "ShapeGeometry");
+  const grid = battle.scene.getObjectByName("terrain-grid");
+  assert.ok(grid);
+  assert.equal(grid.userData.shape, "polygon");
+  assert.equal(grid.type, "LineSegments");
+
+  battle.dispose();
+});
+
 test("battle scene renders unit sensor coverage when no scan action exists", () => {
   const battle = createBattleScene({ obstacles: [] });
   battle.sync(makeFrame([makeUnit()]));

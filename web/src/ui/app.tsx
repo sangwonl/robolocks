@@ -402,6 +402,7 @@ function BattleDockPanel() {
         canStepBackward={canStepBackward}
         canStepForward={canStepForward}
         currentIndex={replayIndex}
+        frame={frame}
         frameCount={frameCount}
         isPlaying={isPlaying}
         onNext={() => playback.stepTo(Math.min(frameCount - 1, replayIndex + 1))}
@@ -424,7 +425,7 @@ function ResearchDockPanel() {
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex min-w-0 flex-wrap items-end gap-x-1.5 gap-y-1.5" aria-label="Research presets">
             <div className={cn(FIELD_CLASS, "min-w-0 flex-[1_1_116px]")}>
-              <Label htmlFor="research-battle-preset">Battle</Label>
+              <Label htmlFor="research-battle-preset">Battlefield</Label>
               <select
                 id="research-battle-preset"
                 className={SELECT_CLASS}
