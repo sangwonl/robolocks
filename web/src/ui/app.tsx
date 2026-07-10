@@ -21,7 +21,7 @@ import "dockview-react/dist/styles/dockview.css";
 import type { BattleFrame, FieldBoundsFrame, StaticObstacleFrame } from "../types/protocol";
 import type { BattleReplay } from "../replay/replay";
 import { parseBattleReplay } from "../replay/replay.ts";
-import { MAX_RESEARCH_TICKS, RESEARCH_BOT_LOGIC_PRESETS, RESEARCH_BATTLE_PRESETS, RESEARCH_RULE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
+import { CUSTOM_BATTLE_ID, MAX_RESEARCH_TICKS, RESEARCH_BOT_LOGIC_PRESETS, RESEARCH_BATTLE_PRESETS, RESEARCH_RULE_PRESETS, RESEARCH_UNIT_PRESETS } from "../research/research.ts";
 import type { ResearchProgress } from "../research/researchWorkerProtocol.ts";
 import { cn } from "../lib/utils.ts";
 import { deriveStatusText } from "./statusText.ts";
@@ -29,6 +29,7 @@ import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
 import { Label } from "../components/ui/label.tsx";
 import { BattleSceneThreeView } from "./BattleSceneThreeView.tsx";
+import { BattleFieldEditor } from "./BattleFieldEditor.tsx";
 import { BotConsole } from "./BotConsole.tsx";
 import { Inspector, Stat } from "./Inspector.tsx";
 import { PlaybackControls } from "./PlaybackControls.tsx";
@@ -87,6 +88,7 @@ const WorkbenchPanelContext = createContext<WorkbenchPanelContextValue | null>(n
 
 const DOCKVIEW_COMPONENTS: Record<string, FunctionComponent<IDockviewPanelProps>> = {
   battle: BattleDockPanel,
+  battleField: BattleFieldDockPanel,
   research: ResearchDockPanel,
   replay: ReplayDockPanel,
   rules: RulesDockPanel,
@@ -135,7 +137,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const frame = loadedReplay?.frames[replayIndex] ?? null;
   const canStepBackward = Boolean(loadedReplay && replayIndex > 0);
   const canStepForward = Boolean(loadedReplay && replayIndex < loadedReplay.frames.length - 1);
-  const canPlay = Boolean((loadedReplay && loadedReplay.frames.length > 1) || research.researchMode === "ready");
+  const canPlay = Boolean(loadedReplay && loadedReplay.frames.length > 1);
   const frameCount = loadedReplay?.frames.length ?? 0;
 
   const statusText = useMemo(() => {
@@ -198,10 +200,6 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   function handlePlayPause(): void {
     if (isPlaying) {
       playback.pause();
-      return;
-    }
-    if (research.researchMode === "ready") {
-      research.runResearch();
       return;
     }
     playback.play();
@@ -288,6 +286,13 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       id: "battle-scene",
       component: "battle",
       title: "Battle Scene",
+    });
+    event.api.addPanel({
+      id: "battle-field",
+      component: "battleField",
+      title: "Battle Field",
+      inactive: true,
+      position: { referencePanel: "battle-scene", direction: "within" },
     });
     event.api.addPanel({
       id: "research",
@@ -387,6 +392,7 @@ function BattleDockPanel() {
     canStepForward,
     frame,
     frameCount,
+    isLoading,
     isPlaying,
     loadedReplay,
     onPlayPause,
@@ -404,6 +410,9 @@ function BattleDockPanel() {
         canPlay={canPlay}
         canStepBackward={canStepBackward}
         canStepForward={canStepForward}
+        canRun={!isLoading && !research.isResearchRunning}
+        isRunning={research.isResearchRunning}
+        onRun={research.runResearch}
         currentIndex={replayIndex}
         frame={frame}
         frameCount={frameCount}
@@ -420,11 +429,86 @@ function BattleDockPanel() {
   );
 }
 
+function BattleFieldDockPanel() {
+  const { research } = useWorkbenchPanel();
+  const selId = research.researchBattlePresetId;
+  const isCustom = research.isCustomBattleSelected;
+  const isSaved = isCustom && selId !== CUSTOM_BATTLE_ID;
+  const presetLabel = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === selId)?.label ?? "—";
+
+  const [nameDraft, setNameDraft] = useState(research.activeCustomBattleName);
+  // Reset the name field whenever the selected battle changes.
+  useEffect(() => {
+    setNameDraft(research.activeCustomBattleName);
+  }, [selId, research.activeCustomBattleName]);
+
+  const running = research.isResearchRunning;
+  const nameChanged = isSaved && nameDraft.trim() !== research.activeCustomBattleName;
+  const canSave = isCustom && !running && (research.isCustomBattleDirty || nameChanged);
+
+  return (
+    <section className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 bg-[var(--surface-raised)] p-2.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-dim)]">
+        {isCustom ? (
+          <>
+            <span className="u-label text-[10px]">Name</span>
+            <input
+              className="min-w-0 flex-[1_1_140px] rounded-md border border-[var(--line-control)] bg-[var(--surface-well)] px-2 py-1 text-[11px] font-semibold text-[var(--text-soft)] disabled:opacity-55"
+              value={nameDraft}
+              placeholder={isSaved ? research.activeCustomBattleName : "Name this battle"}
+              disabled={running}
+              onChange={(event) => setNameDraft(event.currentTarget.value)}
+            />
+            {research.isCustomBattleDirty && (
+              <span className="text-[10px] text-[var(--brand)]" title="Unsaved changes">
+                ●
+              </span>
+            )}
+            <button
+              type="button"
+              className="rounded-md border border-[var(--line-control)] bg-[var(--surface-well)] px-2 py-1 text-[10px] font-bold text-[var(--text-soft)] disabled:opacity-40"
+              disabled={!canSave}
+              onClick={() => research.saveCustomBattle(nameDraft)}
+            >
+              {isSaved ? "Save" : "Save as…"}
+            </button>
+            {isSaved && (
+              <button
+                type="button"
+                className="rounded-md border border-[var(--status-contested-border)] bg-[var(--surface-well)] px-2 py-1 text-[10px] font-bold text-[var(--text-soft)] disabled:opacity-40"
+                disabled={running}
+                onClick={() => research.deleteCustomBattle(selId)}
+              >
+                Delete
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="u-label text-[10px]">Editing</span>
+            <span className="rounded-md border border-[var(--line-control)] bg-[var(--surface-well)] px-2 py-1 text-[10px] font-bold text-[var(--text-soft)]">
+              {presetLabel}
+            </span>
+            <span className="ml-auto u-label text-[9px] text-[var(--text-muted)]">edits fork into a Custom draft</span>
+          </>
+        )}
+      </div>
+      <div className="min-h-0 flex-1">
+        <BattleFieldEditor
+          layout={research.editorLayout}
+          dispatch={research.dispatchLayoutAction}
+          disabled={running}
+        />
+      </div>
+    </section>
+  );
+}
+
 function ResearchDockPanel() {
   const { isLoading, research } = useWorkbenchPanel();
   return (
     <section className="h-full min-h-0 overflow-hidden bg-[var(--surface-raised)] p-2.5">
-      <div className="grid h-full min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-2">
+      <div className="grid h-full min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2">
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex min-w-0 flex-wrap items-end gap-x-1.5 gap-y-1.5" aria-label="Research presets">
             <div className={cn(FIELD_CLASS, "min-w-0 flex-[1_1_116px]")}>
@@ -434,13 +518,23 @@ function ResearchDockPanel() {
                 className={SELECT_CLASS}
                 value={research.researchBattlePresetId}
                 disabled={isLoading}
-                onChange={(event) => research.setResearchBattlePresetId(event.currentTarget.value)}
+                onChange={(event) => research.selectResearchBattle(event.currentTarget.value)}
               >
                 {RESEARCH_BATTLE_PRESETS.map((preset) => (
                   <option key={preset.id} value={preset.id}>
                     {preset.label}
                   </option>
                 ))}
+                {research.savedCustomBattles.length > 0 && (
+                  <optgroup label="Saved">
+                    {research.savedCustomBattles.map((battle) => (
+                      <option key={battle.id} value={battle.id}>
+                        {battle.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <option value={CUSTOM_BATTLE_ID}>Custom (draft — edit in Battle Field tab)</option>
               </select>
             </div>
             <div className={cn(FIELD_CLASS, "min-w-0 flex-[1_1_116px]")}>
@@ -459,22 +553,36 @@ function ResearchDockPanel() {
                 ))}
               </select>
             </div>
-            <div className={cn(FIELD_CLASS, "min-w-0 flex-[1_1_116px]")}>
-              <Label htmlFor="research-unit-preset">Unit</Label>
-              <select
-                id="research-unit-preset"
-                className={SELECT_CLASS}
-                value={research.researchUnitPresetId}
-                disabled={isLoading}
-                onChange={(event) => research.setResearchUnitPresetId(event.currentTarget.value)}
-              >
-                {RESEARCH_UNIT_PRESETS.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {(() => {
+              const mode = (research.researchRulePreset?.rule as { mode?: string } | undefined)?.mode;
+              const field =
+                mode === "kill_limit_deathmatch" ? { key: "killLimit" as const, label: "Kill limit", max: 999 }
+                : mode === "timed_deathmatch" ? { key: "timeLimitTicks" as const, label: "Time (ticks)", max: MAX_RESEARCH_TICKS }
+                : mode === "capture_point" ? { key: "captureHoldTicks" as const, label: "Hold ticks", max: MAX_RESEARCH_TICKS }
+                : null;
+              if (!field) {
+                return null;
+              }
+              return (
+                <div className={cn(FIELD_CLASS, "flex-[0_0_92px]")}>
+                  <Label htmlFor="research-rule-param">{field.label}</Label>
+                  <Input
+                    id="research-rule-param"
+                    type="number"
+                    min={1}
+                    max={field.max}
+                    value={research.researchRuleParams[field.key]}
+                    disabled={isLoading}
+                    onChange={(event) => {
+                      const next = event.currentTarget.valueAsNumber;
+                      if (!Number.isNaN(next)) {
+                        research.setResearchRuleParam(field.key, next);
+                      }
+                    }}
+                  />
+                </div>
+              );
+            })()}
             <div className={cn(FIELD_CLASS, "flex-[0_0_92px]")}>
               <Label htmlFor="research-ticks">Ticks</Label>
               <Input
@@ -516,7 +624,7 @@ function ResearchDockPanel() {
                   return (
                     <div
                       key={unitId}
-                      className="grid grid-cols-[minmax(0,72px)_minmax(0,1fr)_auto] items-center gap-1.5"
+                      className="grid grid-cols-[minmax(0,60px)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1.5"
                     >
                       <button
                         type="button"
@@ -532,9 +640,23 @@ function ResearchDockPanel() {
                       </button>
                       <select
                         className={SELECT_CLASS}
+                        value={research.unitPresetByUnit[unitId] ?? RESEARCH_UNIT_PRESETS[0]?.id}
+                        disabled={isLoading || research.isResearchRunning}
+                        onChange={(event) => research.setResearchUnitPresetId(unitId, event.currentTarget.value)}
+                        title={`${unitName} unit`}
+                      >
+                        {RESEARCH_UNIT_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        className={SELECT_CLASS}
                         value={botLogic.presetId}
                         disabled={isLoading || research.isResearchRunning}
                         onChange={(event) => research.setResearchBotLogicPresetId(unitId, event.currentTarget.value)}
+                        title={`${unitName} logic`}
                       >
                         {RESEARCH_BOT_LOGIC_PRESETS.map((preset) => (
                           <option key={preset.id} value={preset.id}>
@@ -565,14 +687,6 @@ function ResearchDockPanel() {
             value={research.researchBotSource}
           />
         </Suspense>
-        <Button
-          type="button"
-          className="w-full"
-          disabled={isLoading || research.isResearchRunning}
-          onClick={() => research.setupResearch()}
-        >
-          {research.researchMode === "ready" ? "Ready" : "Setup"}
-        </Button>
       </div>
     </section>
   );

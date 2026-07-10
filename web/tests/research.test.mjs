@@ -2,11 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CUSTOM_BATTLE_ID,
+  SAVED_CUSTOM_ID_PREFIX,
+  isSavedCustomId,
   RESEARCH_BOT_LOGIC_PRESETS,
   RESEARCH_BATTLE_PRESETS,
   RESEARCH_RULE_PRESETS,
   createResearchBattleConfigJson,
   createResearchSetupReplay,
+  layoutFromPreset,
+  layoutReducer,
+  layoutToBattlePreset,
   runResearchInBrowser,
 } from "../src/research/research.ts";
 
@@ -19,7 +25,7 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
   const battleConfigJson = createResearchBattleConfigJson({
     battlePresetId: "open_range",
     rulePresetId: "capture_alpha",
-    unitPresetId: "ballistic_test",
+    unitPresetIdByUnit: { 1: "ballistic_test", 2: "ballistic_test" },
   });
 
   const result = await runResearchInBrowser({
@@ -80,7 +86,7 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
   assert.equal(observedBotSources.length, 2);
   assert.match(observedBotSources[0], /def on_tick/);
   assert.match(observedBotSources[1], /def on_tick/);
-  assert.equal(receivedConfig.battleId, "research_open_range_ballistic_test_capture_alpha");
+  assert.equal(receivedConfig.battleId, "research_open_range_ballistic_test_vs_ballistic_test_capture_alpha");
   assert.equal(receivedConfig.obstacles.length, 0);
   assert.equal(receivedConfig.units[0].modules.weapon.fireMode, "ballistic");
   assert.equal(receivedConfig.units[0].modules.weapon.blastRadiusMeters, 2.5);
@@ -113,7 +119,7 @@ test("browser research run routes ticks and logs per bot id", async () => {
   const battleConfigJson = createResearchBattleConfigJson({
     battlePresetId: "open_range",
     rulePresetId: "kill_limit_team",
-    unitPresetId: "standard_tank",
+    unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
   });
 
   const result = await runResearchInBrowser({
@@ -192,7 +198,7 @@ test("createResearchSetupReplay builds a paused one-frame replay from battle con
   const battleConfigJson = createResearchBattleConfigJson({
     battlePresetId: "open_range",
     rulePresetId: "kill_limit_team",
-    unitPresetId: "heavy_gunner",
+    unitPresetIdByUnit: { 1: "heavy_gunner", 2: "heavy_gunner" },
   });
 
   const replay = createResearchSetupReplay(battleConfigJson);
@@ -219,7 +225,7 @@ test("standard research weapon can penetrate the fixed target front armor", () =
   const config = JSON.parse(createResearchBattleConfigJson({
     battlePresetId: "open_range",
     rulePresetId: "kill_limit_team",
-    unitPresetId: "standard_tank",
+    unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
   }));
 
   assert.ok(
@@ -232,10 +238,10 @@ test("createResearchBattleConfigJson selects timed rule preset", () => {
   const config = JSON.parse(createResearchBattleConfigJson({
     battlePresetId: "close_cover",
     rulePresetId: "timed_team",
-    unitPresetId: "scout_optics",
+    unitPresetIdByUnit: { 1: "scout_optics", 2: "scout_optics" },
   }));
 
-  assert.equal(config.battleId, "research_close_cover_scout_optics_timed_team");
+  assert.equal(config.battleId, "research_close_cover_scout_optics_vs_scout_optics_timed_team");
   assert.equal(config.rule.mode, "timed_deathmatch");
   assert.equal(config.rule.teamMode, "team");
   assert.equal(config.rule.timeLimitTicks, 300);
@@ -297,7 +303,7 @@ test("capture flag uses the selected battle flag position while deathmatch hides
   const captureConfig = JSON.parse(createResearchBattleConfigJson({
     battlePresetId: "flag_run",
     rulePresetId: "capture_alpha",
-    unitPresetId: "standard_tank",
+    unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
   }));
   const battlePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "flag_run");
   const captureRule = RESEARCH_RULE_PRESETS.find((preset) => preset.id === "capture_alpha");
@@ -311,7 +317,7 @@ test("capture flag uses the selected battle flag position while deathmatch hides
   const deathmatchConfig = JSON.parse(createResearchBattleConfigJson({
     battlePresetId: "flag_run",
     rulePresetId: "kill_limit_team",
-    unitPresetId: "standard_tank",
+    unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
   }));
   assert.equal(deathmatchConfig.rule.captureZones, undefined);
 
@@ -323,7 +329,7 @@ test("research replays keep shaped battlefield metadata from the selected preset
   const battleConfigJson = createResearchBattleConfigJson({
     battlePresetId: "brawl_ring",
     rulePresetId: "kill_limit_team",
-    unitPresetId: "standard_tank",
+    unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
   });
   const config = JSON.parse(battleConfigJson);
   assert.equal(config.field.shape.type, "circle");
@@ -419,3 +425,103 @@ function closestPointOnSegment(point, start, end) {
   const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq));
   return { x: start.x + dx * t, y: start.y + dy * t };
 }
+
+test("createResearchBattleConfigJson applies per-bot unit presets and rule params", () => {
+  const config = JSON.parse(createResearchBattleConfigJson({
+    battlePresetId: "open_range",
+    rulePresetId: "kill_limit_team",
+    unitPresetIdByUnit: { 1: "standard_tank", 2: "heavy_gunner" },
+    ruleParams: { killLimit: 7 },
+  }));
+  // Each bot gets its own module set.
+  assert.equal(config.units[0].modules.mobility.id, "tracked_chassis_mk1");
+  assert.equal(config.units[1].modules.mobility.id, "heavy_tracks_v0");
+  // The active rule's parameter is overridden.
+  assert.equal(config.rule.killLimit, 7);
+});
+
+test("createResearchBattleConfigJson overrides capture hold ticks", () => {
+  const config = JSON.parse(createResearchBattleConfigJson({
+    battlePresetId: "flag_run",
+    rulePresetId: "capture_alpha",
+    unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
+    ruleParams: { captureHoldTicks: 150 },
+  }));
+  assert.equal(config.rule.captureZones[0].holdTicks, 150);
+});
+
+test("layoutFromPreset / layoutToBattlePreset round-trips a rect preset", () => {
+  const preset = RESEARCH_BATTLE_PRESETS.find((p) => p.id === "flag_run");
+  const layout = layoutFromPreset(preset);
+  assert.equal(layout.field.shape, "rect");
+  assert.equal(layout.obstacles.length, preset.obstacles.length);
+  assert.deepEqual(layout.flag, { x: preset.flagPosition.x, y: preset.flagPosition.y });
+
+  const back = layoutToBattlePreset(layout);
+  assert.equal(back.id, CUSTOM_BATTLE_ID);
+  assert.deepEqual(back.field.min, preset.field.min);
+  assert.deepEqual(back.field.max, preset.field.max);
+  assert.equal(back.field.shape, undefined);
+  assert.equal(back.obstacles.length, preset.obstacles.length);
+});
+
+test("layoutToBattlePreset emits a circle field shape", () => {
+  const preset = RESEARCH_BATTLE_PRESETS.find((p) => p.id === "brawl_ring");
+  const layout = layoutFromPreset(preset);
+  assert.equal(layout.field.shape, "circle");
+  const back = layoutToBattlePreset(layout);
+  assert.equal(back.field.shape.type, "circle");
+  assert.equal(back.field.shape.radiusMeters, layout.field.rx);
+});
+
+test("layoutReducer add/move/resize/remove obstacle with field clamp", () => {
+  const base = { field: { shape: "rect", cx: 0, cy: 0, rx: 20, ry: 12 }, obstacles: [], flag: { x: 0, y: 0 }, blueSpawn: { x: -10, y: 0, headingDeg: 0 }, targetSpawn: { x: 10, y: 0, headingDeg: 180 } };
+  const added = layoutReducer(base, { type: "addObstacle", x: 5, y: 3 });
+  assert.equal(added.obstacles.length, 1);
+  const id = added.obstacles[0].id;
+
+  // Move outside the rect -> clamped to bounds.
+  const moved = layoutReducer(added, { type: "moveObstacle", id, x: 999, y: 999 });
+  assert.equal(moved.obstacles[0].x, 20);
+  assert.equal(moved.obstacles[0].y, 12);
+
+  const resized = layoutReducer(moved, { type: "resizeObstacle", id, radius: 0.05 });
+  assert.ok(resized.obstacles[0].radius >= 0.4); // clamped to a minimum
+
+  const removed = layoutReducer(resized, { type: "removeObstacle", id });
+  assert.equal(removed.obstacles.length, 0);
+});
+
+test("layoutReducer setShape circle squares the radius and config uses custom layout", () => {
+  const base = { field: { shape: "rect", cx: 4, cy: 2, rx: 30, ry: 18 }, obstacles: [{ id: "obs_0", x: 4, y: 2, radius: 1.5 }], flag: { x: 4, y: 2 }, blueSpawn: { x: -20, y: 0, headingDeg: 0 }, targetSpawn: { x: 28, y: 0, headingDeg: 180 } };
+  const circle = layoutReducer(base, { type: "setShape", shape: "circle" });
+  assert.equal(circle.field.shape, "circle");
+  assert.equal(circle.field.rx, 18); // min(rx, ry)
+  assert.equal(circle.field.ry, 18);
+
+  const config = JSON.parse(createResearchBattleConfigJson({
+    battlePresetId: CUSTOM_BATTLE_ID,
+    rulePresetId: "kill_limit_team",
+    customBattle: layoutToBattlePreset(circle),
+    unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
+  }));
+  assert.equal(config.field.shape.type, "circle");
+  assert.equal(config.obstacles.length, 1);
+  assert.equal(config.units[0].spawn.x, -20);
+});
+
+test("layoutReducer moveField repositions the field boundary only", () => {
+  const base = { field: { shape: "rect", cx: 0, cy: 0, rx: 20, ry: 12 }, obstacles: [{ id: "obs_0", x: 5, y: 3, radius: 1.5 }], flag: { x: 2, y: 1 }, blueSpawn: { x: -10, y: 0, headingDeg: 0 }, targetSpawn: { x: 10, y: 0, headingDeg: 180 } };
+  const moved = layoutReducer(base, { type: "moveField", cx: 30, cy: -8 });
+  assert.equal(moved.field.cx, 30);
+  assert.equal(moved.field.cy, -8);
+  // Contents keep their world position.
+  assert.deepEqual(moved.obstacles[0], base.obstacles[0]);
+  assert.deepEqual(moved.flag, base.flag);
+});
+
+test("isSavedCustomId distinguishes saved custom ids from presets and the draft", () => {
+  assert.equal(isSavedCustomId(`${SAVED_CUSTOM_ID_PREFIX}1`), true);
+  assert.equal(isSavedCustomId(CUSTOM_BATTLE_ID), false);
+  assert.equal(isSavedCustomId("covered_duel"), false);
+});

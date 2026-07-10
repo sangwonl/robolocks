@@ -836,10 +836,196 @@ export const RESEARCH_RULE_PRESETS: ResearchRulePreset[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Custom battle field (Bundle B): an editable layout the 2D field editor mutates.
+// The sim is 2D (x/y only), so the layout carries no heights — the 3D scene
+// assigns per-element heights. `layoutToBattlePreset` maps it onto the same
+// ResearchBattlePreset shape the presets use, so the config path is unchanged.
+// ---------------------------------------------------------------------------
+
+export const CUSTOM_BATTLE_ID = "custom";
+const CUSTOM_SPAWN_RADIUS_M = 8;
+const DEFAULT_OBSTACLE_RADIUS_M = 1.3;
+const MIN_OBSTACLE_RADIUS_M = 0.4;
+const MIN_FIELD_HALF_M = 6;
+
+export type EditableObstacle = { id: string; x: number; y: number; radius: number };
+
+export type CustomBattleLayout = {
+  // circle: rx === ry === radius; rect: rx/ry are half-width/half-height.
+  field: { shape: "rect" | "circle"; cx: number; cy: number; rx: number; ry: number };
+  obstacles: EditableObstacle[];
+  flag: { x: number; y: number };
+  blueSpawn: { x: number; y: number; headingDeg: number };
+  targetSpawn: { x: number; y: number; headingDeg: number };
+};
+
+// A named custom battle saved to local storage, selectable like a built-in preset.
+export type SavedCustomBattle = { id: string; name: string; layout: CustomBattleLayout };
+
+// Custom battle ids are prefixed so they never collide with built-in preset ids.
+export const SAVED_CUSTOM_ID_PREFIX = "saved_";
+
+export function isSavedCustomId(id: string): boolean {
+  return id.startsWith(SAVED_CUSTOM_ID_PREFIX);
+}
+
+export function layoutFromPreset(preset: ResearchBattlePreset): CustomBattleLayout {
+  const f = preset.field;
+  let shape: "rect" | "circle" = "rect";
+  let cx = (f.min.x + f.max.x) / 2;
+  let cy = (f.min.y + f.max.y) / 2;
+  let rx = (f.max.x - f.min.x) / 2;
+  let ry = (f.max.y - f.min.y) / 2;
+  if (f.shape?.type === "circle") {
+    shape = "circle";
+    cx = f.shape.center.x;
+    cy = f.shape.center.y;
+    rx = f.shape.radiusMeters;
+    ry = f.shape.radiusMeters;
+  }
+  const obstacles: EditableObstacle[] = (Array.isArray(preset.obstacles) ? preset.obstacles : []).map((raw, index) => {
+    const obstacle = isRecord(raw) ? raw : {};
+    const position = isRecord(obstacle.position) ? obstacle.position : {};
+    return {
+      id: typeof obstacle.id === "string" ? obstacle.id : `obs_${index}`,
+      x: typeof position.x === "number" ? position.x : 0,
+      y: typeof position.y === "number" ? position.y : 0,
+      radius: numberField(obstacle, "radiusMeters") || DEFAULT_OBSTACLE_RADIUS_M,
+    };
+  });
+  return {
+    field: { shape, cx, cy, rx, ry },
+    obstacles,
+    flag: { x: preset.flagPosition.x, y: preset.flagPosition.y },
+    blueSpawn: { ...preset.blueSpawn },
+    targetSpawn: { ...preset.targetSpawn },
+  };
+}
+
+export function layoutToBattlePreset(layout: CustomBattleLayout): ResearchBattlePreset {
+  const { field, obstacles, flag, blueSpawn, targetSpawn } = layout;
+  const min = { x: field.cx - field.rx, y: field.cy - field.ry };
+  const max = { x: field.cx + field.rx, y: field.cy + field.ry };
+  const fieldFrame: FieldBoundsFrame = field.shape === "circle"
+    ? { min, max, shape: { type: "circle", center: { x: field.cx, y: field.cy }, radiusMeters: field.rx } }
+    : { min, max };
+  return {
+    id: CUSTOM_BATTLE_ID,
+    label: "Custom",
+    description: "Custom field from the Battle Field editor.",
+    field: fieldFrame,
+    obstacles: obstacles.map((obstacle) => ({
+      id: obstacle.id,
+      position: { x: obstacle.x, y: obstacle.y },
+      radiusMeters: obstacle.radius,
+      blocksMovement: true,
+      blocksLineOfSight: true,
+    })),
+    flagPosition: { x: flag.x, y: flag.y },
+    blueSpawn: { ...blueSpawn },
+    targetSpawn: { ...targetSpawn },
+    blueRespawnZone: { position: { x: blueSpawn.x, y: blueSpawn.y }, radiusMeters: CUSTOM_SPAWN_RADIUS_M, headingDeg: blueSpawn.headingDeg },
+    targetRespawnZone: { position: { x: targetSpawn.x, y: targetSpawn.y }, radiusMeters: CUSTOM_SPAWN_RADIUS_M, headingDeg: targetSpawn.headingDeg },
+  };
+}
+
+function clampPointToField(field: CustomBattleLayout["field"], x: number, y: number): { x: number; y: number } {
+  if (field.shape === "circle") {
+    const dx = x - field.cx;
+    const dy = y - field.cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > field.rx && dist > 1e-6) {
+      return { x: field.cx + (dx / dist) * field.rx, y: field.cy + (dy / dist) * field.rx };
+    }
+    return { x, y };
+  }
+  return {
+    x: Math.max(field.cx - field.rx, Math.min(field.cx + field.rx, x)),
+    y: Math.max(field.cy - field.ry, Math.min(field.cy + field.ry, y)),
+  };
+}
+
+function nextObstacleId(obstacles: EditableObstacle[]): string {
+  let max = -1;
+  for (const obstacle of obstacles) {
+    const match = /^obs_(\d+)$/.exec(obstacle.id);
+    if (match) {
+      max = Math.max(max, Number(match[1]));
+    }
+  }
+  return `obs_${max + 1}`;
+}
+
+export type LayoutAction =
+  | { type: "addObstacle"; x: number; y: number }
+  | { type: "moveObstacle"; id: string; x: number; y: number }
+  | { type: "resizeObstacle"; id: string; radius: number }
+  | { type: "removeObstacle"; id: string }
+  | { type: "moveFlag"; x: number; y: number }
+  | { type: "moveSpawn"; which: "blue" | "target"; x: number; y: number }
+  | { type: "setShape"; shape: "rect" | "circle" }
+  | { type: "resizeField"; rx: number; ry: number }
+  | { type: "moveField"; cx: number; cy: number };
+
+export function layoutReducer(layout: CustomBattleLayout, action: LayoutAction): CustomBattleLayout {
+  switch (action.type) {
+    case "addObstacle": {
+      const { x, y } = clampPointToField(layout.field, action.x, action.y);
+      return { ...layout, obstacles: [...layout.obstacles, { id: nextObstacleId(layout.obstacles), x, y, radius: DEFAULT_OBSTACLE_RADIUS_M }] };
+    }
+    case "moveObstacle": {
+      const { x, y } = clampPointToField(layout.field, action.x, action.y);
+      return { ...layout, obstacles: layout.obstacles.map((o) => (o.id === action.id ? { ...o, x, y } : o)) };
+    }
+    case "resizeObstacle":
+      return { ...layout, obstacles: layout.obstacles.map((o) => (o.id === action.id ? { ...o, radius: Math.max(MIN_OBSTACLE_RADIUS_M, action.radius) } : o)) };
+    case "removeObstacle":
+      return { ...layout, obstacles: layout.obstacles.filter((o) => o.id !== action.id) };
+    case "moveFlag":
+      return { ...layout, flag: clampPointToField(layout.field, action.x, action.y) };
+    case "moveSpawn": {
+      const pos = clampPointToField(layout.field, action.x, action.y);
+      const key = action.which === "blue" ? "blueSpawn" : "targetSpawn";
+      return { ...layout, [key]: { ...layout[key], x: pos.x, y: pos.y } };
+    }
+    case "setShape": {
+      if (action.shape === layout.field.shape) {
+        return layout;
+      }
+      const radius = Math.min(layout.field.rx, layout.field.ry);
+      return { ...layout, field: { ...layout.field, shape: action.shape, ...(action.shape === "circle" ? { rx: radius, ry: radius } : {}) } };
+    }
+    case "resizeField": {
+      const rx = Math.max(MIN_FIELD_HALF_M, action.rx);
+      const ry = Math.max(MIN_FIELD_HALF_M, action.ry);
+      return { ...layout, field: { ...layout.field, rx, ry: layout.field.shape === "circle" ? rx : ry } };
+    }
+    case "moveField":
+      return { ...layout, field: { ...layout.field, cx: action.cx, cy: action.cy } };
+    default:
+      return layout;
+  }
+}
+
+// Editable rule parameters. Only the field matching the active rule's mode is
+// applied (kill limit for kill_limit_deathmatch, etc.).
+export type ResearchRuleParams = {
+  killLimit?: number;
+  timeLimitTicks?: number;
+  captureHoldTicks?: number;
+};
+
 export function createResearchBattleConfigJson(options: {
   battlePresetId: string;
   rulePresetId?: string;
-  unitPresetId: string;
+  // When battlePresetId is CUSTOM_BATTLE_ID, this custom layout (as a preset) is
+  // used instead of a built-in preset. Produced by layoutToBattlePreset.
+  customBattle?: ResearchBattlePreset;
+  // Per-bot unit preset id, keyed by unit id (1 = Blue, 2 = Red).
+  unitPresetIdByUnit: Record<number, string>;
+  // Editable rule parameters (kill limit / time limit / capture hold ticks).
+  ruleParams?: ResearchRuleParams;
   // Deadline (safety cap) in ticks. When the rule does not resolve on its own by
   // this tick, the engine settles the battle on the current score. Defaults to a
   // large backstop; the research UI passes its tick count here so the run stops
@@ -847,15 +1033,20 @@ export function createResearchBattleConfigJson(options: {
   // fixed number of ticks.
   maxTicks?: number;
 }): string {
-  const battlePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === options.battlePresetId) ?? RESEARCH_BATTLE_PRESETS[0];
+  const battlePreset = options.battlePresetId === CUSTOM_BATTLE_ID && options.customBattle
+    ? options.customBattle
+    : RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === options.battlePresetId) ?? RESEARCH_BATTLE_PRESETS[0];
   const rulePreset = RESEARCH_RULE_PRESETS.find((preset) => preset.id === options.rulePresetId) ?? RESEARCH_RULE_PRESETS[0];
-  const unitPreset = RESEARCH_UNIT_PRESETS.find((preset) => preset.id === options.unitPresetId) ?? RESEARCH_UNIT_PRESETS[0];
+  const unitPresetForUnit = (unitId: number) =>
+    RESEARCH_UNIT_PRESETS.find((preset) => preset.id === options.unitPresetIdByUnit[unitId]) ?? RESEARCH_UNIT_PRESETS[0];
+  const bluePreset = unitPresetForUnit(1);
+  const redPreset = unitPresetForUnit(2);
   // Normalize with the same clamp the run loop uses so the engine's settle-on-
   // score deadline lands exactly on the loop's last tick (no early unresolved stop).
   const tickLimit = options.maxTicks !== undefined ? normalizeTickCount(options.maxTicks) : MAX_RESEARCH_TICKS;
 
   return JSON.stringify({
-    battleId: `research_${battlePreset.id}_${unitPreset.id}_${rulePreset.id}`,
+    battleId: `research_${battlePreset.id}_${bluePreset.id}_vs_${redPreset.id}_${rulePreset.id}`,
     seed: 1,
     tickRate: 30,
     tickLimit,
@@ -867,21 +1058,21 @@ export function createResearchBattleConfigJson(options: {
         teamId: 1,
         name: "Blue",
         spawn: battlePreset.blueSpawn,
-        modules: cloneJson(unitPreset.modules),
+        modules: cloneJson(bluePreset.modules),
       },
       {
         unitId: 2,
         teamId: 2,
         name: "Red",
         spawn: battlePreset.targetSpawn,
-        modules: cloneJson(unitPreset.modules),
+        modules: cloneJson(redPreset.modules),
       },
     ],
     controllers: [
       { unitId: 1, type: "json_callback" },
       { unitId: 2, type: "json_callback" },
     ],
-    rule: createRuleConfig(rulePreset, battlePreset),
+    rule: createRuleConfig(rulePreset, battlePreset, options.ruleParams),
   });
 }
 
@@ -1104,12 +1295,31 @@ function setupCaptureZonesFromRule(payload: unknown): BattleFrame["ruleState"]["
   });
 }
 
-function createRuleConfig(rulePreset: ResearchRulePreset, battlePreset: ResearchBattlePreset): ResearchRuleConfig {
+function createRuleConfig(
+  rulePreset: ResearchRulePreset,
+  battlePreset: ResearchBattlePreset,
+  ruleParams?: ResearchRuleParams,
+): ResearchRuleConfig {
   const rule = cloneJson(rulePreset.rule);
+
+  // Apply editable rule parameters for the active mode only.
+  if (ruleParams) {
+    if (rule.mode === "kill_limit_deathmatch" && typeof ruleParams.killLimit === "number" && ruleParams.killLimit > 0) {
+      rule.killLimit = Math.floor(ruleParams.killLimit);
+    }
+    if (rule.mode === "timed_deathmatch" && typeof ruleParams.timeLimitTicks === "number" && ruleParams.timeLimitTicks > 0) {
+      rule.timeLimitTicks = Math.floor(ruleParams.timeLimitTicks);
+    }
+  }
+
+  const holdTicksOverride = rule.mode === "capture_point" && typeof ruleParams?.captureHoldTicks === "number" && ruleParams.captureHoldTicks > 0
+    ? Math.floor(ruleParams.captureHoldTicks)
+    : undefined;
   if (Array.isArray(rule.captureZones)) {
     rule.captureZones = rule.captureZones.map((zone) => ({
       ...(isRecord(zone) ? zone : {}),
       position: { x: battlePreset.flagPosition.x, y: battlePreset.flagPosition.y },
+      ...(holdTicksOverride !== undefined ? { holdTicks: holdTicksOverride } : {}),
     }));
   }
   const respawn = rule.respawn;

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw, Swords } from "lucide-react";
 
 import { Button } from "../components/ui/button.tsx";
 import type { BattleFrame } from "../types/protocol.ts";
@@ -13,6 +13,9 @@ export type PlaybackControlsProps = {
   frame: BattleFrame | null;
   frameCount: number;
   isPlaying: boolean;
+  canRun: boolean;
+  isRunning: boolean;
+  onRun: () => void;
   onNext: () => void;
   onPlayPause: () => void;
   onPrev: () => void;
@@ -30,6 +33,9 @@ export function PlaybackControls({
   frame,
   frameCount,
   isPlaying,
+  canRun,
+  isRunning,
+  onRun,
   onNext,
   onPlayPause,
   onPrev,
@@ -42,10 +48,25 @@ export function PlaybackControls({
   return (
     <div
       className="absolute bottom-3 left-1/2 z-[3] grid w-[min(440px,calc(100%_-_24px))] -translate-x-1/2 gap-2 rounded-[10px] border border-[var(--brand-border)] bg-[var(--overlay-strong)] p-2.5 shadow-[0_14px_42px_var(--shadow)] backdrop-blur-md"
-      aria-label="Replay playback controls"
+      aria-label="Battle scene run and playback controls"
     >
-      <div className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--surface-well)] px-2 py-1 text-center text-[11px] font-semibold leading-tight text-[var(--text-soft)]">
-        <span className="block truncate">{playbackStatusText(frame)}</span>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-stretch gap-2">
+        <div className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--surface-well)] px-2 py-1 text-center text-[11px] font-semibold leading-tight text-[var(--text-soft)] grid place-items-center">
+          <span className="block truncate">{playbackStatusText(frame)}</span>
+        </div>
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          disabled={!canRun}
+          aria-label={isRunning ? "Running simulation" : "Run simulation"}
+          title="Run a new simulation from the current setup"
+          onClick={onRun}
+          className="gap-1.5 whitespace-nowrap font-bold [&_svg]:h-[13px] [&_svg]:w-[13px]"
+        >
+          <Swords aria-hidden="true" />
+          {isRunning ? "Running…" : "Run"}
+        </Button>
       </div>
 
       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2">

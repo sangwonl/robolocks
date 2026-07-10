@@ -10,8 +10,32 @@ import {
   RESEARCH_UNIT_PRESETS,
   createResearchBattleConfigJson,
   createResearchSetupReplay,
+  layoutFromPreset,
+  layoutReducer,
+  layoutToBattlePreset,
+  CUSTOM_BATTLE_ID,
+  SAVED_CUSTOM_ID_PREFIX,
+  isSavedCustomId,
   type BotLogEntry,
+  type CustomBattleLayout,
+  type LayoutAction,
+  type ResearchRuleParams,
+  type SavedCustomBattle,
 } from "../../research/research.ts";
+
+// Concrete (all-present) rule parameters held in UI state; only the active rule's
+// field is applied when building the battle config.
+export type ResearchRuleParamState = {
+  killLimit: number;
+  timeLimitTicks: number;
+  captureHoldTicks: number;
+};
+
+const DEFAULT_RULE_PARAMS: ResearchRuleParamState = {
+  killLimit: 3,
+  timeLimitTicks: 300,
+  captureHoldTicks: 90,
+};
 import {
   parseWorkerMessage,
   runRequest,
@@ -33,8 +57,31 @@ export type UseResearchRunResult = {
   setResearchBattlePresetId: (id: string) => void;
   researchRulePresetId: string;
   setResearchRulePresetId: (id: string) => void;
-  researchUnitPresetId: string;
-  setResearchUnitPresetId: (id: string) => void;
+  unitPresetByUnit: Record<number, string>;
+  setResearchUnitPresetId: (unitId: number, id: string) => void;
+  researchRuleParams: ResearchRuleParamState;
+  setResearchRuleParam: (key: keyof ResearchRuleParamState, value: number) => void;
+  customBattleLayout: CustomBattleLayout;
+  // What the field editor shows: the selected preset's geometry when a preset is
+  // active, or the editable Custom layout (draft or a saved battle) once forked.
+  editorLayout: CustomBattleLayout;
+  dispatchLayoutAction: (action: LayoutAction) => void;
+  // Named custom battles saved to local storage.
+  savedCustomBattles: SavedCustomBattle[];
+  // True when the current selection is a custom battle (draft or saved).
+  isCustomBattleSelected: boolean;
+  // Name of the active custom battle (empty for an unsaved draft).
+  activeCustomBattleName: string;
+  // The active layout differs from what is saved (or is an unnamed draft).
+  isCustomBattleDirty: boolean;
+  // Select a battle by id (preset, "custom" draft, or a saved custom id). Loads
+  // the layout of a saved custom into the editor.
+  selectResearchBattle: (id: string) => void;
+  // Save the current custom layout under a name: creates a new saved battle from
+  // a draft, or overwrites the selected saved battle.
+  saveCustomBattle: (name: string) => void;
+  // Delete a saved custom battle by id.
+  deleteCustomBattle: (id: string) => void;
   researchBotLogicPresetId: string;
   setResearchBotLogicPresetId: (unitId: number, id: string) => void;
   researchBotSource: string;
@@ -47,11 +94,9 @@ export type UseResearchRunResult = {
   setBotLogs: (logs: BotLogEntry[]) => void;
   researchBattlePreset: (typeof RESEARCH_BATTLE_PRESETS)[number] | undefined;
   researchRulePreset: (typeof RESEARCH_RULE_PRESETS)[number] | undefined;
-  researchUnitPreset: (typeof RESEARCH_UNIT_PRESETS)[number] | undefined;
   researchBattleConfigJson: string;
   isResearchRunning: boolean;
   researchProgress: ResearchProgress | null;
-  setupResearch: () => void;
   runResearch: () => void;
   cancelResearch: () => void;
 };
@@ -69,7 +114,11 @@ const STORAGE_KEY = "robolocks.research.v1";
 type StoredResearchState = {
   battlePresetId?: unknown;
   rulePresetId?: unknown;
-  unitPresetId?: unknown;
+  unitPresetId?: unknown;          // legacy single-unit preset (migrated to unitPresetByUnit)
+  unitPresetByUnit?: unknown;
+  ruleParams?: unknown;
+  customBattleLayout?: unknown;
+  savedCustomBattles?: unknown;
   botLogicPresetId?: unknown;
   editorBotSource?: unknown;
   appliedBotSource?: unknown;
@@ -82,7 +131,10 @@ type StoredResearchState = {
 type NormalizedStoredResearchState = {
   battlePresetId: string;
   rulePresetId: string;
-  unitPresetId: string;
+  unitPresetByUnit: Record<number, string>;
+  ruleParams: ResearchRuleParamState;
+  customBattleLayout: CustomBattleLayout;
+  savedCustomBattles: SavedCustomBattle[];
   botLogicPresetId: string;
   editorBotSource: string;
   appliedBotSource: string;
@@ -101,7 +153,13 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
   const [botLogicByUnit, setBotLogicByUnit] = useState<Record<number, ResearchBotLogicState>>(stored.botLogicByUnit);
   const [researchBattlePresetId, setResearchBattlePresetId] = useState(stored.battlePresetId);
   const [researchRulePresetId, setResearchRulePresetId] = useState(stored.rulePresetId);
-  const [researchUnitPresetId, setResearchUnitPresetId] = useState(stored.unitPresetId);
+  const [unitPresetByUnit, setUnitPresetByUnit] = useState<Record<number, string>>(stored.unitPresetByUnit);
+  const [researchRuleParams, setResearchRuleParams] = useState<ResearchRuleParamState>(stored.ruleParams);
+  const [customBattleLayout, setCustomBattleLayout] = useState<CustomBattleLayout>(stored.customBattleLayout);
+  const [savedCustomBattles, setSavedCustomBattles] = useState<SavedCustomBattle[]>(stored.savedCustomBattles);
+  // The working layout differs from what is saved (or is an unnamed draft that has
+  // never been saved). Not persisted: unsaved edits are lost on reload by design.
+  const [isCustomBattleDirty, setIsCustomBattleDirty] = useState(stored.battlePresetId === CUSTOM_BATTLE_ID);
   const [researchTickCount, setResearchTickCount] = useState(stored.tickCount);
   const [botLogs, setBotLogs] = useState<BotLogEntry[]>([]);
   const [isResearchRunning, setIsResearchRunning] = useState(false);
@@ -110,18 +168,97 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
 
   const researchBattlePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === researchBattlePresetId) ?? RESEARCH_BATTLE_PRESETS[0];
   const researchRulePreset = RESEARCH_RULE_PRESETS.find((preset) => preset.id === researchRulePresetId) ?? RESEARCH_RULE_PRESETS[0];
-  const researchUnitPreset = RESEARCH_UNIT_PRESETS.find((preset) => preset.id === researchUnitPresetId) ?? RESEARCH_UNIT_PRESETS[0];
+
+  // A custom battle is selected when the id is the draft or a saved custom. In
+  // both cases the run and the editor use the working customBattleLayout.
+  const activeSavedBattle = savedCustomBattles.find((battle) => battle.id === researchBattlePresetId);
+  const isCustomBattleSelected = researchBattlePresetId === CUSTOM_BATTLE_ID || activeSavedBattle !== undefined;
+  const activeCustomBattleName = activeSavedBattle?.name ?? "";
+
   const researchBattleConfigJson = useMemo(
     () => createResearchBattleConfigJson({
-      battlePresetId: researchBattlePresetId,
+      // Saved customs and the draft all run the working layout via CUSTOM_BATTLE_ID.
+      battlePresetId: isCustomBattleSelected ? CUSTOM_BATTLE_ID : researchBattlePresetId,
       rulePresetId: researchRulePresetId,
-      unitPresetId: researchUnitPresetId,
+      customBattle: layoutToBattlePreset(customBattleLayout),
+      unitPresetIdByUnit: unitPresetByUnit,
+      ruleParams: researchRuleParams as ResearchRuleParams,
       // The tick count is the deadline (safety cap), not a fixed run length: the
       // engine settles on score at this tick if the rule has not resolved first.
       maxTicks: researchTickCount,
     }),
-    [researchBattlePresetId, researchRulePresetId, researchUnitPresetId, researchTickCount],
+    [researchBattlePresetId, isCustomBattleSelected, researchRulePresetId, customBattleLayout, unitPresetByUnit, researchRuleParams, researchTickCount],
   );
+
+  function setResearchUnitPresetId(unitId: number, id: string): void {
+    setUnitPresetByUnit((current) => ({ ...current, [unitId]: id }));
+  }
+
+  function setResearchRuleParam(key: keyof ResearchRuleParamState, value: number): void {
+    setResearchRuleParams((current) => ({ ...current, [key]: value }));
+  }
+
+  // The editor mirrors whatever battle is selected: a preset's geometry directly,
+  // or the editable working layout (draft or a saved custom) once forked/selected.
+  const editorLayout = isCustomBattleSelected
+    ? customBattleLayout
+    : layoutFromPreset(researchBattlePreset);
+
+  // Editing the field uses the working layout. While a preset is selected the first
+  // edit forks that preset into the Custom draft (not the stale working layout), so
+  // edits build on the battlefield the user is looking at.
+  function dispatchLayoutAction(action: LayoutAction): void {
+    if (isCustomBattleSelected) {
+      setCustomBattleLayout((current) => layoutReducer(current, action));
+      setIsCustomBattleDirty(true);
+      return;
+    }
+    setCustomBattleLayout(layoutReducer(layoutFromPreset(researchBattlePreset), action));
+    setResearchBattlePresetId(CUSTOM_BATTLE_ID);
+    setIsCustomBattleDirty(true);
+  }
+
+  // Select a battle by id. Choosing a saved custom loads its layout into the editor
+  // (discarding any unsaved draft edits, per the explicit-save model).
+  function selectResearchBattle(id: string): void {
+    const saved = savedCustomBattles.find((battle) => battle.id === id);
+    if (saved) {
+      setCustomBattleLayout(saved.layout);
+      setIsCustomBattleDirty(false);
+    } else if (id === CUSTOM_BATTLE_ID) {
+      // Returning to the draft keeps its working layout; treat it as unsaved.
+      setIsCustomBattleDirty(true);
+    }
+    setResearchBattlePresetId(id);
+  }
+
+  // Save the working layout: a draft becomes a new saved battle, an already-saved
+  // battle is overwritten (its name updated to the given name).
+  function saveCustomBattle(name: string): void {
+    const trimmed = name.trim() || defaultCustomName(savedCustomBattles);
+    if (activeSavedBattle) {
+      setSavedCustomBattles((list) =>
+        list.map((battle) => (battle.id === activeSavedBattle.id ? { ...battle, name: trimmed, layout: customBattleLayout } : battle)),
+      );
+      setIsCustomBattleDirty(false);
+      return;
+    }
+    const id = `${SAVED_CUSTOM_ID_PREFIX}${nextSavedCustomSuffix(savedCustomBattles)}`;
+    setSavedCustomBattles((list) => [...list, { id, name: trimmed, layout: customBattleLayout }]);
+    setResearchBattlePresetId(id);
+    setIsCustomBattleDirty(false);
+  }
+
+  // Delete a saved custom battle. If it is the active selection, its layout stays
+  // in the editor as an unsaved draft.
+  function deleteCustomBattle(id: string): void {
+    setSavedCustomBattles((list) => list.filter((battle) => battle.id !== id));
+    if (researchBattlePresetId === id) {
+      setResearchBattlePresetId(CUSTOM_BATTLE_ID);
+      setIsCustomBattleDirty(true);
+    }
+  }
+
   const activeBotLogic = botLogicByUnit[activeResearchBotUnitId] ?? emptyBotLogicState();
   const researchBotLogicPresetId = activeBotLogic.presetId;
   const researchBotSource = activeBotLogic.editorSource;
@@ -134,7 +271,10 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     writeStoredResearchState({
       battlePresetId: researchBattlePresetId,
       rulePresetId: researchRulePresetId,
-      unitPresetId: researchUnitPresetId,
+      unitPresetByUnit,
+      ruleParams: researchRuleParams,
+      customBattleLayout,
+      savedCustomBattles,
       botLogicPresetId: researchBotLogicPresetId,
       editorBotSource: researchBotSource,
       appliedBotSource,
@@ -152,12 +292,26 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     researchBotSource,
     researchMode,
     researchRulePresetId,
+    researchRuleParams,
     researchTickCount,
-    researchUnitPresetId,
+    unitPresetByUnit,
+    customBattleLayout,
+    savedCustomBattles,
   ]);
 
+  // After a run, editing any setup (battle/units/rule/field) drops back to preview
+  // so the scene reflects the new config instead of the stale run replay. There is
+  // no explicit Setup step: changing the config re-arms the preview automatically.
   useEffect(() => {
-    if (researchMode !== "ready") {
+    setResearchMode((mode) => (mode === "loaded" ? "ready" : mode));
+  }, [researchBattleConfigJson]);
+
+  // Keep the scene showing a live preview of the selected battle whenever a run
+  // isn't loaded or in flight. This makes the field/spawns/obstacles of the
+  // current battle visible on first open (and update as the config changes),
+  // instead of a placeholder field.
+  useEffect(() => {
+    if (researchMode === "simulating" || researchMode === "loaded") {
       return;
     }
     depsRef.current.pause();
@@ -168,14 +322,6 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     teardownWorker(workerRef);
     setIsResearchRunning(false);
     setResearchProgress(null);
-  }
-
-  function setupResearch(): void {
-    deps.pause();
-    setBotLogs([]);
-    setResearchMode("ready");
-    deps.applyReplay(createResearchSetupReplay(researchBattleConfigJson), false);
-    deps.setStatus("Research ready");
   }
 
   function setResearchBotLogicPresetId(unitId: number, id: string): void {
@@ -297,8 +443,20 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     setResearchBattlePresetId,
     researchRulePresetId,
     setResearchRulePresetId,
-    researchUnitPresetId,
+    unitPresetByUnit,
     setResearchUnitPresetId,
+    researchRuleParams,
+    setResearchRuleParam,
+    customBattleLayout,
+    editorLayout,
+    dispatchLayoutAction,
+    savedCustomBattles,
+    isCustomBattleSelected,
+    activeCustomBattleName,
+    isCustomBattleDirty,
+    selectResearchBattle,
+    saveCustomBattle,
+    deleteCustomBattle,
     researchBotLogicPresetId,
     setResearchBotLogicPresetId,
     researchBotSource,
@@ -311,11 +469,9 @@ export function useResearchRun(deps: UseResearchRunDeps): UseResearchRunResult {
     setBotLogs,
     researchBattlePreset,
     researchRulePreset,
-    researchUnitPreset,
     researchBattleConfigJson,
     isResearchRunning,
     researchProgress,
-    setupResearch,
     runResearch,
     cancelResearch,
   };
@@ -329,10 +485,14 @@ function teardownWorker(workerRef: { current: Worker | null }): void {
 }
 
 function readStoredResearchState(): NormalizedStoredResearchState {
+  const defaultUnitPresetId = RESEARCH_UNIT_PRESETS[0]?.id ?? "";
   const fallback: NormalizedStoredResearchState = {
     battlePresetId: RESEARCH_BATTLE_PRESETS[0]?.id ?? "",
     rulePresetId: RESEARCH_RULE_PRESETS[0]?.id ?? "",
-    unitPresetId: RESEARCH_UNIT_PRESETS[0]?.id ?? "",
+    unitPresetByUnit: { 1: defaultUnitPresetId, 2: defaultUnitPresetId },
+    ruleParams: { ...DEFAULT_RULE_PARAMS },
+    customBattleLayout: layoutFromPreset(RESEARCH_BATTLE_PRESETS[0]),
+    savedCustomBattles: [],
     botLogicPresetId: "charger",
     editorBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "charger")?.source ?? "",
     appliedBotSource: RESEARCH_BOT_LOGIC_PRESETS.find((p) => p.id === "charger")?.source ?? "",
@@ -354,17 +514,28 @@ function readStoredResearchState(): NormalizedStoredResearchState {
       RESEARCH_BOT_LOGIC_PRESETS.map((preset) => preset.id),
       fallback.botLogicPresetId,
     );
+    const savedCustomBattles = savedCustomBattlesFromStored(parsed, fallback.customBattleLayout);
+    // A selection may be a built-in preset, the Custom draft, or a saved custom id.
+    const battleIds = [...RESEARCH_BATTLE_PRESETS.map((preset) => preset.id), CUSTOM_BATTLE_ID, ...savedCustomBattles.map((battle) => battle.id)];
+    const battlePresetId = validPresetId(parsed.battlePresetId, battleIds, fallback.battlePresetId);
+    // Selecting a saved custom loads its layout; otherwise keep the working draft.
+    const activeSaved = savedCustomBattles.find((battle) => battle.id === battlePresetId);
     return {
-      battlePresetId: validPresetId(parsed.battlePresetId, RESEARCH_BATTLE_PRESETS.map((preset) => preset.id), fallback.battlePresetId),
+      battlePresetId,
       rulePresetId: validPresetId(parsed.rulePresetId, RESEARCH_RULE_PRESETS.map((preset) => preset.id), fallback.rulePresetId),
-      unitPresetId: validPresetId(parsed.unitPresetId, RESEARCH_UNIT_PRESETS.map((preset) => preset.id), fallback.unitPresetId),
+      unitPresetByUnit: unitPresetByUnitFromStored(parsed, fallback),
+      ruleParams: ruleParamsFromStored(parsed, fallback),
+      customBattleLayout: activeSaved ? activeSaved.layout : customBattleLayoutFromStored(parsed, fallback),
+      savedCustomBattles,
       botLogicPresetId,
       editorBotSource: typeof parsed.editorBotSource === "string" ? parsed.editorBotSource : fallback.editorBotSource,
       appliedBotSource: typeof parsed.appliedBotSource === "string" ? parsed.appliedBotSource : fallback.appliedBotSource,
       activeBotUnitId: typeof parsed.activeBotUnitId === "number" ? parsed.activeBotUnitId : fallback.activeBotUnitId,
       botLogicByUnit: botLogicByUnitFromStored(parsed, fallback),
       tickCount: typeof parsed.tickCount === "number" ? parsed.tickCount : fallback.tickCount,
-      mode: isResearchMode(parsed.mode) && parsed.mode !== "simulating" ? parsed.mode : fallback.mode,
+      // The loaded replay isn't persisted, so "simulating"/"loaded" can't be
+      // restored meaningfully; fall back to a preview mode that reflects the config.
+      mode: isResearchMode(parsed.mode) && parsed.mode !== "simulating" && parsed.mode !== "loaded" ? parsed.mode : fallback.mode,
     };
   } catch {
     return fallback;
@@ -388,6 +559,114 @@ function isResearchMode(value: unknown): value is ResearchMode {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function unitPresetByUnitFromStored(
+  parsed: StoredResearchState,
+  fallback: NormalizedStoredResearchState,
+): Record<number, string> {
+  const validIds = RESEARCH_UNIT_PRESETS.map((preset) => preset.id);
+  const resolve = (value: unknown, byUnit: number): string =>
+    validPresetId(value, validIds, fallback.unitPresetByUnit[byUnit]);
+  if (isRecord(parsed.unitPresetByUnit)) {
+    const map = parsed.unitPresetByUnit;
+    return { 1: resolve(map[1], 1), 2: resolve(map[2], 2) };
+  }
+  // Migrate the legacy single unit preset to both bots.
+  if (typeof parsed.unitPresetId === "string") {
+    const migrated = resolve(parsed.unitPresetId, 1);
+    return { 1: migrated, 2: migrated };
+  }
+  return { ...fallback.unitPresetByUnit };
+}
+
+function customBattleLayoutFromStored(
+  parsed: StoredResearchState,
+  fallback: NormalizedStoredResearchState,
+): CustomBattleLayout {
+  return parseLayout(parsed.customBattleLayout, fallback.customBattleLayout);
+}
+
+function parseLayout(raw: unknown, fb: CustomBattleLayout): CustomBattleLayout {
+  if (!isRecord(raw) || !isRecord(raw.field) || !Array.isArray(raw.obstacles)) {
+    return fb;
+  }
+  const num = (value: unknown, fallbackValue: number): number =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallbackValue;
+  const field = raw.field as Record<string, unknown>;
+  const shape = field.shape === "circle" ? "circle" : "rect";
+  const point = (value: unknown, fx: number, fy: number): { x: number; y: number } => {
+    const p = isRecord(value) ? value : {};
+    return { x: num(p.x, fx), y: num(p.y, fy) };
+  };
+  const spawn = (value: unknown, sfb: { x: number; y: number; headingDeg: number }) => {
+    const s = isRecord(value) ? value : {};
+    return { x: num(s.x, sfb.x), y: num(s.y, sfb.y), headingDeg: num(s.headingDeg, sfb.headingDeg) };
+  };
+  return {
+    field: {
+      shape,
+      cx: num(field.cx, fb.field.cx),
+      cy: num(field.cy, fb.field.cy),
+      rx: num(field.rx, fb.field.rx),
+      ry: num(field.ry, fb.field.ry),
+    },
+    obstacles: raw.obstacles
+      .filter(isRecord)
+      .map((o, index) => ({
+        id: typeof o.id === "string" ? o.id : `obs_${index}`,
+        x: num(o.x, 0),
+        y: num(o.y, 0),
+        radius: num(o.radius, 1.3),
+      })),
+    flag: point(raw.flag, fb.flag.x, fb.flag.y),
+    blueSpawn: spawn(raw.blueSpawn, fb.blueSpawn),
+    targetSpawn: spawn(raw.targetSpawn, fb.targetSpawn),
+  };
+}
+
+function savedCustomBattlesFromStored(parsed: StoredResearchState, fallbackLayout: CustomBattleLayout): SavedCustomBattle[] {
+  const raw = parsed.savedCustomBattles;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .filter(isRecord)
+    .filter((battle): battle is Record<string, unknown> & { id: string } => typeof battle.id === "string" && isSavedCustomId(battle.id))
+    .map((battle) => ({
+      id: battle.id,
+      name: typeof battle.name === "string" && battle.name.trim() ? battle.name : "Custom",
+      layout: parseLayout(battle.layout, fallbackLayout),
+    }));
+}
+
+function defaultCustomName(list: SavedCustomBattle[]): string {
+  return `Custom ${list.length + 1}`;
+}
+
+function nextSavedCustomSuffix(list: SavedCustomBattle[]): number {
+  let max = 0;
+  for (const battle of list) {
+    const match = new RegExp(`^${SAVED_CUSTOM_ID_PREFIX}(\\d+)$`).exec(battle.id);
+    if (match) {
+      max = Math.max(max, Number(match[1]));
+    }
+  }
+  return max + 1;
+}
+
+function ruleParamsFromStored(
+  parsed: StoredResearchState,
+  fallback: NormalizedStoredResearchState,
+): ResearchRuleParamState {
+  const stored = isRecord(parsed.ruleParams) ? parsed.ruleParams : {};
+  const num = (value: unknown, fallbackValue: number): number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallbackValue;
+  return {
+    killLimit: num(stored.killLimit, fallback.ruleParams.killLimit),
+    timeLimitTicks: num(stored.timeLimitTicks, fallback.ruleParams.timeLimitTicks),
+    captureHoldTicks: num(stored.captureHoldTicks, fallback.ruleParams.captureHoldTicks),
+  };
 }
 
 function botLogicByUnitFromStored(
