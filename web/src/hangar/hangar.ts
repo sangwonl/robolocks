@@ -1,10 +1,10 @@
 import type { BattleReplay } from "../replay/replay";
 import type { BattleFrame, BodyShapeFrame, FieldBoundsFrame, UnitFrame, UnitModulesFrame } from "../types/protocol";
-import { createResearchDuelWithJsonBotFromWasmFactory, type JsonBotTick, type KernelBattleRunner } from "../sim/kernelAdapter.ts";
+import { createHangarDuelWithJsonBotFromWasmFactory, type JsonBotTick, type KernelBattleRunner } from "../sim/kernelAdapter.ts";
 import { PYTHON_SDK_FILES } from "./pythonSdkFiles.generated.ts";
-import type { ResearchProgress } from "./researchWorkerProtocol.ts";
+import type { HangarProgress } from "./hangarWorkerProtocol.ts";
 
-export type ResearchBotLogicPreset = {
+export type HangarBotLogicPreset = {
   id: string;
   label: string;
   description: string;
@@ -218,7 +218,7 @@ def on_tick(state: BattleState) -> list[OrderLike]:
 run_bot(on_tick)
 `;
 
-export const RESEARCH_BOT_LOGIC_PRESETS: ResearchBotLogicPreset[] = [
+export const HANGAR_BOT_LOGIC_PRESETS: HangarBotLogicPreset[] = [
   {
     id: "empty",
     label: "Empty",
@@ -263,7 +263,7 @@ export const RESEARCH_BOT_LOGIC_PRESETS: ResearchBotLogicPreset[] = [
   },
 ];
 
-export const DEFAULT_RESEARCH_BOT_SOURCE = CHARGER_BOT_SOURCE;
+export const DEFAULT_HANGAR_BOT_SOURCE = CHARGER_BOT_SOURCE;
 
 export const NO_OP_BOT_SOURCE = `from robolocks import (
     BattleState,
@@ -279,14 +279,17 @@ def on_tick(state: BattleState) -> list[OrderLike]:
 run_bot(on_tick)
 `;
 
-export type ResearchRunOptions = {
+export const NO_OPPONENT_LOGIC_ID = "none";
+
+export type HangarRunOptions = {
   botSource: string;
   botSourcesByUnit?: Record<number, string>;
   battleConfigJson?: string;
   tickCount: number;
+  logDrainIntervalTicks?: number;
   createBotRuntime?: BrowserBotRuntimeFactory;
-  createRunner?: ResearchRunnerFactory;
-  onProgress?: (progress: ResearchProgress) => void;
+  createRunner?: HangarRunnerFactory;
+  onProgress?: (progress: HangarProgress) => void;
 };
 
 // Emit a `simulating` progress event at most this often so a long run does not
@@ -300,7 +303,7 @@ export type BotLogEntry = {
   message: string;
 };
 
-export type ResearchRunResult = {
+export type HangarRunResult = {
   replay: BattleReplay;
   logs: BotLogEntry[];
 };
@@ -313,13 +316,13 @@ export type BrowserBotRuntime = {
 
 export type BrowserBotRuntimeFactory = (botSource: string, botId: number) => Promise<BrowserBotRuntime>;
 
-export type ResearchRunnerFactory = (options: {
+export type HangarRunnerFactory = (options: {
   botId: number;
   battleConfigJson: string;
   onTick: JsonBotTick;
 }) => Promise<KernelBattleRunner>;
 
-export type ResearchBattlePreset = {
+export type HangarBattlePreset = {
   id: string;
   label: string;
   description: string;
@@ -328,33 +331,33 @@ export type ResearchBattlePreset = {
   flagPosition: { x: number; y: number };
   blueSpawn: { x: number; y: number; headingDeg: number };
   targetSpawn: { x: number; y: number; headingDeg: number };
-  blueRespawnZone: ResearchRespawnZone;
-  targetRespawnZone: ResearchRespawnZone;
+  blueRespawnZone: HangarRespawnZone;
+  targetRespawnZone: HangarRespawnZone;
 };
 
-type ResearchRespawnZone = {
+type HangarRespawnZone = {
   position: { x: number; y: number };
   radiusMeters: number;
   headingDeg: number;
 };
 
-export type ResearchUnitPreset = {
+export type HangarUnitPreset = {
   id: string;
   label: string;
   description: string;
-  modules: ResearchUnitModulesConfig;
+  modules: HangarUnitModulesConfig;
 };
 
-export type ResearchRulePreset = {
+export type HangarRulePreset = {
   id: string;
   label: string;
   description: string;
-  rule: ResearchRuleConfig;
+  rule: HangarRuleConfig;
 };
 
-type ResearchRuleConfig = Record<string, unknown>;
+type HangarRuleConfig = Record<string, unknown>;
 
-type ResearchUnitModulesConfig = {
+type HangarUnitModulesConfig = {
   mobility: Record<string, unknown>;
   turret: Record<string, unknown>;
   weapon: Record<string, unknown>;
@@ -363,18 +366,19 @@ type ResearchUnitModulesConfig = {
   sensor: Record<string, unknown>;
 };
 
-export async function runResearchInBrowser(options: ResearchRunOptions): Promise<ResearchRunResult> {
+export async function runHangarInBrowser(options: HangarRunOptions): Promise<HangarRunResult> {
   const tickCount = normalizeTickCount(options.tickCount);
-  const battleConfigJson = options.battleConfigJson ?? DEFAULT_RESEARCH_BATTLE_CONFIG_JSON;
+  const battleConfigJson = options.battleConfigJson ?? DEFAULT_HANGAR_BATTLE_CONFIG_JSON;
   const configuredFieldShape = fieldShapeFromBattleConfigJson(battleConfigJson);
   const onProgress = options.onProgress ?? (() => {});
+  const logDrainIntervalTicks = normalizeLogDrainInterval(options.logDrainIntervalTicks);
   const createBotRuntime = options.createBotRuntime ?? ((botSource, botId) => createPyodideBotRuntime(botSource, botId, onProgress));
   const botSourcesByUnit = botSourcesByUnitFromConfig(battleConfigJson, options.botSource, options.botSourcesByUnit);
   const botRuntimes = new Map<number, BrowserBotRuntime>();
   for (const [unitId, botSource] of botSourcesByUnit) {
     botRuntimes.set(unitId, await createBotRuntime(botSource, unitId));
   }
-  const createRunner = options.createRunner ?? ((runnerOptions) => createResearchDuelWithJsonBotFromWasmFactory(runnerOptions));
+  const createRunner = options.createRunner ?? ((runnerOptions) => createHangarDuelWithJsonBotFromWasmFactory(runnerOptions));
   const runner = await createRunner({
     botId: 1,
     battleConfigJson,
@@ -387,26 +391,35 @@ export async function runResearchInBrowser(options: ResearchRunOptions): Promise
   try {
     const frames = [runner.snapshot()];
     const logs: BotLogEntry[] = [];
+    const drainLogs = (tick: number) => {
+      for (const [unitId, botRuntime] of botRuntimes) {
+        for (const log of botRuntime.drainLogs?.() ?? []) {
+          logs.push({ ...log, tick, unitId });
+        }
+      }
+    };
     onProgress({ stage: "simulating", tick: 0, totalTicks: tickCount });
     for (let i = 0; i < tickCount; i += 1) {
       const frame = runner.step();
       frames.push(frame);
-      for (const [unitId, botRuntime] of botRuntimes) {
-        for (const log of botRuntime.drainLogs?.() ?? []) {
-          logs.push({ ...log, tick: frame.tick, unitId });
-        }
-      }
       const completed = i + 1;
+      const finished = Boolean(frame.ruleState?.outcome?.finished);
+      if (shouldDrainLogs(completed, tickCount, logDrainIntervalTicks, finished)) {
+        drainLogs(frame.tick);
+      }
       // Stop as soon as the rule decides the battle (or the engine settles it on
       // score at the tick-limit deadline). tickCount is the max, not a fixed run
       // length — the rule governs when the battle actually ends.
-      if (frame.ruleState?.outcome?.finished) {
+      if (finished) {
         onProgress({ stage: "simulating", tick: completed, totalTicks: tickCount });
         break;
       }
       if (completed === tickCount || completed % SIMULATION_PROGRESS_INTERVAL === 0) {
         onProgress({ stage: "simulating", tick: completed, totalTicks: tickCount });
       }
+    }
+    if (logDrainIntervalTicks === 0) {
+      drainLogs(frames[frames.length - 1]?.tick ?? 0);
     }
 
     return {
@@ -426,14 +439,14 @@ export async function runResearchInBrowser(options: ResearchRunOptions): Promise
   }
 }
 
-export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
-  battleId: "research_duel_v0",
+export const DEFAULT_HANGAR_BATTLE_CONFIG_JSON = JSON.stringify({
+  battleId: "hangar_duel_v0",
   seed: 1,
   tickRate: 60,
   tickLimit: 18000,
   obstacles: [
     {
-      id: "research_cover",
+      id: "hangar_cover",
       position: { x: 20, y: 6 },
       radiusMeters: 1.5,
       blocksMovement: true,
@@ -483,14 +496,14 @@ export const DEFAULT_RESEARCH_BATTLE_CONFIG_JSON = JSON.stringify({
       cooldownTicks: 180,
       invulnerableTicks: 60,
       spawnPoints: [
-        { id: "blue_research_spawn", teamId: 1, position: { x: 4, y: 5 }, radiusMeters: 2.5, headingDegrees: 35 },
-        { id: "target_research_spawn", teamId: 2, position: { x: 34, y: 18 }, radiusMeters: 2.5, headingDegrees: 215 },
+        { id: "blue_hangar_spawn", teamId: 1, position: { x: 4, y: 5 }, radiusMeters: 2.5, headingDegrees: 35 },
+        { id: "target_hangar_spawn", teamId: 2, position: { x: 34, y: 18 }, radiusMeters: 2.5, headingDegrees: 215 },
       ],
     },
   },
 });
 
-const STANDARD_MODULES: ResearchUnitModulesConfig = {
+const STANDARD_MODULES: HangarUnitModulesConfig = {
   mobility: { id: "tracked_chassis_mk1", maxSpeedMetersPerSecond: 6.0, maxHullTurnDegreesPerSecond: 120.0 },
   turret: { id: "light_turret_mk1", maxTurnDegreesPerSecond: 180.0 },
   weapon: { id: "slow_cannon_test", damage: 25.0, penetrationMillimeters: 120.0, rangeMeters: 80.0, muzzleVelocityMetersPerSecond: 20.0, muzzleOffsetMeters: { x: 3.6, y: 0.0, z: 1.65 }, projectileRadiusMeters: 0.08, reloadTicks: 180 },
@@ -499,7 +512,7 @@ const STANDARD_MODULES: ResearchUnitModulesConfig = {
   sensor: { id: "visual_optic_mk1", rangeMeters: 60.0, fovDegrees: 120.0, refreshTicks: 1 },
 };
 
-const LARGE_RECT_RESEARCH_FIELD: FieldBoundsFrame = {
+const LARGE_RECT_HANGAR_FIELD: FieldBoundsFrame = {
   min: { x: -108, y: -68 },
   max: { x: 148, y: 92 },
 };
@@ -616,15 +629,15 @@ function spreadObstacles(params: {
   return out;
 }
 
-export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
+export const HANGAR_BATTLE_PRESETS: HangarBattlePreset[] = [
   {
     id: "covered_duel",
     label: "Covered Duel",
     description: "One line-of-sight blocker between a mobile unit and a fixed target.",
-    field: LARGE_RECT_RESEARCH_FIELD,
+    field: LARGE_RECT_HANGAR_FIELD,
     obstacles: spreadObstacles({
       idPrefix: "covered",
-      field: LARGE_RECT_RESEARCH_FIELD,
+      field: LARGE_RECT_HANGAR_FIELD,
       flag: { x: 20, y: 12 },
       avoid: [{ x: -68, y: -28, radiusMeters: 10 }, { x: 108, y: 52, radiusMeters: 10 }],
       spacingM: 68,
@@ -642,7 +655,7 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
     id: "open_range",
     label: "Open Range",
     description: "No cover, useful for weapon timing and sensor checks.",
-    field: LARGE_RECT_RESEARCH_FIELD,
+    field: LARGE_RECT_HANGAR_FIELD,
     obstacles: [],
     flagPosition: { x: 20, y: 12 },
     blueSpawn: { x: -70, y: 12, headingDeg: 0 },
@@ -654,10 +667,10 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
     id: "close_cover",
     label: "Close Cover",
     description: "Shorter spawn distance with central cover pressure.",
-    field: LARGE_RECT_RESEARCH_FIELD,
+    field: LARGE_RECT_HANGAR_FIELD,
     obstacles: spreadObstacles({
       idPrefix: "close_cover",
-      field: LARGE_RECT_RESEARCH_FIELD,
+      field: LARGE_RECT_HANGAR_FIELD,
       flag: { x: 20, y: 12 },
       avoid: [{ x: -58, y: -22, radiusMeters: 10 }, { x: 98, y: 46, radiusMeters: 10 }],
       spacingM: 34,
@@ -675,10 +688,10 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
     id: "flag_run",
     label: "Flag Run",
     description: "Staggered cover creates lanes around blockers for capture-route practice.",
-    field: LARGE_RECT_RESEARCH_FIELD,
+    field: LARGE_RECT_HANGAR_FIELD,
     obstacles: spreadObstacles({
       idPrefix: "flag_run",
-      field: LARGE_RECT_RESEARCH_FIELD,
+      field: LARGE_RECT_HANGAR_FIELD,
       flag: { x: 20, y: 12 },
       avoid: [{ x: -76, y: -38, radiusMeters: 10 }, { x: 116, y: 62, radiusMeters: 10 }],
       spacingM: 42,
@@ -736,7 +749,7 @@ export const RESEARCH_BATTLE_PRESETS: ResearchBattlePreset[] = [
   },
 ];
 
-export const RESEARCH_UNIT_PRESETS: ResearchUnitPreset[] = [
+export const HANGAR_UNIT_PRESETS: HangarUnitPreset[] = [
   {
     id: "standard_tank",
     label: "Standard Tank",
@@ -779,7 +792,7 @@ export const RESEARCH_UNIT_PRESETS: ResearchUnitPreset[] = [
   },
 ];
 
-export const RESEARCH_RULE_PRESETS: ResearchRulePreset[] = [
+export const HANGAR_RULE_PRESETS: HangarRulePreset[] = [
   {
     id: "kill_limit_team",
     label: "Kill Limit",
@@ -840,7 +853,7 @@ export const RESEARCH_RULE_PRESETS: ResearchRulePreset[] = [
 // Custom battle field (Bundle B): an editable layout the 2D field editor mutates.
 // The sim is 2D (x/y only), so the layout carries no heights — the 3D scene
 // assigns per-element heights. `layoutToBattlePreset` maps it onto the same
-// ResearchBattlePreset shape the presets use, so the config path is unchanged.
+// HangarBattlePreset shape the presets use, so the config path is unchanged.
 // ---------------------------------------------------------------------------
 
 export const CUSTOM_BATTLE_ID = "custom";
@@ -881,7 +894,22 @@ export function isSavedBotLogicId(id: string): boolean {
   return id.startsWith(SAVED_BOT_LOGIC_ID_PREFIX);
 }
 
-export function layoutFromPreset(preset: ResearchBattlePreset): CustomBattleLayout {
+export type SavedHangarBot = {
+  id: string;
+  name: string;
+  code: string;
+  unitPresetId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const SAVED_HANGAR_BOT_ID_PREFIX = "bot_";
+
+export function isSavedHangarBotId(id: string): boolean {
+  return id.startsWith(SAVED_HANGAR_BOT_ID_PREFIX);
+}
+
+export function layoutFromPreset(preset: HangarBattlePreset): CustomBattleLayout {
   const f = preset.field;
   let shape: "rect" | "circle" = "rect";
   let cx = (f.min.x + f.max.x) / 2;
@@ -914,7 +942,7 @@ export function layoutFromPreset(preset: ResearchBattlePreset): CustomBattleLayo
   };
 }
 
-export function layoutToBattlePreset(layout: CustomBattleLayout): ResearchBattlePreset {
+export function layoutToBattlePreset(layout: CustomBattleLayout): HangarBattlePreset {
   const { field, obstacles, flag, blueSpawn, targetSpawn } = layout;
   const min = { x: field.cx - field.rx, y: field.cy - field.ry };
   const max = { x: field.cx + field.rx, y: field.cy + field.ry };
@@ -1044,43 +1072,48 @@ function clampContentsToField(layout: CustomBattleLayout): CustomBattleLayout {
 
 // Editable rule parameters. Only the field matching the active rule's mode is
 // applied (kill limit for kill_limit_deathmatch, etc.).
-export type ResearchRuleParams = {
+export type HangarRuleParams = {
   killLimit?: number;
   timeLimitTicks?: number;
   captureHoldTicks?: number;
 };
 
-export function createResearchBattleConfigJson(options: {
+export function createHangarBattleConfigJson(options: {
   battlePresetId: string;
   rulePresetId?: string;
   // When battlePresetId is CUSTOM_BATTLE_ID, this custom layout (as a preset) is
   // used instead of a built-in preset. Produced by layoutToBattlePreset.
-  customBattle?: ResearchBattlePreset;
+  customBattle?: HangarBattlePreset;
   // Per-bot unit preset id, keyed by unit id (1 = Blue, 2 = Red).
   unitPresetIdByUnit: Record<number, string>;
+  // Hangar-only solo run mode. When false, unit/controller 2 is omitted entirely.
+  includeOpponent?: boolean;
   // Editable rule parameters (kill limit / time limit / capture hold ticks).
-  ruleParams?: ResearchRuleParams;
+  ruleParams?: HangarRuleParams;
   // Deadline (safety cap) in ticks. When the rule does not resolve on its own by
   // this tick, the engine settles the battle on the current score. Defaults to a
-  // large backstop; the research UI passes its tick count here so the run stops
+  // large backstop; the hangar UI passes its tick count here so the run stops
   // as soon as the rule (or this deadline) decides, rather than always running a
   // fixed number of ticks.
   maxTicks?: number;
 }): string {
   const battlePreset = options.battlePresetId === CUSTOM_BATTLE_ID && options.customBattle
     ? options.customBattle
-    : RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === options.battlePresetId) ?? RESEARCH_BATTLE_PRESETS[0];
-  const rulePreset = RESEARCH_RULE_PRESETS.find((preset) => preset.id === options.rulePresetId) ?? RESEARCH_RULE_PRESETS[0];
+    : HANGAR_BATTLE_PRESETS.find((preset) => preset.id === options.battlePresetId) ?? HANGAR_BATTLE_PRESETS[0];
+  const rulePreset = HANGAR_RULE_PRESETS.find((preset) => preset.id === options.rulePresetId) ?? HANGAR_RULE_PRESETS[0];
   const unitPresetForUnit = (unitId: number) =>
-    RESEARCH_UNIT_PRESETS.find((preset) => preset.id === options.unitPresetIdByUnit[unitId]) ?? RESEARCH_UNIT_PRESETS[0];
+    HANGAR_UNIT_PRESETS.find((preset) => preset.id === options.unitPresetIdByUnit[unitId]) ?? HANGAR_UNIT_PRESETS[0];
   const bluePreset = unitPresetForUnit(1);
   const redPreset = unitPresetForUnit(2);
+  const includeOpponent = options.includeOpponent !== false;
   // Normalize with the same clamp the run loop uses so the engine's settle-on-
   // score deadline lands exactly on the loop's last tick (no early unresolved stop).
-  const tickLimit = options.maxTicks !== undefined ? normalizeTickCount(options.maxTicks) : MAX_RESEARCH_TICKS;
+  const tickLimit = options.maxTicks !== undefined ? normalizeTickCount(options.maxTicks) : MAX_HANGAR_TICKS;
 
   return JSON.stringify({
-    battleId: `research_${battlePreset.id}_${bluePreset.id}_vs_${redPreset.id}_${rulePreset.id}`,
+    battleId: includeOpponent
+      ? `hangar_${battlePreset.id}_${bluePreset.id}_vs_${redPreset.id}_${rulePreset.id}`
+      : `hangar_${battlePreset.id}_${bluePreset.id}_solo_${rulePreset.id}`,
     seed: 1,
     tickRate: 60,
     tickLimit,
@@ -1094,23 +1127,23 @@ export function createResearchBattleConfigJson(options: {
         spawn: battlePreset.blueSpawn,
         modules: cloneJson(bluePreset.modules),
       },
-      {
+      ...(includeOpponent ? [{
         unitId: 2,
         teamId: 2,
         name: "Red",
         spawn: battlePreset.targetSpawn,
         modules: cloneJson(redPreset.modules),
-      },
+      }] : []),
     ],
     controllers: [
       { unitId: 1, type: "json_callback" },
-      { unitId: 2, type: "json_callback" },
+      ...(includeOpponent ? [{ unitId: 2, type: "json_callback" }] : []),
     ],
-    rule: createRuleConfig(rulePreset, battlePreset, options.ruleParams),
+    rule: createRuleConfig(rulePreset, battlePreset, options.ruleParams, includeOpponent),
   });
 }
 
-export function createResearchSetupReplay(battleConfigJson: string): BattleReplay {
+export function createHangarSetupReplay(battleConfigJson: string): BattleReplay {
   const config = JSON.parse(battleConfigJson) as {
     tickRate?: number;
     obstacles?: unknown[];
@@ -1332,10 +1365,11 @@ function setupCaptureZonesFromRule(payload: unknown): BattleFrame["ruleState"]["
 }
 
 function createRuleConfig(
-  rulePreset: ResearchRulePreset,
-  battlePreset: ResearchBattlePreset,
-  ruleParams?: ResearchRuleParams,
-): ResearchRuleConfig {
+  rulePreset: HangarRulePreset,
+  battlePreset: HangarBattlePreset,
+  ruleParams?: HangarRuleParams,
+  includeOpponent = true,
+): HangarRuleConfig {
   const rule = cloneJson(rulePreset.rule);
 
   // Apply editable rule parameters for the active mode only.
@@ -1362,19 +1396,19 @@ function createRuleConfig(
   if (isRecord(respawn) && respawn.enabled === true) {
     respawn.spawnPoints = [
       {
-        id: "blue_research_spawn",
+        id: "blue_hangar_spawn",
         teamId: 1,
         position: { x: battlePreset.blueRespawnZone.position.x, y: battlePreset.blueRespawnZone.position.y },
         radiusMeters: battlePreset.blueRespawnZone.radiusMeters,
         headingDegrees: battlePreset.blueRespawnZone.headingDeg,
       },
-      {
-        id: "target_research_spawn",
+      ...(includeOpponent ? [{
+        id: "target_hangar_spawn",
         teamId: 2,
         position: { x: battlePreset.targetRespawnZone.position.x, y: battlePreset.targetRespawnZone.position.y },
         radiusMeters: battlePreset.targetRespawnZone.radiusMeters,
         headingDegrees: battlePreset.targetRespawnZone.headingDeg,
-      },
+      }] : []),
     ];
   }
   return rule;
@@ -1446,24 +1480,41 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// Upper bound on a research run's tick deadline. This is the safety cap the
+// Upper bound on a hangar run's tick deadline. This is the safety cap the
 // battle settles on score at when the rule does not resolve first; it is not a
 // fixed run length (matches stop as soon as the rule decides). Kept in one place
 // so the loop bound, the engine deadline (config tickLimit), and the UI input
 // max all agree — a mismatch makes the run stop before the deadline, unresolved.
-export const MAX_RESEARCH_TICKS = 18000; // 18000 ticks = 5 minutes at 60Hz
+export const MAX_HANGAR_TICKS = 18000; // 18000 ticks = 5 minutes at 60Hz
 
 function normalizeTickCount(value: number): number {
   if (!Number.isFinite(value)) {
     return 360;
   }
-  return Math.max(1, Math.min(MAX_RESEARCH_TICKS, Math.floor(value)));
+  return Math.max(1, Math.min(MAX_HANGAR_TICKS, Math.floor(value)));
+}
+
+function normalizeLogDrainInterval(value: number | undefined): number {
+  if (value === undefined) {
+    return 1;
+  }
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(0, Math.floor(value));
+}
+
+function shouldDrainLogs(completedTickCount: number, maxTickCount: number, intervalTicks: number, finished: boolean): boolean {
+  if (intervalTicks === 0) {
+    return false;
+  }
+  return finished || completedTickCount === maxTickCount || completedTickCount % intervalTicks === 0;
 }
 
 async function createPyodideBotRuntime(
   botSource: string,
   botId: number,
-  onProgress: (progress: ResearchProgress) => void = () => {},
+  onProgress: (progress: HangarProgress) => void = () => {},
 ): Promise<BrowserBotRuntime> {
   onProgress({ stage: "loading-python" });
   const pyodide = await loadPyodideRuntime();

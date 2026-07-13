@@ -131,9 +131,8 @@ export function CodeEditor({ disabled, onApply, onValueChange, value }: CodeEdit
   return (
     <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface-inset)]">
       <div className="u-label flex min-w-0 items-center justify-between gap-2 border-b border-[var(--line)] px-2 py-1 text-[10px]">
-        <span>Bot code</span>
+        <span>Python</span>
         <div className="flex items-center gap-1.5">
-          <span>Python</span>
           <button
             type="button"
             className={cn(

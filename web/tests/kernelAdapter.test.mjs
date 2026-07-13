@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   createPresetDuelFromWasmFactory,
-  createResearchDuelWithJsonBotFromWasmFactory,
+  createHangarDuelWithJsonBotFromWasmFactory,
 } from "../src/sim/kernelAdapter.ts";
 
 test("wasm JSON battle adapter parses the coarse frame JSON from the C API", async () => {
@@ -286,7 +286,7 @@ test("wasm JSON battle adapter falls back to a generic message when a step fails
   runner.destroy();
 });
 
-test("wasm research duel adapter lets the battle runner call a JSON bot callback", async () => {
+test("wasm hangar duel adapter lets the battle runner call a JSON bot callback", async () => {
   let registeredCallback = null;
   let registeredReleaseCallback = null;
   let releasedPointer = 0;
@@ -349,10 +349,10 @@ test("wasm research duel adapter lets the battle runner call a JSON bot callback
   });
 
   const received = [];
-  const runner = await createResearchDuelWithJsonBotFromWasmFactory({
+  const runner = await createHangarDuelWithJsonBotFromWasmFactory({
     botId: 1,
     battleConfigJson: JSON.stringify({
-      battleId: "callback_research",
+      battleId: "callback_hangar",
       units: [{ unitId: 1, name: "Blue", modules: {}, spawn: { x: 0, y: 0, headingDeg: 0 } }],
       controllers: [{ unitId: 1, type: "json_callback" }],
     }),
@@ -375,13 +375,13 @@ test("wasm research duel adapter lets the battle runner call a JSON bot callback
   assert.equal(received[0].spec.unitId, 1);
   assert.equal(received[1].selfId, 1);
   assert.equal(received[1].tick, 9);
-  assert.equal(JSON.parse(receivedConfig).battleId, "callback_research");
+  assert.equal(JSON.parse(receivedConfig).battleId, "callback_hangar");
   assert.equal(allocations.length, 2);
   assert.equal(releasedPointer, allocations[1]);
   assert.equal(stringsByPointer.has(releasedPointer), false);
 });
 
-test("wasm research duel adapter can create a runner from injected battle config JSON", async () => {
+test("wasm hangar duel adapter can create a runner from injected battle config JSON", async () => {
   let registeredCallback = null;
   let registeredReleaseCallback = null;
   let receivedConfig = "";
@@ -436,10 +436,10 @@ test("wasm research duel adapter can create a runner from injected battle config
     },
   });
 
-  const runner = await createResearchDuelWithJsonBotFromWasmFactory({
+  const runner = await createHangarDuelWithJsonBotFromWasmFactory({
     botId: 1,
     battleConfigJson: JSON.stringify({
-      battleId: "injected_research",
+      battleId: "injected_hangar",
       units: [{ unitId: 1, name: "Injected", modules: {}, spawn: { x: 0, y: 0, headingDeg: 0 } }],
       controllers: [{ unitId: 1, type: "json_callback" }],
     }),
@@ -452,5 +452,5 @@ test("wasm research duel adapter can create a runner from injected battle config
   runner.step();
   runner.destroy();
 
-  assert.equal(JSON.parse(receivedConfig).battleId, "injected_research");
+  assert.equal(JSON.parse(receivedConfig).battleId, "injected_hangar");
 });

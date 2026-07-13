@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const sdkDir = resolve(scriptDir, "../../sdk/python/robolocks");
-const outPath = resolve(scriptDir, "../src/research/pythonSdkFiles.generated.ts");
+const outPath = resolve(scriptDir, "../src/hangar/pythonSdkFiles.generated.ts");
 
 const files = readdirSync(sdkDir)
   .filter((name) => name.endsWith(".py"))

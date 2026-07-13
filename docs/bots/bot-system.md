@@ -2,7 +2,8 @@
 
 How bots plug into Robolocks: the execution model, lifecycle, the two runtimes,
 determinism, and how a battle ends. For the API and tactics, see
-[writing-bots.md](writing-bots.md).
+[writing-bots.md](writing-bots.md). For browser-side evaluation workflows, see
+[arena-guide.md](arena-guide.md).
 
 ## Execution model
 
@@ -57,7 +58,7 @@ Only `on_tick` is required; the others are for setup/cleanup.
 
 The same bot source runs unchanged in two places (`run_bot` auto-detects which):
 
-- **Browser (research workbench):** the bot runs in **Pyodide** inside a web
+- **Browser (Hangar/Arena):** the bot runs in **Pyodide** inside a web
   worker. `run_bot` *registers* your callbacks; the worker calls them each tick
   with observations from the WASM engine. Detected via `sys.platform ==
   "emscripten"`.
@@ -100,9 +101,12 @@ the rule — see targeting notes in [writing-bots.md](writing-bots.md).
 
 ## Running your bot
 
-- **Workbench:** paste your source into the bot editor (or start from a preset),
+- **Hangar:** paste your source into the bot editor (or start from a preset),
   assign it to a unit, and Run. Logs from `print(...)` surface in the console
   panel.
+- **Arena:** save a Hangar bot or import a GitHub bot repo, then run deterministic
+  seed sets to compare bots and update local practice ratings. See
+  [arena-guide.md](arena-guide.md).
 - **CLI:** reference your bot file from a battle config's `controllers` entry
   (`{"unitId": N, "type": "python", "path": "relative/or/abs/bot.py"}`) and run
   `robolocks_cli run --battle <config> --ticks <n>`.

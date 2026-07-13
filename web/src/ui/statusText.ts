@@ -4,7 +4,7 @@ export type DeriveStatusTextArgs = {
   frameLabel: string | null;
 };
 
-// Errors take priority over any stale playback label: once a research run or
+// Errors take priority over any stale playback label: once a hangar run or
 // replay load fails, the raw error message must stay visible even if a
 // previously loaded replay (and its frame label) is still around.
 export function deriveStatusText({ status, statusIsError, frameLabel }: DeriveStatusTextArgs): string {

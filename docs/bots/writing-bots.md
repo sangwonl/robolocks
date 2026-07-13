@@ -4,6 +4,8 @@ The complete authoring guide and API reference for Robolocks bots: the movement
 model, every order, every field of the observation, targeting & firing, movement
 recipes, and the pitfalls that trip people up. For how bots are executed (tick
 loop, lifecycle, runtimes, determinism), see [bot-system.md](bot-system.md).
+For evaluating saved bots and imported GitHub bots, see
+[arena-guide.md](arena-guide.md).
 
 A bot is a Python module that ends with `run_bot(on_tick)`. Import everything
 from the top-level `robolocks` package. `on_tick` receives a `BattleState` and
@@ -394,7 +396,7 @@ return [FaceArmorToward(enemy.position), AimAt(enemy.position), FireIfSolution(m
 
 ## 9. Starter tactics
 
-The research workbench ships readable, dynamic starting points you can select and
+The Hangar ships readable, dynamic starting points you can select and
 edit — each is a complete worked example of the recipes above:
 
 - **Charger** — rush to point-blank and brawl.
@@ -403,5 +405,7 @@ edit — each is a complete worked example of the recipes above:
 - **Flanker** — swing to the weak side.
 - **Evader** — kite at range and dodge shells.
 
-Open one in the bot editor (the **Guide ↗** link there points back here). See also
-`examples/bots/` for a standalone example.
+Open one in the Hangar bot editor (the **Guide ↗** link there points back here).
+Save a promising build, then evaluate it in Arena with
+[arena-guide.md](arena-guide.md). See also `examples/bots/` for a standalone
+example.

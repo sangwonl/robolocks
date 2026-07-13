@@ -5,16 +5,16 @@ import { deriveStatusText } from "../src/ui/statusText.ts";
 
 test("deriveStatusText shows the raw error status even when a frame label is available", () => {
   const result = deriveStatusText({
-    status: "Research run failed: boom",
+    status: "Hangar run failed: boom",
     statusIsError: true,
     frameLabel: "Replay 3/10 - tick 42",
   });
-  assert.equal(result, "Research run failed: boom");
+  assert.equal(result, "Hangar run failed: boom");
 });
 
 test("deriveStatusText shows the frame label when status is not an error", () => {
   const result = deriveStatusText({
-    status: "Research run loaded - 10 frames",
+    status: "Hangar run loaded - 10 frames",
     statusIsError: false,
     frameLabel: "Replay 3/10 - tick 42",
   });

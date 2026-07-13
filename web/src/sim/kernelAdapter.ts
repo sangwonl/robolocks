@@ -48,7 +48,7 @@ const DEFAULT_LIVE_BATTLE_CONFIG_JSON = JSON.stringify({
 
 export type JsonBotTick = (observation: unknown) => unknown;
 
-export async function createResearchDuelWithJsonBotFromWasmFactory(options: {
+export async function createHangarDuelWithJsonBotFromWasmFactory(options: {
   botId: number;
   battleConfigJson: string;
   onTick: JsonBotTick;

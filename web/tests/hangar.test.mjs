@@ -7,32 +7,32 @@ import {
   SAVED_BOT_LOGIC_ID_PREFIX,
   isSavedCustomId,
   isSavedBotLogicId,
-  RESEARCH_BOT_LOGIC_PRESETS,
-  RESEARCH_BATTLE_PRESETS,
-  RESEARCH_RULE_PRESETS,
-  createResearchBattleConfigJson,
-  createResearchSetupReplay,
+  HANGAR_BOT_LOGIC_PRESETS,
+  HANGAR_BATTLE_PRESETS,
+  HANGAR_RULE_PRESETS,
+  createHangarBattleConfigJson,
+  createHangarSetupReplay,
   layoutFromPreset,
   layoutReducer,
   layoutToBattlePreset,
-  runResearchInBrowser,
-} from "../src/research/research.ts";
+  runHangarInBrowser,
+} from "../src/hangar/hangar.ts";
 
-test("browser research run drives a WASM runner with a browser bot runtime", async () => {
+test("browser hangar run drives a WASM runner with a browser bot runtime", async () => {
   const observedBotSources = [];
   const onTickCalls = [];
   let destroyedRuntime = false;
   let destroyedRunner = false;
   let receivedBattleConfigJson = "";
-  const battleConfigJson = createResearchBattleConfigJson({
+  const battleConfigJson = createHangarBattleConfigJson({
     battlePresetId: "open_range",
     rulePresetId: "capture_alpha",
     unitPresetIdByUnit: { 1: "ballistic_test", 2: "ballistic_test" },
   });
 
-  const result = await runResearchInBrowser({
+  const result = await runHangarInBrowser({
     battleConfigJson,
-    botSource: RESEARCH_BOT_LOGIC_PRESETS[1].source,
+    botSource: HANGAR_BOT_LOGIC_PRESETS[1].source,
     tickCount: 2,
     createBotRuntime: async (botSource) => {
       observedBotSources.push(botSource);
@@ -60,7 +60,7 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
         staticObstacles() {
           return [
             {
-              id: "research_cover",
+              id: "hangar_cover",
               position: { x: 20, y: 6 },
               radiusMeters: 1.5,
               blocksMovement: true,
@@ -88,18 +88,18 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
   assert.equal(observedBotSources.length, 2);
   assert.match(observedBotSources[0], /def on_tick/);
   assert.match(observedBotSources[1], /def on_tick/);
-  assert.equal(receivedConfig.battleId, "research_open_range_ballistic_test_vs_ballistic_test_capture_alpha");
+  assert.equal(receivedConfig.battleId, "hangar_open_range_ballistic_test_vs_ballistic_test_capture_alpha");
   assert.equal(receivedConfig.obstacles.length, 0);
   assert.equal(receivedConfig.units[0].modules.weapon.fireMode, "ballistic");
   assert.equal(receivedConfig.units[0].modules.weapon.blastRadiusMeters, 2.5);
   assert.equal(receivedConfig.rule.mode, "capture_point");
   assert.equal(receivedConfig.rule.captureZones[0].id, "alpha");
   assert.equal(receivedConfig.rule.captureZones[0].holdTicks, 180);
-  assert.deepEqual(receivedConfig.rule.respawn.spawnPoints[0].position, RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "open_range").blueRespawnZone.position);
-  assert.equal(receivedConfig.rule.respawn.spawnPoints[1].headingDegrees, RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "open_range").targetRespawnZone.headingDeg);
+  assert.deepEqual(receivedConfig.rule.respawn.spawnPoints[0].position, HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "open_range").blueRespawnZone.position);
+  assert.equal(receivedConfig.rule.respawn.spawnPoints[1].headingDegrees, HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "open_range").targetRespawnZone.headingDeg);
   assert.equal(replay.type, "robolocks.replay.v1");
   assert.equal(replay.tickRate, 60);
-  assert.equal(replay.obstacles[0].id, "research_cover");
+  assert.equal(replay.obstacles[0].id, "hangar_cover");
   assert.equal(replay.frames.length, 3);
   assert.equal(replay.frames[0].tick, 0);
   assert.equal(replay.frames[2].tick, 2);
@@ -114,17 +114,17 @@ test("browser research run drives a WASM runner with a browser bot runtime", asy
   assert.equal(destroyedRuntime, true);
 });
 
-test("browser research run routes ticks and logs per bot id", async () => {
+test("browser hangar run routes ticks and logs per bot id", async () => {
   const runtimeSources = [];
   const callsByBot = [];
   const destroyed = [];
-  const battleConfigJson = createResearchBattleConfigJson({
+  const battleConfigJson = createHangarBattleConfigJson({
     battlePresetId: "open_range",
     rulePresetId: "kill_limit_team",
     unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
   });
 
-  const result = await runResearchInBrowser({
+  const result = await runHangarInBrowser({
     botSource: "fallback",
     botSourcesByUnit: {
       1: "blue source",
@@ -180,8 +180,53 @@ test("browser research run routes ticks and logs per bot id", async () => {
   assert.deepEqual(destroyed, [0, 1]);
 });
 
+test("browser hangar run can drain bot logs less often for arena batches", async () => {
+  let drainCalls = 0;
+  const result = await runHangarInBrowser({
+    botSource: "source",
+    botSourcesByUnit: { 1: "blue", 2: "red" },
+    battleConfigJson: createHangarBattleConfigJson({
+      battlePresetId: "open_range",
+      rulePresetId: "kill_limit_team",
+      unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
+    }),
+    tickCount: 5,
+    logDrainIntervalTicks: 3,
+    createBotRuntime: async () => ({
+      onTick() {
+        return { orders: [] };
+      },
+      drainLogs() {
+        drainCalls += 1;
+        return [{ stream: "stdout", message: `drain ${drainCalls}` }];
+      },
+    }),
+    createRunner: async ({ onTick }) => {
+      let tick = 0;
+      return {
+        staticObstacles() {
+          return [];
+        },
+        snapshot() {
+          return frame(tick);
+        },
+        step() {
+          tick += 1;
+          onTick({ selfId: 1, botId: 1, tick });
+          onTick({ selfId: 2, botId: 2, tick });
+          return frame(tick);
+        },
+        destroy() {},
+      };
+    },
+  });
+
+  assert.equal(drainCalls, 4);
+  assert.deepEqual(result.logs.map((log) => log.tick), [3, 3, 5, 5]);
+});
+
 test("bot logic presets expose empty, built-in, and custom choices", () => {
-  assert.deepEqual(RESEARCH_BOT_LOGIC_PRESETS.map((preset) => preset.id), [
+  assert.deepEqual(HANGAR_BOT_LOGIC_PRESETS.map((preset) => preset.id), [
     "empty",
     "charger",
     "skirmisher",
@@ -190,20 +235,20 @@ test("bot logic presets expose empty, built-in, and custom choices", () => {
     "evader",
     "custom",
   ]);
-  assert.equal(RESEARCH_BOT_LOGIC_PRESETS[0].source, "");
-  assert.match(RESEARCH_BOT_LOGIC_PRESETS[1].source, /def on_tick/);
-  assert.match(RESEARCH_BOT_LOGIC_PRESETS[3].source, /Orbiter: circle the enemy/);
-  assert.equal(RESEARCH_BOT_LOGIC_PRESETS.at(-1).source, "");
+  assert.equal(HANGAR_BOT_LOGIC_PRESETS[0].source, "");
+  assert.match(HANGAR_BOT_LOGIC_PRESETS[1].source, /def on_tick/);
+  assert.match(HANGAR_BOT_LOGIC_PRESETS[3].source, /Orbiter: circle the enemy/);
+  assert.equal(HANGAR_BOT_LOGIC_PRESETS.at(-1).source, "");
 });
 
-test("createResearchSetupReplay builds a paused one-frame replay from battle config", () => {
-  const battleConfigJson = createResearchBattleConfigJson({
+test("createHangarSetupReplay builds a paused one-frame replay from battle config", () => {
+  const battleConfigJson = createHangarBattleConfigJson({
     battlePresetId: "open_range",
     rulePresetId: "kill_limit_team",
     unitPresetIdByUnit: { 1: "heavy_gunner", 2: "heavy_gunner" },
   });
 
-  const replay = createResearchSetupReplay(battleConfigJson);
+  const replay = createHangarSetupReplay(battleConfigJson);
   const frame = replay.frames[0];
 
   assert.equal(replay.type, "robolocks.replay.v1");
@@ -212,7 +257,7 @@ test("createResearchSetupReplay builds a paused one-frame replay from battle con
   assert.equal(frame.tick, 0);
   assert.equal(frame.units.length, 2);
   assert.equal(frame.units[0].name, "Blue");
-  const openRangePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "open_range");
+  const openRangePreset = HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "open_range");
   assert.deepEqual(frame.units[0].position, { x: openRangePreset.blueSpawn.x, y: openRangePreset.blueSpawn.y });
   assert.equal(frame.units[0].armorIntegrity, frame.units[0].modules.armor.integrity);
   assert.equal(frame.units[0].modules.weapon.id, "heavy_cannon_v0");
@@ -223,8 +268,8 @@ test("createResearchSetupReplay builds a paused one-frame replay from battle con
   assert.equal(frame.ruleState.scores.length, 2);
 });
 
-test("standard research weapon can penetrate the fixed target front armor", () => {
-  const config = JSON.parse(createResearchBattleConfigJson({
+test("standard hangar weapon can penetrate the fixed target front armor", () => {
+  const config = JSON.parse(createHangarBattleConfigJson({
     battlePresetId: "open_range",
     rulePresetId: "kill_limit_team",
     unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
@@ -232,29 +277,29 @@ test("standard research weapon can penetrate the fixed target front armor", () =
 
   assert.ok(
     config.units[0].modules.weapon.penetrationMillimeters >= config.units[1].modules.armor.frontMillimeters,
-    "standard research weapon should damage default target on a frontal hit",
+    "standard hangar weapon should damage default target on a frontal hit",
   );
 });
 
-test("createResearchBattleConfigJson selects timed rule preset", () => {
-  const config = JSON.parse(createResearchBattleConfigJson({
+test("createHangarBattleConfigJson selects timed rule preset", () => {
+  const config = JSON.parse(createHangarBattleConfigJson({
     battlePresetId: "close_cover",
     rulePresetId: "timed_team",
     unitPresetIdByUnit: { 1: "scout_optics", 2: "scout_optics" },
   }));
 
-  assert.equal(config.battleId, "research_close_cover_scout_optics_vs_scout_optics_timed_team");
+  assert.equal(config.battleId, "hangar_close_cover_scout_optics_vs_scout_optics_timed_team");
   assert.equal(config.rule.mode, "timed_deathmatch");
   assert.equal(config.rule.teamMode, "team");
   assert.equal(config.rule.timeLimitTicks, 600);
   assert.equal(config.rule.respawn.enabled, true);
-  assert.deepEqual(config.rule.respawn.spawnPoints[0].position, RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "close_cover").blueRespawnZone.position);
-  assert.deepEqual(config.rule.respawn.spawnPoints[1].position, RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "close_cover").targetRespawnZone.position);
+  assert.deepEqual(config.rule.respawn.spawnPoints[0].position, HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "close_cover").blueRespawnZone.position);
+  assert.deepEqual(config.rule.respawn.spawnPoints[1].position, HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "close_cover").targetRespawnZone.position);
   assert.equal(config.units[0].modules.sensor.id, "wide_optic_v0");
 });
 
-test("research battle presets include varied arenas and a flag position", () => {
-  assert.deepEqual(RESEARCH_BATTLE_PRESETS.map((preset) => preset.id), [
+test("hangar battle presets include varied arenas and a flag position", () => {
+  assert.deepEqual(HANGAR_BATTLE_PRESETS.map((preset) => preset.id), [
     "covered_duel",
     "open_range",
     "close_cover",
@@ -262,7 +307,7 @@ test("research battle presets include varied arenas and a flag position", () => 
     "brawl_ring",
     "hex_bastion",
   ]);
-  assert.deepEqual(RESEARCH_BATTLE_PRESETS.map((preset) => preset.label), [
+  assert.deepEqual(HANGAR_BATTLE_PRESETS.map((preset) => preset.label), [
     "Covered Duel",
     "Open Range",
     "Close Cover",
@@ -270,18 +315,18 @@ test("research battle presets include varied arenas and a flag position", () => 
     "Circular Arena",
     "Polygon Arena",
   ]);
-  for (const preset of RESEARCH_BATTLE_PRESETS) {
+  for (const preset of HANGAR_BATTLE_PRESETS) {
     assert.equal(typeof preset.flagPosition.x, "number");
     assert.equal(typeof preset.flagPosition.y, "number");
   }
-  assert.ok(RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "brawl_ring").obstacles.length >= 8);
-  assert.ok(RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "hex_bastion").obstacles.length >= 6);
-  assert.equal(RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "brawl_ring").field.shape.type, "circle");
-  assert.equal(RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "hex_bastion").field.shape.type, "polygon");
+  assert.ok(HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "brawl_ring").obstacles.length >= 8);
+  assert.ok(HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "hex_bastion").obstacles.length >= 6);
+  assert.equal(HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "brawl_ring").field.shape.type, "circle");
+  assert.equal(HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "hex_bastion").field.shape.type, "polygon");
 });
 
-test("research battlefields are large enough to keep spawns clear of shaped boundaries", () => {
-  for (const preset of RESEARCH_BATTLE_PRESETS) {
+test("hangar battlefields are large enough to keep spawns clear of shaped boundaries", () => {
+  for (const preset of HANGAR_BATTLE_PRESETS) {
     const width = preset.field.max.x - preset.field.min.x;
     const depth = preset.field.max.y - preset.field.min.y;
     assert.ok(width >= 140, `${preset.id} should be around four times wider than the old small samples`);
@@ -291,8 +336,8 @@ test("research battlefields are large enough to keep spawns clear of shaped boun
   }
 });
 
-test("research battle presets define separated respawn zones per battlefield", () => {
-  for (const preset of RESEARCH_BATTLE_PRESETS) {
+test("hangar battle presets define separated respawn zones per battlefield", () => {
+  for (const preset of HANGAR_BATTLE_PRESETS) {
     assert.ok(preset.blueRespawnZone.radiusMeters >= 6, `${preset.id} blue respawn zone should be usable`);
     assert.ok(preset.targetRespawnZone.radiusMeters >= 6, `${preset.id} red respawn zone should be usable`);
     assert.ok(spawnIsClearOfBoundary(preset.field, preset.blueRespawnZone.position), `${preset.id} blue respawn zone should sit inside boundary`);
@@ -302,33 +347,33 @@ test("research battle presets define separated respawn zones per battlefield", (
 });
 
 test("capture flag uses the selected battle flag position while deathmatch hides it", () => {
-  const captureConfig = JSON.parse(createResearchBattleConfigJson({
+  const captureConfig = JSON.parse(createHangarBattleConfigJson({
     battlePresetId: "flag_run",
     rulePresetId: "capture_alpha",
     unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
   }));
-  const battlePreset = RESEARCH_BATTLE_PRESETS.find((preset) => preset.id === "flag_run");
-  const captureRule = RESEARCH_RULE_PRESETS.find((preset) => preset.id === "capture_alpha");
+  const battlePreset = HANGAR_BATTLE_PRESETS.find((preset) => preset.id === "flag_run");
+  const captureRule = HANGAR_RULE_PRESETS.find((preset) => preset.id === "capture_alpha");
 
   assert.equal(captureRule.label, "Capture Flag");
   assert.deepEqual(captureConfig.rule.captureZones[0].position, battlePreset.flagPosition);
 
-  const captureSetupReplay = createResearchSetupReplay(JSON.stringify(captureConfig));
+  const captureSetupReplay = createHangarSetupReplay(JSON.stringify(captureConfig));
   assert.deepEqual(captureSetupReplay.frames[0].ruleState.captureZones[0].position, battlePreset.flagPosition);
 
-  const deathmatchConfig = JSON.parse(createResearchBattleConfigJson({
+  const deathmatchConfig = JSON.parse(createHangarBattleConfigJson({
     battlePresetId: "flag_run",
     rulePresetId: "kill_limit_team",
     unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
   }));
   assert.equal(deathmatchConfig.rule.captureZones, undefined);
 
-  const deathmatchSetupReplay = createResearchSetupReplay(JSON.stringify(deathmatchConfig));
+  const deathmatchSetupReplay = createHangarSetupReplay(JSON.stringify(deathmatchConfig));
   assert.equal(deathmatchSetupReplay.frames[0].ruleState.captureZones.length, 0);
 });
 
-test("research replays keep shaped battlefield metadata from the selected preset", async () => {
-  const battleConfigJson = createResearchBattleConfigJson({
+test("hangar replays keep shaped battlefield metadata from the selected preset", async () => {
+  const battleConfigJson = createHangarBattleConfigJson({
     battlePresetId: "brawl_ring",
     rulePresetId: "kill_limit_team",
     unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
@@ -336,10 +381,10 @@ test("research replays keep shaped battlefield metadata from the selected preset
   const config = JSON.parse(battleConfigJson);
   assert.equal(config.field.shape.type, "circle");
 
-  const setupReplay = createResearchSetupReplay(battleConfigJson);
+  const setupReplay = createHangarSetupReplay(battleConfigJson);
   assert.equal(setupReplay.frames[0].field.shape.type, "circle");
 
-  const result = await runResearchInBrowser({
+  const result = await runHangarInBrowser({
     battleConfigJson,
     botSource: "",
     tickCount: 1,
@@ -428,8 +473,8 @@ function closestPointOnSegment(point, start, end) {
   return { x: start.x + dx * t, y: start.y + dy * t };
 }
 
-test("createResearchBattleConfigJson applies per-bot unit presets and rule params", () => {
-  const config = JSON.parse(createResearchBattleConfigJson({
+test("createHangarBattleConfigJson applies per-bot unit presets and rule params", () => {
+  const config = JSON.parse(createHangarBattleConfigJson({
     battlePresetId: "open_range",
     rulePresetId: "kill_limit_team",
     unitPresetIdByUnit: { 1: "standard_tank", 2: "heavy_gunner" },
@@ -442,8 +487,23 @@ test("createResearchBattleConfigJson applies per-bot unit presets and rule param
   assert.equal(config.rule.killLimit, 7);
 });
 
-test("createResearchBattleConfigJson overrides capture hold ticks", () => {
-  const config = JSON.parse(createResearchBattleConfigJson({
+test("createHangarBattleConfigJson can omit the test opponent for solo hangar runs", () => {
+  const config = JSON.parse(createHangarBattleConfigJson({
+    battlePresetId: "open_range",
+    rulePresetId: "kill_limit_team",
+    unitPresetIdByUnit: { 1: "standard_tank", 2: "heavy_gunner" },
+    includeOpponent: false,
+  }));
+  assert.equal(config.units.length, 1);
+  assert.equal(config.units[0].unitId, 1);
+  assert.equal(config.controllers.length, 1);
+  assert.equal(config.controllers[0].unitId, 1);
+  assert.ok(config.battleId.includes("_solo_"));
+  assert.deepEqual(config.rule.respawn.spawnPoints.map((spawn) => spawn.teamId), [1]);
+});
+
+test("createHangarBattleConfigJson overrides capture hold ticks", () => {
+  const config = JSON.parse(createHangarBattleConfigJson({
     battlePresetId: "flag_run",
     rulePresetId: "capture_alpha",
     unitPresetIdByUnit: { 1: "standard_tank", 2: "standard_tank" },
@@ -453,7 +513,7 @@ test("createResearchBattleConfigJson overrides capture hold ticks", () => {
 });
 
 test("layoutFromPreset / layoutToBattlePreset round-trips a rect preset", () => {
-  const preset = RESEARCH_BATTLE_PRESETS.find((p) => p.id === "flag_run");
+  const preset = HANGAR_BATTLE_PRESETS.find((p) => p.id === "flag_run");
   const layout = layoutFromPreset(preset);
   assert.equal(layout.field.shape, "rect");
   assert.equal(layout.obstacles.length, preset.obstacles.length);
@@ -468,7 +528,7 @@ test("layoutFromPreset / layoutToBattlePreset round-trips a rect preset", () => 
 });
 
 test("layoutToBattlePreset emits a circle field shape", () => {
-  const preset = RESEARCH_BATTLE_PRESETS.find((p) => p.id === "brawl_ring");
+  const preset = HANGAR_BATTLE_PRESETS.find((p) => p.id === "brawl_ring");
   const layout = layoutFromPreset(preset);
   assert.equal(layout.field.shape, "circle");
   const back = layoutToBattlePreset(layout);
@@ -505,7 +565,7 @@ test("layoutReducer setShape circle squares the radius and clamps contents insid
   assert.ok(Math.hypot(circle.blueSpawn.x - 4, circle.blueSpawn.y - 2) <= 18 + 1e-6);
   assert.ok(circle.blueSpawn.x > -20);
 
-  const config = JSON.parse(createResearchBattleConfigJson({
+  const config = JSON.parse(createHangarBattleConfigJson({
     battlePresetId: CUSTOM_BATTLE_ID,
     rulePresetId: "kill_limit_team",
     customBattle: layoutToBattlePreset(circle),

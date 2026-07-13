@@ -167,23 +167,23 @@ select {
   background: var(--surface-raised);
 }
 
-.research-overlay-spinner {
+.hangar-overlay-spinner {
   width: 22px;
   height: 22px;
   border: 2px solid var(--brand-border);
   border-top-color: var(--brand);
   border-radius: 50%;
-  animation: research-overlay-spin 0.8s linear infinite;
+  animation: hangar-overlay-spin 0.8s linear infinite;
 }
 
-@keyframes research-overlay-spin {
+@keyframes hangar-overlay-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .research-overlay-spinner {
+  .hangar-overlay-spinner {
     animation: none;
   }
 }

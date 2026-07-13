@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { CustomBattleLayout, LayoutAction } from "../research/research.ts";
+import type { CustomBattleLayout, LayoutAction } from "../hangar/hangar.ts";
 import { cn } from "../lib/utils.ts";
 import { teamColor } from "./teamPalette.ts";
 

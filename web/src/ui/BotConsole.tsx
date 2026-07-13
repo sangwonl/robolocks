@@ -1,4 +1,4 @@
-import type { BotLogEntry } from "../research/research.ts";
+import type { BotLogEntry } from "../hangar/hangar.ts";
 
 export type BotConsoleProps = {
   currentTick: number;

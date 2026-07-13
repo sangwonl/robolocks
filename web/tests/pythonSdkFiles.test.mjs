@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { PYTHON_SDK_FILES } from "../src/research/pythonSdkFiles.generated.ts";
+import { PYTHON_SDK_FILES } from "../src/hangar/pythonSdkFiles.generated.ts";
 
 const sdkDir = resolve(import.meta.dirname, "../../sdk/python/robolocks");
 

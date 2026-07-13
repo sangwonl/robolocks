@@ -1,21 +1,21 @@
-// Pure message protocol between the research Web Worker and the main thread.
+// Pure message protocol between the hangar Web Worker and the main thread.
 // No DOM / worker globals are touched here so the guards and constructors can
-// be unit-tested directly (see tests/researchWorkerProtocol.test.mjs).
+// be unit-tested directly (see tests/hangarWorkerProtocol.test.mjs).
 import type { BattleReplay } from "../replay/replay";
-import type { BotLogEntry } from "./research";
+import type { BotLogEntry } from "./hangar";
 
-// Stages reported while a research run progresses. `simulating` additionally
+// Stages reported while a hangar run progresses. `simulating` additionally
 // carries a tick counter; the python/sdk stages are indeterminate loads.
-export type ResearchStage = "loading-python" | "installing-sdk" | "simulating";
+export type HangarStage = "loading-python" | "installing-sdk" | "simulating";
 
-export type ResearchProgress = {
-  stage: ResearchStage;
+export type HangarProgress = {
+  stage: HangarStage;
   tick?: number;
   totalTicks?: number;
 };
 
 // Main thread -> worker: the one request that kicks off a run.
-export type ResearchRunRequest = {
+export type HangarRunRequest = {
   botSource: string;
   botSourcesByUnit?: Record<number, string>;
   battleConfigJson?: string;
@@ -23,19 +23,19 @@ export type ResearchRunRequest = {
 };
 
 // Worker -> main thread messages.
-export type WorkerProgressMessage = { type: "progress" } & ResearchProgress;
+export type WorkerProgressMessage = { type: "progress" } & HangarProgress;
 export type WorkerDoneMessage = { type: "done"; replay: BattleReplay; logs: BotLogEntry[] };
 export type WorkerErrorMessage = { type: "error"; message: string };
 export type WorkerMessage = WorkerProgressMessage | WorkerDoneMessage | WorkerErrorMessage;
 
-const RESEARCH_STAGES: ReadonlySet<string> = new Set<ResearchStage>([
+const HANGAR_STAGES: ReadonlySet<string> = new Set<HangarStage>([
   "loading-python",
   "installing-sdk",
   "simulating",
 ]);
 
-export function runRequest(request: ResearchRunRequest): ResearchRunRequest {
-  const built: ResearchRunRequest = { botSource: request.botSource, tickCount: request.tickCount };
+export function runRequest(request: HangarRunRequest): HangarRunRequest {
+  const built: HangarRunRequest = { botSource: request.botSource, tickCount: request.tickCount };
   if (request.battleConfigJson !== undefined) {
     built.battleConfigJson = request.battleConfigJson;
   }
@@ -45,7 +45,7 @@ export function runRequest(request: ResearchRunRequest): ResearchRunRequest {
   return built;
 }
 
-export function progressMessage(progress: ResearchProgress): WorkerProgressMessage {
+export function progressMessage(progress: HangarProgress): WorkerProgressMessage {
   const message: WorkerProgressMessage = { type: "progress", stage: progress.stage };
   if (typeof progress.tick === "number") {
     message.tick = progress.tick;
@@ -65,7 +65,7 @@ export function errorMessage(message: string): WorkerErrorMessage {
 }
 
 export function isProgressMessage(message: unknown): message is WorkerProgressMessage {
-  return isRecord(message) && message.type === "progress" && isResearchStage(message.stage);
+  return isRecord(message) && message.type === "progress" && isHangarStage(message.stage);
 }
 
 export function isDoneMessage(message: unknown): message is WorkerDoneMessage {
@@ -103,7 +103,7 @@ export function parseWorkerMessage(data: unknown): WorkerMessage | null {
   return null;
 }
 
-export function parseRunRequest(data: unknown): ResearchRunRequest | null {
+export function parseRunRequest(data: unknown): HangarRunRequest | null {
   if (!isRecord(data)) {
     return null;
   }
@@ -124,8 +124,8 @@ export function parseRunRequest(data: unknown): ResearchRunRequest | null {
   });
 }
 
-function isResearchStage(value: unknown): value is ResearchStage {
-  return typeof value === "string" && RESEARCH_STAGES.has(value);
+function isHangarStage(value: unknown): value is HangarStage {
+  return typeof value === "string" && HANGAR_STAGES.has(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

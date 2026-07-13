@@ -11,7 +11,7 @@ import {
   parseWorkerMessage,
   progressMessage,
   runRequest,
-} from "../src/research/researchWorkerProtocol.ts";
+} from "../src/hangar/hangarWorkerProtocol.ts";
 
 const SAMPLE_REPLAY = {
   type: "robolocks.replay.v1",

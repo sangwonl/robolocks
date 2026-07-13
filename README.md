@@ -2,7 +2,7 @@
 
 Robolocks is a deterministic tank-combat simulator you program with bots. A C++
 engine owns all the rules; you write Python bots that read a per-tick observation
-and return orders. Battles run headless (CLI) or in the browser research
+and return orders. Battles run headless (CLI) or in the browser Hangar/Arena
 workbench (the same engine, compiled to WebAssembly, with a 3D replay view).
 
 ```text
@@ -16,13 +16,13 @@ Observation  ──▶  your bot (on_tick)  ──▶  Orders  ──▶  engine
 | `engine/` | C++ simulation kernel (physics, sensors, projectiles, rules) + CLI + WASM entry points |
 | `sdk/python/robolocks/` | Python bot SDK (orders, observation types, `run_bot` runtime) |
 | `examples/bots/` | Example bot programs |
-| `web/` | Browser research workbench (React + Three.js), talks to the WASM engine |
+| `web/` | Browser Hangar/Arena workbench (React + Three.js), talks to the WASM engine |
 | `fixtures/` | Battle configs, replay fixtures, golden contract files |
 | `docs/` | Architecture and bot-authoring documentation |
 
 ## Quick start
 
-### Browser workbench (write & watch bots fight)
+### Browser workbench (build, test, and evaluate bots)
 
 ```bash
 cd web
@@ -30,9 +30,15 @@ npm install
 npm run dev          # predev builds the Python SDK bundle + copies Pyodide
 ```
 
-Open the dev URL, pick a battle/rule/unit preset, choose a **bot logic preset**
-(or write your own in the editor), and run. The workbench ships starter tactics
-you can read and tweak: **Charger, Skirmisher, Orbiter, Flanker, Evader**.
+Open the dev URL:
+
+- Use **Hangar** to choose a battle/rule/unit preset, start from a bot logic
+  preset, edit Python code, run a local test, and save bot snapshots.
+- Use **Arena** to evaluate saved Hangar bots and imported GitHub bots across
+  deterministic seed sets.
+
+The workbench ships starter tactics you can read and tweak: **Charger,
+Skirmisher, Orbiter, Flanker, Evader**.
 
 The browser runs your Python bot in Pyodide against the WASM engine and plays the
 result back in a freely-navigable 3D view.
@@ -100,6 +106,8 @@ Read the full guides before writing anything non-trivial:
 - **[docs/bots/writing-bots.md](docs/bots/writing-bots.md)** — the authoring
   guide: the movement model, every order, the observation/state reference,
   targeting & firing, worked tactics, and common pitfalls.
+- **[docs/bots/arena-guide.md](docs/bots/arena-guide.md)** — how to save Hangar
+  bots, import GitHub bot repos, run Arena evaluations, and read local ratings.
 
 ## Architecture docs
 
