@@ -6,6 +6,7 @@ import {
   canStartArenaEvaluation,
   createLocalBotBuild,
   importGitHubBotBuild,
+  importGitHubBotBuilds,
   matchSummaryFromReplay,
   parseGitHubBotReference,
   removeArenaBuildState,
@@ -73,6 +74,63 @@ test("importGitHubBotBuild fetches manifest, bot code, and unit config from raw 
   assert.equal(build.source.kind, "github");
   assert.equal(build.code, "def on_tick(state):\n    return []\n");
   assert.equal(build.unit.unitPresetId, "scout_optics");
+});
+
+test("importGitHubBotBuilds imports every bot entry from one GitHub repo", async () => {
+  const requestedUrls = [];
+  const files = new Map([
+    [
+      "https://raw.githubusercontent.com/eddy/ridge-runner/main/robolocks.bot.json",
+      JSON.stringify({
+        version: "0.2.0",
+        sdkVersion: "0.1",
+        unit: "unit.json",
+        author: "eddy",
+        bots: [
+          { name: "ridge-skirmisher", entry: "bots/skirmisher.py" },
+          { name: "wall-runner", entry: "bots/wall_runner.py", unit: "wall-unit.json" },
+        ],
+      }),
+    ],
+    [
+      "https://raw.githubusercontent.com/eddy/ridge-runner/main/bots/skirmisher.py",
+      "def on_tick(state):\n    return []\n",
+    ],
+    [
+      "https://raw.githubusercontent.com/eddy/ridge-runner/main/unit.json",
+      JSON.stringify({ unitPresetId: "standard_tank" }),
+    ],
+    [
+      "https://raw.githubusercontent.com/eddy/ridge-runner/main/bots/wall_runner.py",
+      "def on_tick(state):\n    return []\n",
+    ],
+    [
+      "https://raw.githubusercontent.com/eddy/ridge-runner/main/wall-unit.json",
+      JSON.stringify({ unitPresetId: "scout_optics" }),
+    ],
+  ]);
+
+  const builds = await importGitHubBotBuilds("eddy/ridge-runner", {
+    fetchText: async (url) => {
+      requestedUrls.push(url);
+      const text = files.get(url);
+      if (text === undefined) {
+        throw new Error(`missing ${url}`);
+      }
+      return text;
+    },
+    now: () => "2026-07-13T00:00:00.000Z",
+  });
+
+  assert.deepEqual(requestedUrls, [...files.keys()]);
+  assert.deepEqual(builds.map((build) => build.id), [
+    "github:eddy/ridge-runner@main#ridge-skirmisher",
+    "github:eddy/ridge-runner@main#wall-runner",
+  ]);
+  assert.deepEqual(builds.map((build) => build.name), ["ridge-skirmisher", "wall-runner"]);
+  assert.equal(builds[0].unit.unitPresetId, "standard_tank");
+  assert.equal(builds[1].unit.unitPresetId, "scout_optics");
+  assert.deepEqual(builds.map((build) => build.source.repo), ["ridge-runner", "ridge-runner"]);
 });
 
 test("buildArenaBattleConfigJson creates a deterministic two entrant battle", () => {

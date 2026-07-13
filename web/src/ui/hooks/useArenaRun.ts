@@ -5,7 +5,7 @@ import {
   buildArenaBattleConfigJson,
   canStartArenaEvaluation,
   createLocalBotBuild,
-  importGitHubBotBuild,
+  importGitHubBotBuilds,
   matchSummaryFromReplay,
   removeArenaBuildState,
   removeArenaRepoState,
@@ -194,11 +194,11 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
     setIsImportingBot(true);
     deps.setStatus("Importing GitHub bot");
     try {
-      const build = await importGitHubBotBuild(input);
-      setBuilds((current) => upsertBuild(current, build));
-      setSelectedRightBuildId(build.id);
+      const importedBuilds = await importGitHubBotBuilds(input);
+      setBuilds((current) => importedBuilds.reduce((next, build) => upsertBuild(next, build), current));
+      setSelectedRightBuildId(importedBuilds[0]?.id ?? "");
       setGithubInput("");
-      deps.setStatus(`Imported ${build.name}`);
+      deps.setStatus(importedBuilds.length === 1 ? `Imported ${importedBuilds[0].name}` : `Imported ${importedBuilds.length} bots`);
     } catch (error: unknown) {
       deps.setStatus(`GitHub bot import failed: ${errorMessage(error)}`, { isError: true });
     } finally {

@@ -36,6 +36,17 @@ export type GitHubBotManifest = {
   unit?: unknown;
   author?: unknown;
   description?: unknown;
+  bots?: unknown;
+};
+
+export type GitHubBotManifestEntry = {
+  name?: unknown;
+  version?: unknown;
+  sdkVersion?: unknown;
+  entry?: unknown;
+  unit?: unknown;
+  author?: unknown;
+  description?: unknown;
 };
 
 export type ImportGitHubBotBuildOptions = {
@@ -144,27 +155,38 @@ export function parseGitHubBotReference(input: string): GitHubBotReference {
 }
 
 export async function importGitHubBotBuild(input: string, options: ImportGitHubBotBuildOptions = {}): Promise<BotBuild> {
+  const builds = await importGitHubBotBuilds(input, options);
+  return builds[0];
+}
+
+export async function importGitHubBotBuilds(input: string, options: ImportGitHubBotBuildOptions = {}): Promise<BotBuild[]> {
   const reference = parseGitHubBotReference(input);
   const fetchText = options.fetchText ?? fetchTextFromUrl;
   const now = options.now ?? (() => new Date().toISOString());
   const baseUrl = rawGitHubBaseUrl(reference);
   const manifest = parseManifest(await fetchText(`${baseUrl}/${DEFAULT_MANIFEST_PATH}`));
-  const entryPath = manifestString(manifest.entry, "entry", "bot.py");
-  const unitPath = typeof manifest.unit === "string" ? manifest.unit : "";
-  const code = await fetchText(`${baseUrl}/${entryPath}`);
-  const unit = unitPath ? parseBotBuildUnit(await fetchText(`${baseUrl}/${unitPath}`)) : { unitPresetId: HANGAR_UNIT_PRESETS[0]?.id ?? "standard_tank" };
-  const name = manifestString(manifest.name, "name", reference.repo);
-  return {
-    id: `github:${reference.owner}/${reference.repo}@${reference.ref}`,
-    name,
-    version: manifestString(manifest.version, "version", reference.ref),
-    createdAt: now(),
-    sdkVersion: manifestString(manifest.sdkVersion, "sdkVersion", DEFAULT_SDK_VERSION),
-    author: manifestString(manifest.author, "author", DEFAULT_AUTHOR),
-    code,
-    unit,
-    source: { kind: "github", ...reference },
-  };
+  const entries = manifestEntries(manifest);
+  const multiple = entries.length > 1;
+  const builds: BotBuild[] = [];
+  for (const entry of entries) {
+    const entryPath = manifestString(entry.entry, "entry", "bot.py");
+    const unitPath = typeof entry.unit === "string" ? entry.unit : "";
+    const code = await fetchText(`${baseUrl}/${entryPath}`);
+    const unit = unitPath ? parseBotBuildUnit(await fetchText(`${baseUrl}/${unitPath}`)) : { unitPresetId: HANGAR_UNIT_PRESETS[0]?.id ?? "standard_tank" };
+    const name = manifestString(entry.name, "name", reference.repo);
+    builds.push({
+      id: githubBuildId(reference, name, multiple),
+      name,
+      version: manifestString(entry.version, "version", reference.ref),
+      createdAt: now(),
+      sdkVersion: manifestString(entry.sdkVersion, "sdkVersion", DEFAULT_SDK_VERSION),
+      author: manifestString(entry.author, "author", DEFAULT_AUTHOR),
+      code,
+      unit,
+      source: { kind: "github", ...reference },
+    });
+  }
+  return builds;
 }
 
 export function createLocalBotBuild(options: CreateLocalBotBuildOptions): BotBuild {
@@ -340,10 +362,33 @@ function parseManifest(text: string): GitHubBotManifest {
   if (!isRecord(parsed)) {
     throw new Error("robolocks.bot.json must be a JSON object.");
   }
-  if (typeof parsed.entry !== "string" || parsed.entry.trim() === "") {
-    throw new Error("robolocks.bot.json must define an entry file.");
+  const hasSingleEntry = typeof parsed.entry === "string" && parsed.entry.trim() !== "";
+  const hasBotEntries = Array.isArray(parsed.bots) && parsed.bots.some((entry) => isRecord(entry) && typeof entry.entry === "string" && entry.entry.trim() !== "");
+  if (!hasSingleEntry && !hasBotEntries) {
+    throw new Error("robolocks.bot.json must define entry or bots[].entry.");
   }
   return parsed;
+}
+
+function manifestEntries(manifest: GitHubBotManifest): GitHubBotManifestEntry[] {
+  if (!Array.isArray(manifest.bots)) {
+    return [manifest];
+  }
+  const shared = {
+    version: manifest.version,
+    sdkVersion: manifest.sdkVersion,
+    unit: manifest.unit,
+    author: manifest.author,
+  };
+  return manifest.bots
+    .filter(isRecord)
+    .filter((entry) => typeof entry.entry === "string" && entry.entry.trim() !== "")
+    .map((entry) => ({ ...shared, ...entry }));
+}
+
+function githubBuildId(reference: GitHubBotReference, name: string, multiple: boolean): string {
+  const base = `github:${reference.owner}/${reference.repo}@${reference.ref}`;
+  return multiple ? `${base}#${slugify(name)}` : base;
 }
 
 function parseBotBuildUnit(text: string): BotBuildUnit {

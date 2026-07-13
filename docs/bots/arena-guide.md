@@ -104,7 +104,8 @@ https://github.com/owner/repo/tree/ref
 
 If no ref is provided, Arena uses `main`.
 
-The repository must contain `robolocks.bot.json` at its root:
+The repository must contain `robolocks.bot.json` at its root. A simple repo can
+export one bot:
 
 ```json
 {
@@ -135,6 +136,24 @@ Optional:
 | `description` | Metadata; currently not shown in the UI. |
 
 If `unit` is omitted, Arena uses the default Hangar unit preset.
+
+A repo can also export multiple bots. Shared metadata (`version`, `sdkVersion`,
+`unit`, `author`) is inherited by each entry unless the entry overrides it:
+
+```json
+{
+  "version": "0.1.0",
+  "sdkVersion": "0.1",
+  "unit": "unit.json",
+  "author": "you",
+  "bots": [
+    { "name": "ridge-skirmisher", "entry": "bots/skirmisher.py" },
+    { "name": "wall-runner", "entry": "bots/wall_runner.py", "unit": "wall-unit.json" }
+  ]
+}
+```
+
+When a repo has `bots[]`, Arena adds every entry to the bot pool.
 
 Example `unit.json`:
 

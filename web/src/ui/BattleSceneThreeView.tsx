@@ -18,7 +18,7 @@ export type BattleSceneThreeViewProps = {
 // Vertical extent (metres) folded into the camera fit so tall units stay framed.
 const FIELD_VERTICAL_M = 8;
 const CAMERA_FOV_DEG = 50;
-const FIT_PADDING = 1.25;
+const FIT_PADDING = 0.78;
 const ISO_ELEVATION_DEG = 35.264;
 // Free-orbit tilt limits: stay above the ground and short of straight-down.
 const MIN_POLAR_ANGLE = THREE.MathUtils.degToRad(2);
@@ -366,14 +366,15 @@ function applyCameraMode(
   controls.update();
 }
 
-// Distance at which the field's bounding sphere fits within the camera frustum
-// (accounting for the narrower of the vertical/horizontal fov), plus padding.
+// Distance at which the field dimensions fit within the camera frustum, plus
+// modest padding. Fitting width/depth separately avoids the overly distant view
+// produced by a diagonal bounding sphere.
 function fitDistance(camera: THREE.PerspectiveCamera, field: FieldBoundsFrame): number {
   const width = field.max.x - field.min.x;
   const depth = field.max.y - field.min.y;
-  const radius = 0.5 * Math.hypot(width, depth, FIELD_VERTICAL_M);
   const vFov = THREE.MathUtils.degToRad(camera.fov);
   const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
-  const fov = Math.max(0.1, Math.min(vFov, hFov));
-  return (radius / Math.sin(fov / 2)) * FIT_PADDING;
+  const verticalFit = (Math.max(depth, FIELD_VERTICAL_M) / 2) / Math.tan(vFov / 2);
+  const horizontalFit = (width / 2) / Math.tan(Math.max(0.1, hFov) / 2);
+  return Math.max(verticalFit, horizontalFit) * FIT_PADDING;
 }
