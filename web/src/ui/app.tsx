@@ -13,7 +13,9 @@ import {
   type CSSProperties,
   type FunctionComponent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
+import { BookOpen, ExternalLink } from "lucide-react";
 import {
   DockviewDefaultTab,
   DockviewReact,
@@ -66,6 +68,8 @@ const NO_FIELD: FieldBoundsFrame = { min: { x: 0, y: 0 }, max: { x: 40, y: 24 } 
 // Bot authoring guide (rendered on GitHub). Linked from the Bot logic panel.
 const BOT_GUIDE_URL = "https://github.com/sangwonl/robolocks/blob/main/docs/bots/writing-bots.md";
 const ARENA_GUIDE_URL = "https://github.com/sangwonl/robolocks/blob/main/docs/bots/arena-guide.md";
+const PROJECT_REPO_URL = "https://github.com/sangwonl/robolocks";
+const PRODUCT_DESCRIPTION = "robot battle simulation";
 const HANGAR_OWN_UNIT_ID = 1;
 
 // Team colors are sourced once from teamPalette.ts and applied at the app
@@ -114,6 +118,8 @@ function LockedDockTab(props: IDockviewPanelHeaderProps) {
 
 const DOCK_PANEL_CLASS = "h-full min-h-0 overflow-auto bg-[var(--surface-raised)] p-2.5";
 const STATE_DOCK_PANEL_CLASS = "h-full min-h-0 overflow-auto bg-[var(--surface-raised)] p-2";
+const SIDE_DOCK_WIDTH = 360;
+const STATE_DOCK_INITIAL_HEIGHT = 400;
 const FIELD_CLASS = "grid gap-1.5 text-[11px] font-semibold text-[var(--text-dim)]";
 const SELECT_CLASS =
   "h-7 w-full min-w-0 rounded-md border border-[var(--line)] bg-[var(--surface-inset)] px-2 py-1 text-[11px] font-semibold text-[var(--text-soft)] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-55";
@@ -189,11 +195,8 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   }, [loadedReplay, playback]);
 
   const statusText = useMemo(() => {
-    const frameLabel = loadedReplay && frame
-      ? `Replay ${replayIndex + 1}/${loadedReplay.frames.length} - tick ${frame.tick}`
-      : null;
-    return deriveStatusText({ status, statusIsError, frameLabel });
-  }, [frame, loadedReplay, replayIndex, status, statusIsError]);
+    return deriveStatusText({ status, statusIsError, frameLabel: null });
+  }, [status, statusIsError]);
 
   useEffect(() => {
     if (!defaultReplayUrl) {
@@ -265,12 +268,12 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   async function loadReplayUrl(url: string, autoplay: boolean): Promise<void> {
     playback.pause();
     setIsLoading(true);
-    setStatus("Loading replay");
+    setStatus("Loading battle recording");
     try {
       applyReplayText(await fetchText(url), autoplay);
     } catch (error: unknown) {
       setLoadedReplay(null);
-      setStatus(`Replay load failed: ${errorMessage(error)}`, { isError: true });
+      setStatus(`Battle recording load failed: ${errorMessage(error)}`, { isError: true });
     } finally {
       setIsLoading(false);
     }
@@ -283,7 +286,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   function applyReplay(replay: BattleReplay, autoplay: boolean): void {
     pendingReplayIndexRef.current = null;
     setLoadedReplay(replay);
-    setStatus("Replay loaded");
+    setStatus("Battle recording ready");
     if (autoplay && replay.frames.length > 1) {
       playback.play();
     } else {
@@ -299,13 +302,13 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   async function loadReplayFile(file: File): Promise<void> {
     playback.pause();
     setIsLoading(true);
-    setStatus("Loading replay");
+    setStatus("Loading battle recording");
     try {
       hangar.setBotLogs([]);
       applyReplayText(await file.text(), false);
     } catch (error: unknown) {
       setLoadedReplay(null);
-      setStatus(`Replay load failed: ${errorMessage(error)}`, { isError: true });
+      setStatus(`Battle recording load failed: ${errorMessage(error)}`, { isError: true });
     } finally {
       setIsLoading(false);
     }
@@ -378,7 +381,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       component: "units",
       title: "Units",
       position: { referencePanel: "battle-scene", direction: "right" },
-      initialWidth: 360,
+      initialWidth: SIDE_DOCK_WIDTH,
     });
     event.api.addPanel({
       id: "rules",
@@ -392,7 +395,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       component: "console",
       title: "Console",
       position: { referencePanel: "units", direction: "below" },
-      initialHeight: 220,
+      initialHeight: STATE_DOCK_INITIAL_HEIGHT,
     });
   }, []);
 
@@ -403,6 +406,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
         ...TEAM_CSS_VARIABLES,
       } as CSSProperties}
     >
+      <AppHeader />
       <WorkbenchPanelContext.Provider value={panelContext}>
         <DockviewHost onReady={handleDockReady} />
       </WorkbenchPanelContext.Provider>
@@ -410,7 +414,6 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
         className="flex min-h-[26px] items-center gap-2.5 border-t border-[var(--line-strong)] bg-[var(--surface-sunken)] px-2.5 text-[11px] font-semibold text-[var(--text-muted)]"
         role="status"
       >
-        <span className="text-[10px] font-bold uppercase text-[var(--brand)]">Robolocks</span>
         <strong
           className={cn(
             "min-w-0 overflow-hidden truncate text-[11px] font-semibold text-[var(--text-soft)]",
@@ -421,6 +424,44 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
         </strong>
       </div>
     </section>
+  );
+}
+
+function AppHeader() {
+  return (
+    <header className="flex min-h-[42px] shrink-0 items-center justify-between gap-3 border-b border-[var(--line-strong)] bg-[var(--surface-sunken)] px-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid h-7 w-7 shrink-0 place-items-center border border-[var(--brand-border-strong)] bg-[var(--brand-tint)] font-mono text-[11px] font-black text-[var(--brand)]">
+          RL
+        </div>
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h1 className="truncate text-[14px] font-black tracking-[0.02em] text-[var(--text)]">Robolocks</h1>
+          </div>
+          <p className="hidden max-w-[52vw] truncate text-[10px] font-semibold text-[var(--text-muted)] md:block">
+            {PRODUCT_DESCRIPTION}
+          </p>
+        </div>
+      </div>
+      <nav className="flex shrink-0 items-center gap-1.5" aria-label="Project links">
+        <HeaderLink href={BOT_GUIDE_URL} label="Bot Guide" icon={<BookOpen aria-hidden="true" />} />
+        <HeaderLink href={PROJECT_REPO_URL} label="GitHub" icon={<ExternalLink aria-hidden="true" />} />
+      </nav>
+    </header>
+  );
+}
+
+function HeaderLink({ href, label, icon }: { href: string; label: string; icon: ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--surface-inset)] px-2 text-[10px] font-bold text-[var(--text-soft)] no-underline hover:border-[var(--brand-border-strong)] hover:bg-[var(--surface-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] [&_svg]:h-[13px] [&_svg]:w-[13px]"
+    >
+      {icon}
+      <span className="hidden sm:inline">{label}</span>
+    </a>
   );
 }
 
