@@ -8,6 +8,21 @@ bots are evaluated in the browser, read [arena-guide.md](arena-guide.md).
 
 ---
 
+## Sample Repo
+
+Use [sangwonl/robolocks-bot](https://github.com/sangwonl/robolocks-bot) as a
+reference repo for the GitHub import format. In Arena, import it with:
+
+```text
+sangwonl/robolocks-bot
+```
+
+The sample shows the expected `robolocks.bot.json` manifest, Python bot files,
+and unit config files in a repo layout that Arena can fetch directly from
+GitHub.
+
+---
+
 ## Minimal Repo
 
 A single-bot repo needs only two files:

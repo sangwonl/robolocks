@@ -105,6 +105,9 @@ https://github.com/owner/repo/tree/ref
 
 If no ref is provided, Arena uses `main`.
 
+For a working reference repo, try
+[`sangwonl/robolocks-bot`](https://github.com/sangwonl/robolocks-bot).
+
 The repository must contain `robolocks.bot.json` at its root. A simple repo can
 export one bot:
 
