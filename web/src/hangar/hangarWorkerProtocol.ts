@@ -2,6 +2,7 @@
 // No DOM / worker globals are touched here so the guards and constructors can
 // be unit-tested directly (see tests/hangarWorkerProtocol.test.mjs).
 import type { BattleReplay } from "../replay/replay";
+import type { BattleFrame } from "../types/protocol";
 import type { BotLogEntry } from "./hangar";
 
 // Stages reported while a hangar run progresses. `simulating` additionally
@@ -22,11 +23,27 @@ export type HangarRunRequest = {
   tickCount: number;
 };
 
+export type HangarLiveSetupRequest = HangarRunRequest & { type: "setup" };
+export type HangarLiveStepRequest = { type: "step"; count: number };
+export type HangarLiveDisposeRequest = { type: "dispose" };
+export type HangarLiveRequest = HangarLiveSetupRequest | HangarLiveStepRequest | HangarLiveDisposeRequest;
+
 // Worker -> main thread messages.
 export type WorkerProgressMessage = { type: "progress" } & HangarProgress;
 export type WorkerDoneMessage = { type: "done"; replay: BattleReplay; logs: BotLogEntry[] };
+export type WorkerReadyMessage = {
+  type: "ready";
+  replay: BattleReplay;
+  tickLimit: number;
+};
+export type WorkerFramesMessage = {
+  type: "frames";
+  frames: BattleFrame[];
+  logs: BotLogEntry[];
+  finished: boolean;
+};
 export type WorkerErrorMessage = { type: "error"; message: string };
-export type WorkerMessage = WorkerProgressMessage | WorkerDoneMessage | WorkerErrorMessage;
+export type WorkerMessage = WorkerProgressMessage | WorkerDoneMessage | WorkerReadyMessage | WorkerFramesMessage | WorkerErrorMessage;
 
 const HANGAR_STAGES: ReadonlySet<string> = new Set<HangarStage>([
   "loading-python",
@@ -45,6 +62,18 @@ export function runRequest(request: HangarRunRequest): HangarRunRequest {
   return built;
 }
 
+export function liveSetupRequest(request: HangarRunRequest): HangarLiveSetupRequest {
+  return { ...runRequest(request), type: "setup" };
+}
+
+export function liveStepRequest(count: number): HangarLiveStepRequest {
+  return { type: "step", count: Math.max(0, Math.floor(Number.isFinite(count) ? count : 0)) };
+}
+
+export function liveDisposeRequest(): HangarLiveDisposeRequest {
+  return { type: "dispose" };
+}
+
 export function progressMessage(progress: HangarProgress): WorkerProgressMessage {
   const message: WorkerProgressMessage = { type: "progress", stage: progress.stage };
   if (typeof progress.tick === "number") {
@@ -58,6 +87,14 @@ export function progressMessage(progress: HangarProgress): WorkerProgressMessage
 
 export function doneMessage(replay: BattleReplay, logs: BotLogEntry[]): WorkerDoneMessage {
   return { type: "done", replay, logs };
+}
+
+export function readyMessage(replay: BattleReplay, tickLimit: number): WorkerReadyMessage {
+  return { type: "ready", replay, tickLimit };
+}
+
+export function framesMessage(payload: { frames: BattleFrame[]; logs: BotLogEntry[]; finished: boolean }): WorkerFramesMessage {
+  return { type: "frames", frames: payload.frames, logs: payload.logs, finished: payload.finished };
 }
 
 export function errorMessage(message: string): WorkerErrorMessage {
@@ -74,6 +111,25 @@ export function isDoneMessage(message: unknown): message is WorkerDoneMessage {
     message.type === "done" &&
     isRecord(message.replay) &&
     Array.isArray(message.logs)
+  );
+}
+
+export function isReadyMessage(message: unknown): message is WorkerReadyMessage {
+  return (
+    isRecord(message) &&
+    message.type === "ready" &&
+    isRecord(message.replay) &&
+    typeof message.tickLimit === "number"
+  );
+}
+
+export function isFramesMessage(message: unknown): message is WorkerFramesMessage {
+  return (
+    isRecord(message) &&
+    message.type === "frames" &&
+    Array.isArray(message.frames) &&
+    Array.isArray(message.logs) &&
+    typeof message.finished === "boolean"
   );
 }
 
@@ -97,8 +153,31 @@ export function parseWorkerMessage(data: unknown): WorkerMessage | null {
   if (isDoneMessage(data)) {
     return { type: "done", replay: data.replay, logs: data.logs };
   }
+  if (isReadyMessage(data)) {
+    return { type: "ready", replay: data.replay, tickLimit: data.tickLimit };
+  }
+  if (isFramesMessage(data)) {
+    return { type: "frames", frames: data.frames, logs: data.logs, finished: data.finished };
+  }
   if (isErrorMessage(data)) {
     return { type: "error", message: data.message };
+  }
+  return null;
+}
+
+export function parseLiveRequest(data: unknown): HangarLiveRequest | null {
+  if (!isRecord(data) || typeof data.type !== "string") {
+    return null;
+  }
+  if (data.type === "setup") {
+    const request = parseRunRequest(data);
+    return request ? liveSetupRequest(request) : null;
+  }
+  if (data.type === "step") {
+    return typeof data.count === "number" ? liveStepRequest(data.count) : null;
+  }
+  if (data.type === "dispose") {
+    return liveDisposeRequest();
   }
   return null;
 }

@@ -20,14 +20,14 @@ import type { BattleReplay } from "../../replay/replay";
 import type { BotLogEntry } from "../../hangar/hangar.ts";
 import { HANGAR_BATTLE_PRESETS, HANGAR_RULE_PRESETS } from "../../hangar/hangar.ts";
 import {
-  arenaRunRequest,
-  parseArenaWorkerMessage,
-  type ArenaMatchMessage,
-} from "../../arena/arenaWorkerProtocol.ts";
+  liveSetupRequest,
+  liveStepRequest,
+  parseWorkerMessage,
+} from "../../hangar/hangarWorkerProtocol.ts";
 import type { HangarProgress } from "../../hangar/hangarWorkerProtocol.ts";
 
 export type UseArenaRunDeps = {
-  applyReplay: (replay: BattleReplay, autoplay: boolean) => void;
+  applyLiveReplay: (replay: BattleReplay) => void;
   setStatus: (status: string, options?: { isError?: boolean }) => void;
   pause: () => void;
   setBotLogs: (logs: BotLogEntry[]) => void;
@@ -113,6 +113,12 @@ const DEFAULT_SEED_START = 101;
 const DEFAULT_SEED_COUNT = 3;
 const DEFAULT_TICK_LIMIT = 900;
 
+type ArenaLiveMatch = {
+  seed: number;
+  replay: BattleReplay;
+  logs: BotLogEntry[];
+};
+
 export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
   const depsRef = useRef(deps);
   depsRef.current = deps;
@@ -135,6 +141,11 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
   const [isImportingBot, setIsImportingBot] = useState(false);
   const cancelledRef = useRef(false);
   const workerRef = useRef<Worker | null>(null);
+  const liveRunningRef = useRef(false);
+  const liveStepPendingRef = useRef(false);
+  const liveAccumulatorRef = useRef(0);
+  const liveLastTimestampRef = useRef<number | null>(null);
+  const liveRafRef = useRef<number | null>(null);
 
   const normalizedSelectedIds = useMemo(() => normalizeSelectedIds(builds, selectedLeftBuildId, selectedRightBuildId), [builds, selectedLeftBuildId, selectedRightBuildId]);
   useEffect(() => {
@@ -146,7 +157,10 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
     }
   }, [normalizedSelectedIds, selectedLeftBuildId, selectedRightBuildId]);
 
-  useEffect(() => () => teardownWorker(workerRef), []);
+  useEffect(() => () => {
+    stopLiveLoop(liveRafRef);
+    teardownWorker(workerRef);
+  }, []);
 
   useEffect(() => {
     writeStoredArenaState({
@@ -265,6 +279,7 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
 
   function cancelArena(): void {
     cancelledRef.current = true;
+    stopLiveLoop(liveRafRef);
     teardownWorker(workerRef);
     setIsArenaRunning(false);
     setArenaProgress(null);
@@ -318,13 +333,15 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
   async function runArenaSeries(left: BotBuild, right: BotBuild): Promise<void> {
     const seeds = seedsFromStart(arenaSeedStart, arenaSeedCount);
     try {
-      const matches = await runArenaBatchWorker(left, right, seeds);
+      const matches: ArenaLiveMatch[] = [];
+      for (let index = 0; index < seeds.length; index += 1) {
+        if (cancelledRef.current) {
+          break;
+        }
+        matches.push(await runArenaLiveMatch(left, right, seeds[index], index + 1, seeds.length));
+      }
       const summaries = matches.map((match) => matchSummaryFromReplay(match.replay, match.seed));
       const logs = matches.flatMap((match) => match.logs);
-      const lastReplay = matches[matches.length - 1]?.replay;
-      if (lastReplay) {
-        depsRef.current.applyReplay(lastReplay, true);
-      }
       const evaluation = summarizeArenaEvaluation({
         leftBuildId: left.id,
         rightBuildId: right.id,
@@ -339,59 +356,112 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
     } catch (error: unknown) {
       depsRef.current.setStatus(`Arena run failed: ${errorMessage(error)}`, { isError: true });
     } finally {
+      stopLiveLoop(liveRafRef);
       teardownWorker(workerRef);
       setIsArenaRunning(false);
       setArenaProgress(null);
     }
   }
 
-  function runArenaBatchWorker(left: BotBuild, right: BotBuild, seeds: number[]): Promise<ArenaMatchMessage[]> {
+  function startLiveLoop(worker: Worker): void {
+    stopLiveLoop(liveRafRef);
+    liveRunningRef.current = true;
+    liveStepPendingRef.current = false;
+    liveAccumulatorRef.current = 0;
+    liveLastTimestampRef.current = null;
+
+    const tick = (timestamp: number) => {
+      if (!liveRunningRef.current || workerRef.current !== worker) {
+        return;
+      }
+      const previous = liveLastTimestampRef.current ?? timestamp;
+      liveLastTimestampRef.current = timestamp;
+      liveAccumulatorRef.current = Math.min(8, liveAccumulatorRef.current + ((timestamp - previous) * 60) / 1000);
+      const count = Math.min(4, Math.floor(liveAccumulatorRef.current));
+      if (count > 0 && !liveStepPendingRef.current) {
+        liveAccumulatorRef.current -= count;
+        liveStepPendingRef.current = true;
+        worker.postMessage(liveStepRequest(count));
+      }
+      liveRafRef.current = requestAnimationFrame(tick);
+    };
+
+    liveRafRef.current = requestAnimationFrame(tick);
+  }
+
+  function stopCurrentLiveMatch(): void {
+    stopLiveLoop(liveRafRef);
+    liveRunningRef.current = false;
+    liveStepPendingRef.current = false;
+    liveAccumulatorRef.current = 0;
+    liveLastTimestampRef.current = null;
+    teardownWorker(workerRef);
+  }
+
+  function runArenaLiveMatch(left: BotBuild, right: BotBuild, seed: number, runIndex: number, totalRuns: number): Promise<ArenaLiveMatch> {
     return new Promise((resolve, reject) => {
-      const matches: ArenaMatchMessage[] = [];
-      const worker = new Worker(new URL("../../arena/arenaWorker.ts", import.meta.url), { type: "module" });
+      let replay: BattleReplay | null = null;
+      const logs: BotLogEntry[] = [];
+      const worker = new Worker(new URL("../../hangar/hangarWorker.ts", import.meta.url), { type: "module" });
       workerRef.current = worker;
       worker.onmessage = (event: MessageEvent) => {
-        const message = parseArenaWorkerMessage(event.data);
+        const message = parseWorkerMessage(event.data);
         if (!message) {
           return;
         }
         if (message.type === "progress") {
           setArenaProgress({ stage: message.stage, tick: message.tick, totalTicks: message.totalTicks });
-          depsRef.current.setStatus(`Arena match ${message.runIndex}/${message.totalRuns} seed ${message.seed}`);
+          depsRef.current.setStatus(`Arena match ${runIndex}/${totalRuns} seed ${seed}`);
           return;
         }
-        if (message.type === "match") {
-          matches.push(message);
+        if (message.type === "ready") {
+          replay = message.replay;
+          depsRef.current.applyLiveReplay(message.replay);
+          startLiveLoop(worker);
           return;
         }
-        if (message.type === "done") {
-          teardownWorker(workerRef);
-          resolve(matches);
+        if (message.type === "frames") {
+          liveStepPendingRef.current = false;
+          if (message.logs.length > 0) {
+            logs.push(...message.logs);
+            depsRef.current.setBotLogs([...logs]);
+          }
+          if (replay && message.frames.length > 0) {
+            replay = { ...replay, frames: [...replay.frames, ...message.frames] };
+            depsRef.current.applyLiveReplay(replay);
+            setArenaProgress({ stage: "simulating", tick: replay.frames[replay.frames.length - 1]?.tick ?? 0, totalTicks: arenaTickLimit });
+          }
+          if (message.finished) {
+            const completedReplay = replay;
+            stopCurrentLiveMatch();
+            if (!completedReplay) {
+              reject(new Error("Arena live run finished without replay"));
+              return;
+            }
+            resolve({ seed, replay: completedReplay, logs });
+          }
           return;
         }
         if (message.type === "error") {
-          teardownWorker(workerRef);
+          stopCurrentLiveMatch();
           reject(new Error(message.message));
         }
       };
       worker.onerror = (event: ErrorEvent) => {
-        teardownWorker(workerRef);
+        stopCurrentLiveMatch();
         reject(new Error(event.message || "worker error"));
       };
-      worker.postMessage(arenaRunRequest({
+      worker.postMessage(liveSetupRequest({
         botSource: left.code,
         botSourcesByUnit: arenaBotSourcesByUnit(left, right),
-        runs: seeds.map((seed) => ({
+        battleConfigJson: buildArenaBattleConfigJson({
+          battlePresetId: arenaBattlePresetId,
+          rulePresetId: arenaRulePresetId,
           seed,
-          battleConfigJson: buildArenaBattleConfigJson({
-            battlePresetId: arenaBattlePresetId,
-            rulePresetId: arenaRulePresetId,
-            seed,
-            tickLimit: arenaTickLimit,
-            entrants: [left, right],
-          }),
-          tickCount: arenaTickLimit,
-        })),
+          tickLimit: arenaTickLimit,
+          entrants: [left, right],
+        }),
+        tickCount: arenaTickLimit,
       }));
     });
   }
@@ -510,6 +580,13 @@ function teardownWorker(workerRef: { current: Worker | null }): void {
   if (workerRef.current) {
     workerRef.current.terminate();
     workerRef.current = null;
+  }
+}
+
+function stopLiveLoop(rafRef: { current: number | null }): void {
+  if (rafRef.current !== null) {
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
   }
 }
 

@@ -83,9 +83,16 @@ export function useReplayPlayback(replay: BattleReplay | null): UseReplayPlaybac
   // `isPlaying` is intentionally left untouched here - callers control it
   // explicitly via play()/pause() to preserve today's autoplay behavior.
   if (replay !== trackedReplay) {
+    const shouldReset =
+      !replay ||
+      !trackedReplay ||
+      replay.frames.length < trackedReplay.frames.length ||
+      replay.frames[0] !== trackedReplay.frames[0];
     setTrackedReplay(replay);
-    setFrameIndex(0);
-    frameIndexRef.current = 0;
+    if (shouldReset) {
+      setFrameIndex(0);
+      frameIndexRef.current = 0;
+    }
   }
 
   useEffect(() => {

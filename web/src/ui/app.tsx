@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type FunctionComponent,
@@ -136,13 +137,15 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   }, []);
   const [isLoading, setIsLoading] = useState(false);
   const playback = useReplayPlayback(loadedReplay);
+  const pendingReplayIndexRef = useRef<number | null>(null);
   const hangar = useHangarRun({
     applyReplay,
+    applyLiveReplay,
     setStatus,
     pause: playback.pause,
   });
   const arena = useArenaRun({
-    applyReplay,
+    applyLiveReplay,
     setStatus,
     pause: playback.pause,
     setBotLogs: hangar.setBotLogs,
@@ -159,6 +162,15 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const canStepForward = Boolean(loadedReplay && replayIndex < loadedReplay.frames.length - 1);
   const canPlay = Boolean(loadedReplay && loadedReplay.frames.length > 1);
   const frameCount = loadedReplay?.frames.length ?? 0;
+
+  useEffect(() => {
+    const pendingIndex = pendingReplayIndexRef.current;
+    if (pendingIndex === null || !loadedReplay) {
+      return;
+    }
+    pendingReplayIndexRef.current = null;
+    playback.stepTo(Math.min(pendingIndex, loadedReplay.frames.length - 1));
+  }, [loadedReplay, playback]);
 
   const statusText = useMemo(() => {
     const frameLabel = loadedReplay && frame
@@ -244,6 +256,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   }
 
   function applyReplay(replay: BattleReplay, autoplay: boolean): void {
+    pendingReplayIndexRef.current = null;
     setLoadedReplay(replay);
     setStatus("Replay loaded");
     if (autoplay && replay.frames.length > 1) {
@@ -251,6 +264,11 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     } else {
       playback.pause();
     }
+  }
+
+  function applyLiveReplay(replay: BattleReplay): void {
+    pendingReplayIndexRef.current = Math.max(0, replay.frames.length - 1);
+    setLoadedReplay(replay);
   }
 
   async function loadReplayFile(file: File): Promise<void> {
@@ -1295,6 +1313,22 @@ function HangarRunOverlay({
   const stage = progress?.stage ?? "loading-python";
   const stageLabel = HANGAR_STAGE_LABELS[stage];
   const showTicks = stage === "simulating" && typeof progress?.totalTicks === "number";
+  if (stage === "simulating") {
+    return (
+      <div className="pointer-events-none absolute left-3 top-3 z-[4] flex items-center gap-2 border border-[var(--line)] bg-[var(--surface-panel)] px-2.5 py-1.5 shadow-[0_8px_24px_var(--shadow)]">
+        <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand)]" aria-hidden="true" />
+        <span className="text-[10px] font-semibold text-[var(--text-soft)]">Live</span>
+        {showTicks ? (
+          <span className="text-[10px] tabular-nums text-[var(--text-muted)]">
+            tick {progress?.tick ?? 0} / {progress?.totalTicks}
+          </span>
+        ) : null}
+        <Button type="button" variant="secondary" onClick={onCancel} className="pointer-events-auto h-6 px-2 text-[10px]">
+          Cancel
+        </Button>
+      </div>
+    );
+  }
   return (
     <div
       className="absolute inset-0 z-[4] flex items-center justify-center bg-[var(--overlay)] backdrop-blur-md"

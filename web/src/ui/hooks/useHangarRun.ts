@@ -46,13 +46,15 @@ const DEFAULT_RULE_PARAMS: HangarRuleParamState = {
   captureHoldTicks: 180,
 };
 import {
+  liveSetupRequest,
+  liveStepRequest,
   parseWorkerMessage,
-  runRequest,
   type HangarProgress,
 } from "../../hangar/hangarWorkerProtocol.ts";
 
 export type UseHangarRunDeps = {
   applyReplay: (replay: BattleReplay, autoplay: boolean) => void;
+  applyLiveReplay: (replay: BattleReplay) => void;
   setStatus: (status: string, options?: { isError?: boolean }) => void;
   pause: () => void;
 };
@@ -215,6 +217,12 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
   const [isHangarRunning, setIsHangarRunning] = useState(false);
   const [hangarProgress, setHangarProgress] = useState<HangarProgress | null>(null);
   const workerRef = useRef<Worker | null>(null);
+  const liveReplayRef = useRef<BattleReplay | null>(null);
+  const liveRunningRef = useRef(false);
+  const liveStepPendingRef = useRef(false);
+  const liveAccumulatorRef = useRef(0);
+  const liveLastTimestampRef = useRef<number | null>(null);
+  const liveRafRef = useRef<number | null>(null);
 
   const hangarBattlePreset = HANGAR_BATTLE_PRESETS.find((preset) => preset.id === hangarBattlePresetId) ?? HANGAR_BATTLE_PRESETS[0];
   const hangarRulePreset = HANGAR_RULE_PRESETS.find((preset) => preset.id === hangarRulePresetId) ?? HANGAR_RULE_PRESETS[0];
@@ -350,7 +358,10 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
   }
 
   // Tear down the worker on unmount so a run in flight never outlives the app.
-  useEffect(() => () => teardownWorker(workerRef), []);
+  useEffect(() => () => {
+    stopLiveLoop(liveRafRef);
+    teardownWorker(workerRef);
+  }, []);
 
   useEffect(() => {
     writeStoredHangarState({
@@ -411,9 +422,40 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
   }, [hangarBattleConfigJson, hangarMode]);
 
   function finishRun(): void {
+    stopLiveLoop(liveRafRef);
+    liveRunningRef.current = false;
+    liveStepPendingRef.current = false;
+    liveAccumulatorRef.current = 0;
+    liveLastTimestampRef.current = null;
     teardownWorker(workerRef);
     setIsHangarRunning(false);
     setHangarProgress(null);
+  }
+
+  function startLiveLoop(worker: Worker): void {
+    stopLiveLoop(liveRafRef);
+    liveRunningRef.current = true;
+    liveStepPendingRef.current = false;
+    liveAccumulatorRef.current = 0;
+    liveLastTimestampRef.current = null;
+
+    const tick = (timestamp: number) => {
+      if (!liveRunningRef.current || workerRef.current !== worker) {
+        return;
+      }
+      const previous = liveLastTimestampRef.current ?? timestamp;
+      liveLastTimestampRef.current = timestamp;
+      liveAccumulatorRef.current = Math.min(8, liveAccumulatorRef.current + ((timestamp - previous) * 60) / 1000);
+      const count = Math.min(4, Math.floor(liveAccumulatorRef.current));
+      if (count > 0 && !liveStepPendingRef.current) {
+        liveAccumulatorRef.current -= count;
+        liveStepPendingRef.current = true;
+        worker.postMessage(liveStepRequest(count));
+      }
+      liveRafRef.current = requestAnimationFrame(tick);
+    };
+
+    liveRafRef.current = requestAnimationFrame(tick);
   }
 
   function setHangarBotLogicPresetId(unitId: number, id: string): void {
@@ -561,6 +603,37 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
         setHangarProgress({ stage: message.stage, tick: message.tick, totalTicks: message.totalTicks });
         return;
       }
+      if (message.type === "ready") {
+        liveReplayRef.current = message.replay;
+        deps.applyLiveReplay(message.replay);
+        setHangarProgress({ stage: "simulating", tick: 0, totalTicks: message.tickLimit });
+        deps.setStatus("Hangar live");
+        startLiveLoop(worker);
+        return;
+      }
+      if (message.type === "frames") {
+        liveStepPendingRef.current = false;
+        const current = liveReplayRef.current;
+        if (current && message.frames.length > 0) {
+          const replay = {
+            ...current,
+            frames: [...current.frames, ...message.frames],
+          };
+          liveReplayRef.current = replay;
+          deps.applyLiveReplay(replay);
+          setHangarProgress({ stage: "simulating", tick: replay.frames[replay.frames.length - 1]?.tick ?? 0, totalTicks: hangarTickCount });
+        }
+        if (message.logs.length > 0) {
+          setBotLogs((currentLogs) => [...currentLogs, ...message.logs]);
+        }
+        if (message.finished) {
+          const frameCount = liveReplayRef.current?.frames.length ?? 0;
+          finishRun();
+          setHangarMode("loaded");
+          deps.setStatus(`Hangar live complete - ${frameCount} frames`);
+        }
+        return;
+      }
       if (message.type === "done") {
         finishRun();
         setBotLogs(message.logs);
@@ -580,7 +653,7 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
       deps.setStatus(`Hangar run failed: ${event.message || "worker error"}`, { isError: true });
     };
 
-    worker.postMessage(runRequest({
+    worker.postMessage(liveSetupRequest({
       botSource: appliedBotSource || hangarBotSource || (activeBotLogic.presetId === "empty" ? NO_OP_BOT_SOURCE : DEFAULT_HANGAR_BOT_SOURCE),
       botSourcesByUnit: botSourcesByUnit(botLogicByUnit),
       battleConfigJson: hangarBattleConfigJson,
@@ -658,6 +731,13 @@ function teardownWorker(workerRef: { current: Worker | null }): void {
   if (workerRef.current) {
     workerRef.current.terminate();
     workerRef.current = null;
+  }
+}
+
+function stopLiveLoop(rafRef: { current: number | null }): void {
+  if (rafRef.current !== null) {
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
   }
 }
 

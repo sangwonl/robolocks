@@ -308,6 +308,21 @@ export type HangarRunResult = {
   logs: BotLogEntry[];
 };
 
+export type HangarLiveStepResult = {
+  frames: BattleFrame[];
+  logs: BotLogEntry[];
+  finished: boolean;
+};
+
+export type HangarLiveSession = {
+  tickRate: number;
+  tickLimit: number;
+  obstacles: BattleReplay["obstacles"];
+  snapshot(): BattleFrame;
+  step(count: number): HangarLiveStepResult;
+  destroy(): void;
+};
+
 export type BrowserBotRuntime = {
   onTick: JsonBotTick;
   drainLogs?(): Omit<BotLogEntry, "tick" | "unitId">[];
@@ -365,6 +380,95 @@ type HangarUnitModulesConfig = {
   body: Record<string, unknown>;
   sensor: Record<string, unknown>;
 };
+
+export async function createLiveHangarSession(options: HangarRunOptions): Promise<HangarLiveSession> {
+  const tickLimit = normalizeTickCount(options.tickCount);
+  const battleConfigJson = options.battleConfigJson ?? DEFAULT_HANGAR_BATTLE_CONFIG_JSON;
+  const configuredFieldShape = fieldShapeFromBattleConfigJson(battleConfigJson);
+  const onProgress = options.onProgress ?? (() => {});
+  const logDrainIntervalTicks = normalizeLogDrainInterval(options.logDrainIntervalTicks);
+  const createBotRuntime = options.createBotRuntime ?? ((botSource, botId) => createPyodideBotRuntime(botSource, botId, onProgress));
+  const botSourcesByUnit = botSourcesByUnitFromConfig(battleConfigJson, options.botSource, options.botSourcesByUnit);
+  const botRuntimes = new Map<number, BrowserBotRuntime>();
+  for (const [unitId, botSource] of botSourcesByUnit) {
+    botRuntimes.set(unitId, await createBotRuntime(botSource, unitId));
+  }
+  const createRunner = options.createRunner ?? ((runnerOptions) => createHangarDuelWithJsonBotFromWasmFactory(runnerOptions));
+  const runner = await createRunner({
+    botId: 1,
+    battleConfigJson,
+    onTick(observation) {
+      const botId = isRecord(observation) && typeof observation.botId === "number" ? observation.botId : 1;
+      return botRuntimes.get(botId)?.onTick(observation) ?? { orders: [] };
+    },
+  });
+
+  let completedTicks = 0;
+  let destroyed = false;
+  const drainLogs = (tick: number): BotLogEntry[] => {
+    const logs: BotLogEntry[] = [];
+    for (const [unitId, botRuntime] of botRuntimes) {
+      for (const log of botRuntime.drainLogs?.() ?? []) {
+        logs.push({ ...log, tick, unitId });
+      }
+    }
+    return logs;
+  };
+
+  onProgress({ stage: "simulating", tick: 0, totalTicks: tickLimit });
+
+  return {
+    tickRate: 60,
+    tickLimit,
+    obstacles: runner.staticObstacles(),
+    snapshot(): BattleFrame {
+      return applyConfiguredFieldShape([runner.snapshot()], configuredFieldShape)[0];
+    },
+    step(count: number): HangarLiveStepResult {
+      if (destroyed) {
+        return { frames: [], logs: [], finished: true };
+      }
+      const frames: BattleFrame[] = [];
+      const logs: BotLogEntry[] = [];
+      const requested = Number.isFinite(count) ? Math.floor(count) : 0;
+      const stepCount = Math.max(0, Math.min(tickLimit - completedTicks, requested));
+      let finished = completedTicks >= tickLimit;
+      for (let index = 0; index < stepCount; index += 1) {
+        const frame = runner.step();
+        frames.push(frame);
+        completedTicks += 1;
+        finished = Boolean(frame.ruleState?.outcome?.finished) || completedTicks >= tickLimit;
+        if (shouldDrainLogs(completedTicks, tickLimit, logDrainIntervalTicks, finished)) {
+          logs.push(...drainLogs(frame.tick));
+        }
+        if (finished) {
+          break;
+        }
+      }
+      if (logDrainIntervalTicks === 0 && finished) {
+        logs.push(...drainLogs(frames[frames.length - 1]?.tick ?? completedTicks));
+      }
+      if (frames.length > 0) {
+        onProgress({ stage: "simulating", tick: completedTicks, totalTicks: tickLimit });
+      }
+      return {
+        frames: applyConfiguredFieldShape(frames, configuredFieldShape),
+        logs,
+        finished,
+      };
+    },
+    destroy(): void {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
+      runner.destroy();
+      for (const [, botRuntime] of botRuntimes) {
+        botRuntime.destroy?.();
+      }
+    },
+  };
+}
 
 export async function runHangarInBrowser(options: HangarRunOptions): Promise<HangarRunResult> {
   const tickCount = normalizeTickCount(options.tickCount);

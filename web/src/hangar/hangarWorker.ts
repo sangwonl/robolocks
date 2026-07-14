@@ -4,17 +4,68 @@
 // pure protocol in hangarWorkerProtocol.ts. Pyodide + the WASM kernel are
 // loaded lazily inside this worker chunk, so nothing here enters the main
 // bundle. Cancellation is handled on the main thread via worker.terminate().
-import { runHangarInBrowser } from "./hangar.ts";
+import { createLiveHangarSession, runHangarInBrowser, type HangarLiveSession } from "./hangar.ts";
 import {
   doneMessage,
   errorMessage,
+  framesMessage,
+  parseLiveRequest,
   parseRunRequest,
   progressMessage,
+  readyMessage,
 } from "./hangarWorkerProtocol.ts";
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
+let liveSession: HangarLiveSession | null = null;
+
+function destroyLiveSession(): void {
+  liveSession?.destroy();
+  liveSession = null;
+}
 
 ctx.onmessage = (event: MessageEvent) => {
+  const liveRequest = parseLiveRequest(event.data);
+  if (liveRequest) {
+    void (async () => {
+      try {
+        if (liveRequest.type === "setup") {
+          destroyLiveSession();
+          liveSession = await createLiveHangarSession({
+            botSource: liveRequest.botSource,
+            botSourcesByUnit: liveRequest.botSourcesByUnit,
+            battleConfigJson: liveRequest.battleConfigJson,
+            tickCount: liveRequest.tickCount,
+            onProgress: (progress) => ctx.postMessage(progressMessage(progress)),
+          });
+          ctx.postMessage(readyMessage({
+            type: "robolocks.replay.v1",
+            tickRate: liveSession.tickRate,
+            obstacles: liveSession.obstacles,
+            frames: [liveSession.snapshot()],
+          }, liveSession.tickLimit));
+          return;
+        }
+        if (liveRequest.type === "step") {
+          if (!liveSession) {
+            ctx.postMessage(errorMessage("Live hangar session is not ready"));
+            return;
+          }
+          const result = liveSession.step(liveRequest.count);
+          ctx.postMessage(framesMessage(result));
+          if (result.finished) {
+            destroyLiveSession();
+          }
+          return;
+        }
+        destroyLiveSession();
+      } catch (error: unknown) {
+        destroyLiveSession();
+        ctx.postMessage(errorMessage(error instanceof Error ? error.message : String(error)));
+      }
+    })();
+    return;
+  }
+
   const request = parseRunRequest(event.data);
   if (!request) {
     ctx.postMessage(errorMessage("Invalid hangar run request"));
