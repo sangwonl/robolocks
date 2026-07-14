@@ -5,7 +5,8 @@ model, every order, every field of the observation, targeting & firing, movement
 recipes, and the pitfalls that trip people up. For how bots are executed (tick
 loop, lifecycle, runtimes, determinism), see [bot-system.md](bot-system.md).
 For evaluating saved bots and imported GitHub bots, see
-[arena-guide.md](arena-guide.md).
+[arena-guide.md](arena-guide.md). For publishing bots from a GitHub repo, see
+[deploy-bot.md](deploy-bot.md).
 
 A bot is a Python module that ends with `run_bot(on_tick)`. Import everything
 from the top-level `robolocks` package. `on_tick` receives a `BattleState` and

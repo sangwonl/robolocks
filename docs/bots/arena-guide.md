@@ -11,8 +11,9 @@ Arena is local-first:
   summary in browser localStorage.
 - It does not use a server, shared database, or official leaderboard yet.
 
-For bot API details, read [writing-bots.md](writing-bots.md). For execution model
-and determinism, read [bot-system.md](bot-system.md).
+For bot API details, read [writing-bots.md](writing-bots.md). For publishing a
+bot repo that Arena can import, read [deploy-bot.md](deploy-bot.md). For
+execution model and determinism, read [bot-system.md](bot-system.md).
 
 ---
 
