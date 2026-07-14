@@ -64,12 +64,14 @@ export type UseArenaRunResult = {
   lastMatches: ArenaMatchSummary[];
   arenaProgress: HangarProgress | null;
   isArenaRunning: boolean;
+  isArenaPaused: boolean;
   isImportingBot: boolean;
   registerLocalBot: (options: RegisterLocalArenaBotOptions) => void;
   runArenaWithLocalBot: (options: RegisterLocalArenaBotOptions) => void;
   runArenaBuilds: (left: BotBuild, right: BotBuild) => void;
   importGitHubBot: () => Promise<void>;
   runArena: () => void;
+  toggleArenaPause: () => void;
   cancelArena: () => void;
   removeBuild: (id: string) => void;
   removeGitHubRepo: (owner: string, repo: string, ref: string) => void;
@@ -138,6 +140,7 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
   const [lastMatches, setLastMatches] = useState<ArenaMatchSummary[]>(stored.lastMatches);
   const [arenaProgress, setArenaProgress] = useState<HangarProgress | null>(null);
   const [isArenaRunning, setIsArenaRunning] = useState(false);
+  const [isArenaPaused, setIsArenaPaused] = useState(false);
   const [isImportingBot, setIsImportingBot] = useState(false);
   const cancelledRef = useRef(false);
   const workerRef = useRef<Worker | null>(null);
@@ -232,6 +235,7 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
     }
     cancelledRef.current = false;
     setIsArenaRunning(true);
+    setIsArenaPaused(false);
     setArenaProgress({ stage: "loading-python" });
     setLastMatches([]);
     deps.pause();
@@ -246,6 +250,7 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
     }
     cancelledRef.current = false;
     setIsArenaRunning(true);
+    setIsArenaPaused(false);
     setArenaProgress({ stage: "loading-python" });
     setLastMatches([]);
     deps.pause();
@@ -269,6 +274,7 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
     setSelectedRightBuildId(right.id);
     cancelledRef.current = false;
     setIsArenaRunning(true);
+    setIsArenaPaused(false);
     setArenaProgress({ stage: "loading-python" });
     setLastMatches([]);
     deps.pause();
@@ -282,6 +288,7 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
     stopLiveLoop(liveRafRef);
     teardownWorker(workerRef);
     setIsArenaRunning(false);
+    setIsArenaPaused(false);
     setArenaProgress(null);
     deps.setStatus("Arena run cancelled");
   }
@@ -359,6 +366,7 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
       stopLiveLoop(liveRafRef);
       teardownWorker(workerRef);
       setIsArenaRunning(false);
+      setIsArenaPaused(false);
       setArenaProgress(null);
     }
   }
@@ -366,6 +374,7 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
   function startLiveLoop(worker: Worker): void {
     stopLiveLoop(liveRafRef);
     liveRunningRef.current = true;
+    setIsArenaPaused(false);
     liveStepPendingRef.current = false;
     liveAccumulatorRef.current = 0;
     liveLastTimestampRef.current = null;
@@ -396,6 +405,25 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
     liveAccumulatorRef.current = 0;
     liveLastTimestampRef.current = null;
     teardownWorker(workerRef);
+  }
+
+  function toggleArenaPause(): void {
+    const worker = workerRef.current;
+    if (!worker || !isArenaRunning) {
+      return;
+    }
+    if (isArenaPaused) {
+      deps.setStatus("Arena live");
+      startLiveLoop(worker);
+      return;
+    }
+    liveRunningRef.current = false;
+    liveStepPendingRef.current = false;
+    liveAccumulatorRef.current = 0;
+    liveLastTimestampRef.current = null;
+    stopLiveLoop(liveRafRef);
+    setIsArenaPaused(true);
+    deps.setStatus("Arena paused");
   }
 
   function runArenaLiveMatch(left: BotBuild, right: BotBuild, seed: number, runIndex: number, totalRuns: number): Promise<ArenaLiveMatch> {
@@ -491,12 +519,14 @@ export function useArenaRun(deps: UseArenaRunDeps): UseArenaRunResult {
     lastMatches,
     arenaProgress,
     isArenaRunning,
+    isArenaPaused,
     isImportingBot,
     registerLocalBot,
     runArenaWithLocalBot,
     runArenaBuilds,
     importGitHubBot,
     runArena,
+    toggleArenaPause,
     cancelArena,
     removeBuild,
     removeGitHubRepo,

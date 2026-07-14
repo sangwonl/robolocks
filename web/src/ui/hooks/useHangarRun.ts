@@ -128,8 +128,10 @@ export type UseHangarRunResult = {
   hangarRulePreset: (typeof HANGAR_RULE_PRESETS)[number] | undefined;
   hangarBattleConfigJson: string;
   isHangarRunning: boolean;
+  isHangarPaused: boolean;
   hangarProgress: HangarProgress | null;
   runHangar: () => void;
+  toggleHangarPause: () => void;
   cancelHangar: () => void;
 };
 
@@ -215,6 +217,7 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
   }
   const [botLogs, setBotLogs] = useState<BotLogEntry[]>([]);
   const [isHangarRunning, setIsHangarRunning] = useState(false);
+  const [isHangarPaused, setIsHangarPaused] = useState(false);
   const [hangarProgress, setHangarProgress] = useState<HangarProgress | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const liveReplayRef = useRef<BattleReplay | null>(null);
@@ -427,6 +430,7 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
     liveStepPendingRef.current = false;
     liveAccumulatorRef.current = 0;
     liveLastTimestampRef.current = null;
+    setIsHangarPaused(false);
     teardownWorker(workerRef);
     setIsHangarRunning(false);
     setHangarProgress(null);
@@ -435,6 +439,7 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
   function startLiveLoop(worker: Worker): void {
     stopLiveLoop(liveRafRef);
     liveRunningRef.current = true;
+    setIsHangarPaused(false);
     liveStepPendingRef.current = false;
     liveAccumulatorRef.current = 0;
     liveLastTimestampRef.current = null;
@@ -587,6 +592,7 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
     deps.pause();
     setBotLogs([]);
     setIsHangarRunning(true);
+    setIsHangarPaused(false);
     setHangarMode("simulating");
     setHangarProgress({ stage: "loading-python" });
     deps.setStatus("Running hangar");
@@ -661,6 +667,25 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
     }));
   }
 
+  function toggleHangarPause(): void {
+    const worker = workerRef.current;
+    if (!worker || !isHangarRunning) {
+      return;
+    }
+    if (isHangarPaused) {
+      deps.setStatus("Hangar live");
+      startLiveLoop(worker);
+      return;
+    }
+    liveRunningRef.current = false;
+    liveStepPendingRef.current = false;
+    liveAccumulatorRef.current = 0;
+    liveLastTimestampRef.current = null;
+    stopLiveLoop(liveRafRef);
+    setIsHangarPaused(true);
+    deps.setStatus("Hangar paused");
+  }
+
   function cancelHangar(): void {
     if (!workerRef.current) {
       return;
@@ -721,8 +746,10 @@ export function useHangarRun(deps: UseHangarRunDeps): UseHangarRunResult {
     hangarRulePreset,
     hangarBattleConfigJson,
     isHangarRunning,
+    isHangarPaused,
     hangarProgress,
     runHangar,
+    toggleHangarPause,
     cancelHangar,
   };
 }

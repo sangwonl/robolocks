@@ -165,6 +165,18 @@ select {
 
 .dockview-workbench .dv-content-container {
   background: var(--surface-raised);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dockview-workbench .dv-view,
+.dockview-workbench .dv-groupview,
+.dockview-workbench .dv-pane-container,
+.dockview-workbench .dv-grid-view,
+.dockview-workbench .dv-split-view-container {
+  min-width: 0;
+  min-height: 0;
 }
 
 .hangar-overlay-spinner {

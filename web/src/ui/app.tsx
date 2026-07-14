@@ -2,6 +2,7 @@ import { createRoot, type Root } from "react-dom/client";
 import {
   createContext,
   lazy,
+  memo,
   Suspense,
   useCallback,
   useContext,
@@ -127,6 +128,21 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
   reactRoot.render(<WorkbenchApp options={options} />);
 }
 
+const DockviewHost = memo(function DockviewHost({ onReady }: { onReady: (event: DockviewReadyEvent) => void }) {
+  return (
+    <div className="min-h-0 flex-1" onKeyDownCapture={handleDockKeyDownCapture}>
+      <DockviewReact
+        className="dockview-workbench dockview-theme-dark h-full min-h-0 bg-[var(--surface-app)] text-[var(--text)]"
+        components={DOCKVIEW_COMPONENTS}
+        defaultTabComponent={LockedDockTab}
+        getTabContextMenuItems={() => []}
+        keyboardNavigation={false}
+        onReady={onReady}
+      />
+    </div>
+  );
+});
+
 function WorkbenchApp({ options }: { options: RenderAppOptions }) {
   const [loadedReplay, setLoadedReplay] = useState<BattleReplay | null>(null);
   const [status, setStatusText] = useState("Ready");
@@ -203,7 +219,8 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       if (!action) {
         return;
       }
-      if (action === "toggle-play" && !canPlay) {
+      const isRunning = hangar.isHangarRunning || arena.isArenaRunning;
+      if (action === "toggle-play" && !canPlay && !isRunning) {
         return;
       }
       event.preventDefault();
@@ -227,9 +244,17 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [loadedReplay, canPlay, isPlaying, replayIndex, frameCount, playback, hangar]);
+  }, [loadedReplay, canPlay, isPlaying, replayIndex, frameCount, playback, hangar, arena]);
 
   function handlePlayPause(): void {
+    if (hangar.isHangarRunning) {
+      hangar.toggleHangarPause();
+      return;
+    }
+    if (arena.isArenaRunning) {
+      arena.toggleArenaPause();
+      return;
+    }
     if (isPlaying) {
       playback.pause();
       return;
@@ -379,16 +404,7 @@ function WorkbenchApp({ options }: { options: RenderAppOptions }) {
       } as CSSProperties}
     >
       <WorkbenchPanelContext.Provider value={panelContext}>
-        <div className="min-h-0 flex-1" onKeyDownCapture={handleDockKeyDownCapture}>
-          <DockviewReact
-            className="dockview-workbench dockview-theme-dark h-full min-h-0 bg-[var(--surface-app)] text-[var(--text)]"
-            components={DOCKVIEW_COMPONENTS}
-            defaultTabComponent={LockedDockTab}
-            getTabContextMenuItems={() => []}
-            keyboardNavigation={false}
-            onReady={handleDockReady}
-          />
-        </div>
+        <DockviewHost onReady={handleDockReady} />
       </WorkbenchPanelContext.Provider>
       <div
         className="flex min-h-[26px] items-center gap-2.5 border-t border-[var(--line-strong)] bg-[var(--surface-sunken)] px-2.5 text-[11px] font-semibold text-[var(--text-muted)]"
@@ -446,13 +462,16 @@ function BattleDockPanel() {
     hangar,
     arena,
   } = useWorkbenchPanel();
+  const isRunPaused = hangar.isHangarRunning ? hangar.isHangarPaused : arena.isArenaPaused;
+  const toggleRunPause = hangar.isHangarRunning ? hangar.toggleHangarPause : arena.toggleArenaPause;
+  const stopRun = hangar.isHangarRunning ? hangar.cancelHangar : arena.cancelArena;
   return (
     <section className="battle-scene relative h-full min-h-0 w-full min-w-0 overflow-hidden bg-[var(--surface-scene)]">
       <BattleSceneThreeView frame={frame} obstacles={loadedReplay?.obstacles ?? NO_OBSTACLES} field={loadedReplay?.frames[0]?.field ?? NO_FIELD} />
       {hangar.isHangarRunning ? (
-        <HangarRunOverlay progress={hangar.hangarProgress} onCancel={hangar.cancelHangar} />
+        <HangarRunOverlay progress={hangar.hangarProgress} />
       ) : arena.isArenaRunning ? (
-        <HangarRunOverlay progress={arena.arenaProgress} onCancel={arena.cancelArena} />
+        <HangarRunOverlay progress={arena.arenaProgress} />
       ) : null}
       <PlaybackControls
         canPlay={canPlay}
@@ -460,7 +479,10 @@ function BattleDockPanel() {
         canStepForward={canStepForward}
         canRun={!isLoading && !hangar.isHangarRunning && !arena.isArenaRunning}
         isRunning={hangar.isHangarRunning || arena.isArenaRunning}
+        isRunPaused={isRunPaused}
         onRun={hangar.runHangar}
+        onRunPlayPause={toggleRunPause}
+        onStopRun={stopRun}
         currentIndex={replayIndex}
         frame={frame}
         frameCount={frameCount}
@@ -1294,21 +1316,19 @@ function RulesDockPanel() {
 function ConsoleDockPanel() {
   const { frame, hangar } = useWorkbenchPanel();
   return (
-    <section className={STATE_DOCK_PANEL_CLASS}>
+    <section className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-[var(--surface-raised)] p-2">
       <BotConsole logs={hangar.botLogs} currentTick={frame?.tick ?? 0} />
     </section>
   );
 }
 
-// Lightweight overlay shown over the battle viewport while a hangar run is in
-// flight. It covers only the scene (the Monaco editor and side panels stay
-// interactive) and offers a cancel affordance that terminates the worker.
+// Lightweight run status shown over the battle viewport. Loading stages use a
+// blocking overlay; live stepping uses a compact badge while controls stay in
+// the playback bar.
 function HangarRunOverlay({
   progress,
-  onCancel,
 }: {
   progress: HangarProgress | null;
-  onCancel: () => void;
 }) {
   const stage = progress?.stage ?? "loading-python";
   const stageLabel = HANGAR_STAGE_LABELS[stage];
@@ -1323,9 +1343,6 @@ function HangarRunOverlay({
             tick {progress?.tick ?? 0} / {progress?.totalTicks}
           </span>
         ) : null}
-        <Button type="button" variant="secondary" onClick={onCancel} className="pointer-events-auto h-6 px-2 text-[10px]">
-          Cancel
-        </Button>
       </div>
     );
   }
@@ -1344,9 +1361,6 @@ function HangarRunOverlay({
             <span className="u-label text-[9px] text-[var(--text-muted)]">runs until the rule decides · deadline {progress?.totalTicks}</span>
           </div>
         ) : null}
-        <Button type="button" variant="secondary" onClick={onCancel} className="mt-1">
-          Cancel
-        </Button>
       </div>
     </div>
   );
